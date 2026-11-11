@@ -85,6 +85,25 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
+    def _download(self, code, data: bytes, ctype: str, filename: str):
+        """带 Content-Disposition 的下载响应（导出 CSV 用）。"""
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        # 中文文件名用 RFC 5987 的 filename*，老浏览器回退到 ASCII 名
+        from urllib.parse import quote
+
+        self.send_header(
+            "Content-Disposition",
+            f"attachment; filename=\"export.csv\"; filename*=UTF-8''{quote(filename)}",
+        )
+        self.end_headers()
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def _file(self, path: Path):
         if not path.is_file():
             return self._send(404, {"error": "文件不存在"})
@@ -138,6 +157,20 @@ class Handler(BaseHTTPRequestHandler):
             # 附带「上次进度」：前端据此把按钮改成「继续加购（从第 N 行）」
             data["progress"] = tr.batch_progress_summary()
             return self._send(200, data)
+        if path == "/api/taobao/batch/export.csv":
+            # 跑完一轮要人工核对上百行，屏幕上滚太痛苦 —— 导出后和 BOM 并排 diff
+            import csv
+            import io
+            from datetime import datetime
+
+            st = tr.RUNNER.batch_status()
+            rows = tr.batch_export_rows(st.get("results") or [])
+            buf = io.StringIO()
+            csv.writer(buf).writerows(rows)
+            # utf-8-sig：Excel 双击打开不乱码
+            body = ("\ufeff" + buf.getvalue()).encode("utf-8")
+            name = f"batch-{datetime.now().strftime('%Y%m%d-%H%M')}.csv"
+            return self._download(200, body, "text/csv; charset=utf-8", name)
         if path == "/favicon.ico":
             return self._send(204, b"")
         if path.startswith("/static/"):
@@ -318,8 +351,38 @@ def _take_over_logs() -> None:
             sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
 
+def _cleanup_old_runs(keep_days: int = 14) -> None:
+    """清掉 runs/ 里过期的日志与截图（只动 .log / .jpg，不碰 json 进度）。
+
+    一天跑一轮会产生几十份会话日志和上百张截图，长期只涨不降。
+    默认保留 14 天，可用 BOM_KEEP_DAYS 调整（0 = 不清理）。
+    """
+    import time
+
+    if keep_days <= 0:
+        return
+    cutoff = time.time() - keep_days * 86400
+    removed = freed = 0
+    for pattern in ("*.log", "*.jpg"):
+        for path in RUNS.glob(pattern):
+            try:
+                st = path.stat()
+                if st.st_mtime < cutoff:
+                    path.unlink()
+                    removed += 1
+                    freed += st.st_size
+            except OSError:
+                continue
+    if removed:
+        print(f"[site] 清理过期日志/截图 {removed} 个，释放 {freed / 1048576:.1f} MB（>{keep_days} 天）", flush=True)
+
+
 def main(argv=None):
     _take_over_logs()  # 必须在任何 print 之前
+    try:
+        _cleanup_old_runs(int(os.environ.get("BOM_KEEP_DAYS", "14")))
+    except Exception:  # noqa: BLE001
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)

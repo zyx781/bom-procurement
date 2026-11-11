@@ -260,6 +260,10 @@ COOLDOWN_SEC = int(os.environ.get("TAOBAO_COOLDOWN_SEC", "40"))
 # 早期信号 —— 实测连续出现后 1~2 行内就会升级成硬拦截。所以连续 N 行 uncertain
 # 就自动拉长冷却，别等验证弹出来才停。
 UNCERTAIN_STREAK_TRIGGER = max(1, int(os.environ.get("TAOBAO_UNC_TRIGGER", "2")))
+# 淘宝购物车约 200 行上限，满了之后每行都会失败。开跑前先看一眼件数：
+# 到 STOP 直接不跑（省 20 分钟白跑），到 WARN 记日志提醒清车。
+CART_LIMIT_WARN = max(1, int(os.environ.get("TAOBAO_CART_WARN", "150")))
+CART_LIMIT_STOP = max(1, int(os.environ.get("TAOBAO_CART_STOP", "190")))
 UNCERTAIN_COOL_BASE_S = int(os.environ.get("TAOBAO_UNC_COOL", "60"))
 UNCERTAIN_COOL_MAX_S = int(os.environ.get("TAOBAO_UNC_COOL_MAX", "300"))
 
@@ -1559,6 +1563,39 @@ class SessionRunner:
             }
         )
 
+    def _precheck_cart_limit(self, dry_run: bool = False) -> None:
+        """开跑前看购物车件数：接近淘宝上限就别白跑了。
+
+        实测上限约 200 行，满了之后每一行都会失败；与其跑 20 分钟全红，
+        不如开跑 5 秒就看一眼（cart-view 一次）。
+        """
+        if dry_run:
+            return
+        try:
+            cv = self.send({"cmd": "cart-view"}, timeout=120)
+        except Exception as exc:  # noqa: BLE001
+            _log(f"[batch] cart precheck skipped: {exc}")
+            return
+        data = cv.get("data") or {}
+        count = data.get("cart_item_count")
+        with self._state_lock:
+            self._batch["cart_count_before"] = count
+        if not isinstance(count, int):
+            return
+        if count >= CART_LIMIT_STOP:
+            with self._state_lock:
+                self._batch["stopped_reason"] = (
+                    f"购物车已有 {count} 件，接近淘宝上限（约 200 行），先清理再跑"
+                )
+            self._append_log(
+                f"[batch] 购物车 {count} 件 ≥ 阈值 {CART_LIMIT_STOP}，不启动（先清理购物车）"
+            )
+            return
+        if count >= CART_LIMIT_WARN:
+            self._append_log(
+                f"[batch] 购物车已有 {count} 件，接近上限（约 200 行），建议先清理"
+            )
+
     def _run_batch(self, lines: list, prefer_cheap: bool, max_candidates: int, dry_run: bool = False):
         ran = 0
         _unc_streak = 0  # 连续 uncertain 计数：软限流的早期信号
@@ -1571,6 +1608,11 @@ class SessionRunner:
         except Exception as exc:  # noqa: BLE001
             self._append_log(f"[batch] 隐藏浏览器窗口失败（不影响跑批）：{exc}")
         try:
+            # 开跑前预检购物车件数：淘宝上限约 200 行，满了一行都加不进去。
+            # 这里直接看一次，比跑 20 分钟全失败再回来查划算。
+            self._precheck_cart_limit(dry_run=dry_run)
+            if self._batch.get("stopped_reason"):
+                return
             for i, line in enumerate(lines):
                 with self._state_lock:
                     if self._batch.get("stopped_reason"):
@@ -2249,6 +2291,51 @@ def _is_transient_error(exc) -> bool:
         for k in ("Timeout", "timeout", "超时", "net::ERR", "Target closed", "Navigation",
                   "ECONNRESET", "断开的连接", "ERR_CONNECTION")
     )
+
+
+EXPORT_COLUMNS = (
+    "行号",
+    "状态",
+    "需求",
+    "买到的商品",
+    "SKU",
+    "数量",
+    "实付金额",
+    "确认方式",
+    "耗时(s)",
+    "备注",
+)
+
+
+def batch_export_rows(results: list[dict]) -> list[list[str]]:
+    """把批量逐行结果整理成可直接落 CSV 的二维表（首行是表头）。
+
+    跑完一轮要人工核对 100+ 行时，屏幕上滚太痛苦 —— 导出后可以用 Excel
+    跟 BOM 并排 diff。金额/耗时都转成字符串，避免 csv 写入出现类型差异。
+    """
+    rows: list[list[str]] = [list(EXPORT_COLUMNS)]
+    for r in results or []:
+        if r.get("status") not in ("ok", "failed", "uncertain", "skipped"):
+            continue
+        sku = " / ".join(
+            f"{s.get('label')}={s.get('value')}" for s in (r.get("sku") or []) if s.get("value")
+        )
+        cost = r.get("cost")
+        rows.append(
+            [
+                str(r.get("line_no") or ""),
+                str(r.get("status") or ""),
+                str(r.get("headline") or ""),
+                str((r.get("candidate") or {}).get("title") or ""),
+                sku,
+                str(r.get("qty") or ""),
+                "" if cost is None else f"{float(cost):.2f}",
+                str(r.get("cart_verified_via") or ""),
+                f"{(r.get('total_ms') or 0) / 1000:.1f}",
+                " ".join(str(r.get("message") or "").split()),
+            ]
+        )
+    return rows
 
 
 def _strip_pkg(text: str) -> str:

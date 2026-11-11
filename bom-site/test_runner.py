@@ -687,6 +687,52 @@ runner.send = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
 check("会话出错 → None", runner._cart_contains("任意商品")[0] is None)
 runner.send = _bak_send2
 
+print("== 开跑前购物车预检（2026-11-11） ==")
+_bak_send3 = runner.send
+_bak_batch4 = runner._batch
+
+
+def _precheck_case(count):
+    runner._batch = {"running": False, "results": [], "stopped_reason": ""}
+    runner.send = lambda *a, **k: {"data": {"cart_item_count": count}}
+    runner._precheck_cart_limit()
+    return dict(runner._batch)
+
+
+_at_limit = _precheck_case(195)
+check("接近上限直接不跑", "先清理" in (_at_limit.get("stopped_reason") or ""), _at_limit.get("stopped_reason"))
+_ok = _precheck_case(20)
+check("正常件数不拦", not _ok.get("stopped_reason"), _ok.get("stopped_reason"))
+check("记录了开跑前件数", _ok.get("cart_count_before") == 20, _ok.get("cart_count_before"))
+_warn = _precheck_case(160)
+check("150+ 仅提醒不拦", not _warn.get("stopped_reason"), _warn.get("stopped_reason"))
+runner.send = _bak_send3
+runner._batch = _bak_batch4
+
+print("== 批量结果导出（CSV 行） ==")
+_rows = tr.batch_export_rows(
+    [
+        {
+            "line_no": 3,
+            "status": "ok",
+            "headline": "0603 10kΩ ×2",
+            "candidate": {"title": "0603WAF1002T5E"},
+            "sku": [{"label": "阻值", "value": "10kΩ"}],
+            "qty": 1,
+            "cost": 1.284,
+            "cart_verified_via": "xhr",
+            "total_ms": 5234,
+            "message": "已加入\n购物车",
+        },
+        {"line_no": 4, "status": "skipped", "message": "跳过"},
+        {"line_no": 5, "status": "pending"},
+    ]
+)
+check("表头 10 列", len(_rows[0]) == 10, _rows[0])
+check("ok 行字段齐全", _rows[1][0] == "3" and _rows[1][6] == "1.28" and _rows[1][7] == "xhr", _rows[1])
+check("备注里的换行被压平", "\n" not in _rows[1][9], _rows[1][9])
+check("pending 行不导出", all(r[0] != "5" for r in _rows[1:]), _rows)
+
 print()
 print(f"RESULT: {PASS} passed, {FAIL} failed")
 sys.exit(0 if FAIL == 0 else 1)

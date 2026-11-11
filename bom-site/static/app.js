@@ -1244,6 +1244,12 @@
     const resetBtn = $("#btn-batch-reset");
     if (resetBtn) resetBtn.addEventListener("click", resetBatchProgress);
     $("#btn-batch-stop").addEventListener("click", stopBatch);
+    const exportBtn = $("#btn-batch-export");
+    if (exportBtn)
+      exportBtn.addEventListener("click", () => {
+        // 直接下 CSV：导出的是「本次/上次批量」的逐行结果（含状态、金额、确认方式）
+        window.location.href = "/api/taobao/batch/export.csv";
+      });
     $("#btn-cart-view").addEventListener("click", execCart);
     $("#btn-cart-remove").addEventListener("click", () => cartRemove(false));
     $("#btn-cart-clear").addEventListener("click", () => cartRemove(true));

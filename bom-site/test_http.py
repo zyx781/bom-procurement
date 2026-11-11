@@ -111,4 +111,18 @@ except urllib.error.HTTPError as e:
 # 3) 同源（无 Origin 的命令行调用）照常放行：这里是只读接口
 print("SAME-ORIGIN STILL OK", post("/api/type-check", {})[0], "(404 = 路由不存在，说明没被 403 误杀)")
 
+# 4) 批量结果导出（CSV，Excel 直接打开不乱码）
+with urllib.request.urlopen(BASE + "/api/taobao/batch/export.csv", timeout=10) as r:
+    _csv = r.read().decode("utf-8-sig")
+    print(
+        "BATCH EXPORT",
+        r.status,
+        "| 表头:",
+        _csv.splitlines()[0][:32],
+        "| 行数:",
+        len(_csv.splitlines()),
+        "|",
+        (r.headers.get("Content-Disposition") or "")[:28],
+    )
+
 print("ALL HTTP TESTS DONE")

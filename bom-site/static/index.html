@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BOM 选型台 · 上传即出采购答案</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">B</div>
+    <div class="brand-text">
+      <h1>BOM 选型台</h1>
+      <p>上传 BOM → 锁定规格 → 本地会话执行到购物车</p>
+    </div>
+  </div>
+  <div class="topbar-tags">
+    <span class="tag ok">规则决策 + 本地执行</span>
+    <span class="tag">只到购物车</span>
+    <span class="tag warn">付款人工</span>
+    <button class="ghost danger small" id="btn-shutdown" title="关闭本地服务与淘宝浏览器（不用再双击停止用的 bat）">退出服务</button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="panel" id="input-panel">
+    <div class="panel-head">
+      <h2><span class="step">1</span>上传 BOM</h2>
+      <span class="hint">CSV / XLSX，至少要有「型号」或「名称」，建议带「封装 / 参数 / 数量」</span>
+    </div>
+
+    <div class="input-grid">
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="file" accept=".csv,.xlsx,.xlsm">
+        <span class="dz-icon">＋</span>
+        <strong>点击选择，或把文件拖到这里</strong>
+        <span class="dz-sub">.csv / .xlsx，表头中英文都认</span>
+      </label>
+
+      <div class="paste">
+        <textarea id="bom-text" spellcheck="false" placeholder="也可以直接粘贴 CSV，例如：&#10;行号,型号,名称,封装,参数,数量&#10;1,RC0603FR-0710KL,贴片电阻,0603,10kΩ ±1% 0.1W,100&#10;2,STM32F103C8T6,MCU,LQFP48,64KB Flash,10"></textarea>
+        <div class="row">
+          <button class="ghost" id="btn-sample">载入示例 BOM</button>
+          <button class="primary" id="btn-analyze">分析 BOM →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="status" id="input-status"></div>
+  </section>
+
+  <section class="panel hidden" id="result-panel">
+    <div class="panel-head">
+      <h2><span class="step">2</span>选型答案</h2>
+      <div class="actions">
+        <label class="sets-ctl" title="BOM 用量是按「一套」写的，这里填要做几套，所有行按此倍数放大">
+          采购套数
+          <input id="sets-input" type="number" min="1" max="999" step="1" value="1">
+        </label>
+        <button class="ghost" id="btn-export-csv">导出清单 CSV</button>
+        <button class="ghost" id="btn-export">导出 JSON</button>
+      </div>
+    </div>
+
+    <div class="summary" id="summary"></div>
+
+    <div class="result-grid">
+      <aside class="line-list" id="line-list"></aside>
+      <div class="line-detail" id="line-detail">
+        <div class="empty">选择左侧任意一行，查看采购口径、搜索词与风险。</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="score-panel">
+    <div class="panel-head">
+      <h2><span class="step">3</span>候选评分<span class="opt">可选</span></h2>
+      <span class="hint">把你看到的候选粘进来，按 SKILL 权重打分；本页不抓取、不访问任何平台</span>
+    </div>
+
+    <div class="score-form">
+      <div class="score-line-row">
+        <label for="score-line">对应 BOM 行</label>
+        <select id="score-line"></select>
+      </div>
+      <textarea id="cand-text" spellcheck="false" placeholder="title,price,sales,rating,shop_type,is_tmall,real_photo&#10;0603 10KΩ ±1% 贴片电阻 100只,3.5,12000,0.98,企业店,false,true&#10;0603 10kΩ 1% 电阻,2.8,3400,0.95,个人C店,false,false"></textarea>
+      <div class="row">
+        <button class="ghost" id="btn-cand-sample">载入示例候选</button>
+        <button class="primary" id="btn-score">评分</button>
+      </div>
+      <p class="fineprint">示例候选是合成数据，仅用于演示评分逻辑；评分只使用你粘贴的字段，不抓取。真正访问淘宝只在下方「淘宝执行」区。</p>
+    </div>
+
+    <div id="score-result"></div>
+  </section>
+
+  <section class="panel hidden" id="exec-panel">
+    <div class="panel-head">
+      <h2><span class="step">4</span>淘宝执行<span class="opt">只到购物车</span></h2>
+      <div class="actions">
+        <button class="ghost" id="btn-session-start">启动淘宝会话</button>
+        <button class="ghost" id="btn-session-stop">结束会话</button>
+      </div>
+    </div>
+
+    <div class="session-bar">
+      <span class="sdot" id="sess-dot"></span>
+      <span id="sess-text">未启动</span>
+      <span class="sess-task" id="sess-task"></span>
+      <span class="sess-warn" id="sess-warn"></span>
+      <button class="ghost hidden" id="btn-sess-recheck" title="在浏览器里过完滑块后点这里，立刻解锁按钮">验证已完成，重新检测</button>
+      <button class="ghost" id="btn-sess-window" title="跑批时浏览器藏在屏幕外，不会盖住你正在用的软件；点这里移回屏幕内（不抢前台）">显示淘宝窗口</button>
+      <button class="ghost" id="btn-sess-window-hide" title="再藏回屏幕外">藏起来</button>
+    </div>
+
+    <div class="batch-bar">
+      <button class="primary" id="btn-batch-start" disabled>一键全部加购</button>
+      <button class="ghost" id="btn-batch-stop" disabled>停止</button>
+      <button class="ghost hidden" id="btn-batch-reset" title="只清进度记录，不动购物车">重新开始</button>
+      <span class="fineprint" id="batch-note">逐行搜索 → 取通过硬门槛的候选里最便宜的一个 → 匹配 SKU → 加购；某一行失败会自动换下一个候选。</span>
+    </div>
+    <div id="batch-progress" class="batch-progress hidden"></div>
+
+    <div class="exec-grid">
+      <div class="exec-left">
+        <label class="exec-label" for="exec-line">BOM 行</label>
+        <select id="exec-line"></select>
+        <button class="primary exec-search" id="btn-exec-search" disabled>1 · 搜索候选</button>
+        <div id="exec-candidates" class="exec-candidates"></div>
+        <button class="ghost exec-search" id="btn-exec-open" disabled style="margin-top:10px">2 · 打开选中并匹配 SKU</button>
+        <div id="exec-search-note" class="fineprint"></div>
+      </div>
+      <div class="exec-right" id="exec-detail">
+        <div class="empty">会话就绪后选一行搜索；候选按规则打分，再由你确认打开和加购。</div>
+      </div>
+    </div>
+
+    <details class="cart-tools">
+      <summary>购物车维护（删除 / 测试用）</summary>
+      <div class="row">
+        <input id="cart-keyword" type="text" placeholder="按标题关键字删除，例如 0603、STM32、IRF540">
+        <button class="ghost" id="btn-cart-view">查看购物车明细</button>
+        <button class="ghost" id="btn-cart-remove">删除匹配商品</button>
+        <button class="ghost danger" id="btn-cart-clear">清空整个购物车</button>
+      </div>
+      <div id="cart-remove-result" class="fineprint">删除只影响淘宝购物车，不可撤销；清空会连同你自己加的商品一起删掉。</div>
+    </details>
+
+    <details class="logs">
+      <summary>会话日志（排查用）</summary>
+      <pre id="sess-logs"></pre>
+    </details>
+    <p class="fineprint">执行层只调用 search / open / select-sku / cart-add；付款、地址、发票必须你本人在淘宝完成。遇到验证码请手动完成，站点不会绕过。</p>
+  </section>
+
+  <section class="panel compliance">
+    <div class="panel-head"><h2>合规边界</h2></div>
+    <div class="comp-grid">
+      <div><b>不代登录</b><span>不模拟登录、不读取或导出 Cookie；登录由你在弹出的浏览器里完成。</span></div>
+      <div><b>不绕验证</b><span>遇到验证码/滑块立即停，人工完成后继续，不做任何绕过。</span></div>
+      <div><b>只到购物车</b><span>只执行搜索、选 SKU、加购；不结算、不付款、不确认收货。</span></div>
+      <div><b>付款人工</b><span>地址、发票、付款永远由你在淘宝完成。</span></div>
+    </div>
+    <p class="fineprint">决策是「规则结论」，不是实时报价；执行结果以淘宝页面为准。<code>manual_approval_required = true</code>，关键件需逐行确认。</p>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <span>BOM 选型台 · 引擎 v<span id="engine-ver">—</span></span>
+  <span>规则来源：taobao-bom-procurement SKILL v0.3</span>
+</footer>
+
+<div id="toast" class="toast"></div>
+
+<script src="/static/app.js" defer></script>
+</body>
+</html>

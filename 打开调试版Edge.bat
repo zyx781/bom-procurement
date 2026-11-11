@@ -1,15 +1,27 @@
 @echo off
-chcp 936 >nul
-set EDGE="C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-if not exist %EDGE% set EDGE="C:\Program Files\Microsoft\Edge\Application\msedge.exe"
-if not exist %EDGE% (
-  echo [´íÎó] Ã»ÕÒµ½ msedge.exe£¬ÇëÈ·ÈÏ Edge °²×°Î»ÖÃ
+rem BOM é‡‡è´­å° Â· æ‰“å¼€è°ƒè¯•ç‰ˆ Edgeï¼ˆç‹¬ç«‹ profile + CDP 9222ï¼‰ã€‚UTF-8 ç¼–ç ï¼Œé€»è¾‘å…¨åœ¨ bom-site\launcher.ps1ã€‚
+chcp 65001 >nul
+title BOM é‡‡è´­å° Â· è°ƒè¯•ç‰ˆ Edge
+mode con cols=78 lines=30 >nul 2>&1
+setlocal
+set "PS=%~dp0bom-site\launcher.ps1"
+
+if not exist "%PS%" (
+  echo.
+  echo   [å¤±è´¥] æ‰¾ä¸åˆ°å¯åŠ¨å™¨
+  echo          %PS%
+  echo.
+  echo   è¯·ç¡®è®¤ bom-site ç›®å½•ä¸å¯åŠ¨è„šæœ¬åœ¨åŒä¸€å±‚ï¼Œä¸”ä»“åº“å·²å®Œæ•´è§£å‹ã€‚
+  echo.
   pause
   exit /b 1
 )
-echo ÕıÔÚÆô¶¯´øµ÷ÊÔ¶Ë¿ÚµÄ Edge£¨profile: D:\²âÊÔ\bom-site\.cdp-profile£©...
-echo Õâ¸ö´°¿ÚÀïµÇÂ¼Ò»´ÎÌÔ±¦£¬Ö®ºó¶¼¸´ÓÃËü£»²»Òª¹ØËü¡£
-start "" %EDGE% --remote-debugging-port=9222 --user-data-dir="D:\²âÊÔ\bom-site\.cdp-profile" --no-first-run --no-default-browser-check --window-position=-2000,0 --window-size=1500,1000 --restore-last-session https://www.taobao.com
-timeout /t 3 >nul
-powershell -NoProfile -Command "try { $v = Invoke-RestMethod http://127.0.0.1:9222/json/version -TimeoutSec 3; Write-Host ('[OK] CDP ÒÑ¾ÍĞ÷: ' + $v.Browser) } catch { Write-Host '[Ê§°Ü] 9222 Ã»ÆğÀ´£¬¿ÉÄÜ Edge ÒÑ±»±ğµÄÊµÀıÕ¼ÓÃ£¨°ÑÆÕÍ¨ Edge ´°¿ÚÈ«¹ØµôÔÙÊÔ£©' }"
-pause
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PS%" edge -NoPause
+set "CODE=%errorlevel%"
+if not "%CODE%"=="0" (
+  echo.
+  echo   å¯åŠ¨å™¨è¿”å›é”™è¯¯ç  %CODE%ï¼Œä¸Šæ–¹æœ‰å…·ä½“åŸå› ã€‚
+  pause
+)
+exit /b %CODE%

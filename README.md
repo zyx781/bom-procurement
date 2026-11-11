@@ -42,17 +42,26 @@ pip install -r requirements.txt
 
 ### 2. 启动
 
-```bash
-# 1) 先打开调试版 Edge（开放 9222 端口，独立 profile）
-双击  打开调试版Edge.bat
-
-# 2) 再启动本地网站（后台运行，不留黑框）
-双击  启动BOM选型台.bat
+```text
+打开调试版Edge.bat     ← 第 1 步：独立 profile + CDP 9222
+启动BOM选型台.bat      ← 第 2 步：自检 → 后台起服务 → 打开界面
 ```
+
+三个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.9.1）。
 
 打开 <http://127.0.0.1:8765/>。
 
-也可以手动起服务：
+启动器支持参数（在 cmd 里带参数，或写进快捷方式的目标里）：
+
+| 命令 | 作用 |
+|---|---|
+| `启动BOM选型台.bat status` | 只看运行状态，不启动任何东西 |
+| `启动BOM选型台.bat diag` | 只读体检：Python / 依赖 / Edge / 端口 / PID / 日志 |
+| `启动BOM选型台.bat restart` | 重启服务 |
+| `启动BOM选型台.bat help` | 打印用法 |
+| `停止BOM选型台.bat` | 停服务 + 关调试版 Edge（普通 Edge 不动） |
+
+也可以手动起服务（等价，但没有自检）：
 
 ```bash
 cd bom-site
@@ -69,8 +78,8 @@ python server.py            # 默认 127.0.0.1:8765
 
 ### 4. 关闭
 
-- 网页右上角 **退出服务**：停批量、停会话、关浏览器、退进程
-- 或双击 `停止BOM选型台.bat`（备用）
+- 网页右上角 **退出服务**：停批量、停会话、关浏览器、退进程（最常用）
+- 或双击 `停止BOM选型台.bat`（备用）：只结束本项目的服务进程与带 `--remote-debugging-port=9222` 的 Edge，不碰你自己的普通浏览器窗口
 
 ---
 
@@ -92,38 +101,48 @@ python server.py            # 默认 127.0.0.1:8765
 
 ```
 bom-site/                     本地网站与调度
+  launcher.ps1                启动 / 停止 / 状态 / 体检 / 调试 Edge 的统一入口
   server.py                   HTTP 服务（127.0.0.1:8765）
   engine.py                   BOM 解析 + 选型规则 + 候选打分
   taobao_runner.py            批量调度、SKU 决策、加购确认、对账
   window_pos.py               调试浏览器窗口显隐（跑批时不抢前台）
   static/                     前端（无框架）
-  test_*.py                   514 项测试
+  test_*.py                   542 项断言（8 套纯 Python 测试）
   samples/                    示例 BOM / 候选
 Taobao-Search-Skill/scripts/  淘宝执行层（Playwright over CDP）
 taobao-bom-procurement/       决策层 SKILL 文档
+*.bat                         三个 Windows 入口（UTF-8 / CRLF）
+VERSION                       当前版本号
 ```
 
 ## 测试
 
 ```bash
 cd bom-site
-python test_engine.py             # 176 项：解析与规则
-python test_sku_selection.py      #  73 项：SKU 选择与门禁
-python test_runner.py             # 148 项：调度、对账、进度、续跑
-python test_verification_recovery.py  # 27 项
-python test_window_focus.py       #  54 项
-python test_click_guard.py        #  14 项
-python test_integration.py        #  22 项：假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
+python test_engine.py                 # 176 项：解析与规则
+python test_sku_selection.py            #  73 项：SKU 选择与门禁
+python test_runner.py                   # 148 项：调度、对账、进度、续跑
+python test_verification_recovery.py    #  27 项：验证/风控恢复
+python test_window_focus.py            #  58 项：窗口显隐与不抢前台
+python test_click_guard.py              #  14 项：点击三守卫
+python test_cart_cleanup.py             #  24 项：精准清车不误删
+python test_integration.py             #  22 项：假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
 ```
 
-纯 Python 用例不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
-GitHub Actions 在 Windows runner 上跑全部 7 套（见 `.github/workflows/tests.yml`）。
+以上 8 套共 542 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+另有 `python test_http.py`：需要服务**已经在 8765 跑着**，只做 HTTP 冒烟打印，不断言，故不进 CI。
+GitHub Actions 在 Windows runner 上跑 8 套测试 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。
 
 ## 常见问题
 
 | 现象 | 处理 |
 |---|---|
-| 撞到滑块/图片验证 | 批量会原地等（默认 30 分钟），在浏览器里完成后自动续跑 |
+| 撞到滑块/图片验证 | 页面顶部会出现提示条，批量原地等（默认 30 分钟），**不会把淘宝窗口突然弹到前台**；想看窗口点「显示淘宝窗口」，过完验证点「验证已完成，重新检测」 |
+| 双击 bat 后中文乱码 | 脚本已固定 `chcp 65001` + UTF-8；若仍乱码，确认按 `.gitattributes` 检出（`.bat` 为 CRLF），别用记事本另存为 ANSI |
+| 启动器说 8765 被占用 | 先跑 `启动BOM选型台.bat diag` 看是谁占着；多半是上次没退干净，双击 `停止BOM选型台.bat` 再启动 |
+| 提示缺少 playwright / openpyxl | `pip install -r requirements.txt` |
+| 9222 被普通 Edge 占了 / CDP 不通 | 关掉所有 Edge 窗口再双击 `打开调试版Edge.bat`；脚本会先探测 CDP，已就绪就不重复启动 |
+| 服务起不来，窗口一闪而过 | 窗口不会自动关（失败会 pause），看报错；或跑 `diag` 查 `bom-site/runs/server.err.log` |
 | 加购频繁「无回执」 | 多为限流前兆，程序会自动降温；可调 `TAOBAO_LINE_GAP`、`TAOBAO_COOL_*` 环境变量放慢 |
 | 浏览器被关掉 | 网页里点「启动淘宝会话」会自动重开；窗口默认藏在屏幕外，需要点「显示淘宝窗口」 |
 | 解析少行 | 多工作表 XLSX 会自动合并（表头不一致的页会在警告里点名）；若仍少行，检查表头是否被识别 |

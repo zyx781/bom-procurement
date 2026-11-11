@@ -34,8 +34,26 @@ jobs:
           python test_verification_recovery.py
           python test_window_focus.py
           python test_click_guard.py
+          python test_cart_cleanup.py
 
       # 端到端：起假会话 + 临时 server 进程，验证调度闭环与 HTTP 路由
       - name: Integration (fake session)
         working-directory: bom-site
         run: python test_integration.py
+
+      # Windows 启动器：语法解析 + 只读体检（不启动服务/浏览器）
+      - name: Launcher smoke
+        shell: pwsh
+        working-directory: bom-site
+        run: |
+          $ps1 = (Resolve-Path launcher.ps1).Path
+          $errs = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($ps1, [ref]$null, [ref]$errs) | Out-Null
+          if ($errs.Count -gt 0) {
+            $errs | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          pwsh -NoProfile -File $ps1 help -NoPause
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File $ps1 diag -NoPause
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

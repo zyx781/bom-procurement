@@ -76,7 +76,15 @@ def parse_workbook(filename: str, raw: bytes) -> dict:
     warnings = []
 
     if suffix in (".xlsx", ".xlsm"):
-        headers, raw_rows = _read_xlsx(raw)
+        headers, raw_rows, meta = _read_xlsx(raw)
+        used = meta.get("sheets_used") or []
+        skipped = meta.get("sheets_skipped") or []
+        if len(used) > 1:
+            warnings.append(f"已合并 {len(used)} 个工作表：{'、'.join(used)}")
+        if skipped:
+            warnings.append(
+                f"以下工作表表头与本表不一致，未合并：{'、'.join(skipped)}（请确认是否漏行）"
+            )
     elif suffix == ".xls":
         raise ValueError("旧版 .xls 不支持，请在 Excel 里另存为 .xlsx 或 .csv")
     else:
@@ -176,24 +184,22 @@ def _to_int(text, default=None):
     return int(m.group(0)) if m else default
 
 
-def _read_xlsx(raw: bytes):
-    from openpyxl import load_workbook
-
-    wb = load_workbook(io.BytesIO(raw), data_only=True, read_only=True)
-    ws = wb[wb.sheetnames[0]]
+def _xlsx_sheet_table(ws) -> list[list[str]]:
+    """一个工作表 → 二维字符串表（跳过空行）。"""
     table = []
     for row in ws.iter_rows(values_only=True):
         if row is None:
             continue
-        table.append([_cell_text(c) for c in row])
-    try:
-        wb.close()
-    except Exception:
-        pass
+        cells = [_cell_text(c) for c in row]
+        if any(cells):
+            table.append(cells)
+    return table
+
+
+def _xlsx_split_header(table: list[list[str]]) -> tuple[list[str], list[list[str]]]:
+    """在一个工作表里找出表头行（别名命中最多的一行），返回 (表头, 数据行)。"""
     if not table:
         return [], []
-
-    # 表头可能不在第一行：在前 10 行里找命中别名最多的一行
     best_i, best_hits = 0, -1
     for i, row in enumerate(table[:10]):
         hits = sum(1 for c in row if _canon_header(c))
@@ -201,8 +207,56 @@ def _read_xlsx(raw: bytes):
             best_i, best_hits = i, hits
     if best_hits < 1:
         best_i = 0
-    headers = table[best_i]
-    return headers, table[best_i + 1 :]
+    return table[best_i], table[best_i + 1 :]
+
+
+def _xlsx_header_matches(base: list[str], other: list[str]) -> bool:
+    """两个工作表算不算同一张 BOM：规范化后的表头列集合有交集即可。"""
+    a = {k for k in (_canon_header(c) for c in base) if k}
+    b = {k for k in (_canon_header(c) for c in other) if k}
+    if not a or not b:
+        return False
+    return len(a & b) >= max(1, min(len(a), len(b)) // 2)
+
+
+def _read_xlsx(raw: bytes) -> tuple[list[str], list[list[str]], dict]:
+    """读 XLSX / XLSM 的**所有工作表**并合并。
+
+    2026-11-11：以前只读 `wb.sheetnames[0]`，KiCad/AD 导出的多页 BOM
+    （主板 / 电源板 / 连接器）第 2 页起的行会**静默消失** —— 不报错最危险。
+    现在逐页解析、表头能对上的合并，对不上的跳过并在 meta 里记账。
+    """
+    from openpyxl import load_workbook
+
+    wb = load_workbook(io.BytesIO(raw), data_only=True, read_only=True)
+    merged_headers: list[str] = []
+    merged_rows: list[list[str]] = []
+    used, skipped = [], []
+    try:
+        for name in wb.sheetnames:
+            ws = wb[name]
+            try:
+                table = _xlsx_sheet_table(ws)
+            except Exception:  # noqa: BLE001
+                skipped.append(name)
+                continue
+            headers, rows = _xlsx_split_header(table)
+            if not headers or not rows:
+                continue  # 空表 / 只有表头的说明页
+            if not merged_headers:
+                merged_headers, merged_rows = list(headers), list(rows)
+                used.append(name)
+            elif _xlsx_header_matches(merged_headers, headers):
+                merged_rows.extend(rows)
+                used.append(name)
+            else:
+                skipped.append(name)
+    finally:
+        try:
+            wb.close()
+        except Exception:  # noqa: BLE001
+            pass
+    return merged_headers, merged_rows, {"sheets_used": used, "sheets_skipped": skipped}
 
 
 # --------------------------------------------------------------------------
@@ -1918,8 +1972,6 @@ def score_candidates(line, csv_text=None, candidates=None, execution=False) -> d
         candidates = parse_candidates_csv(csv_text)
     cat = line.get("category") or "other"
     weights = WEIGHTS.get(cat, WEIGHTS["other"])
-    p = line.get("params") or {}
-    pkg = (line.get("package") or "").split(" ")[0]
 
     prepared = []
     # 买「够这一行用」要花多少钱，而不是单只看多少钱：

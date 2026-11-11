@@ -442,6 +442,31 @@ eq("非模块行不享受放宽",
    engine._check_title(engine.analyze_line({"refs": "U1", "desc": "SN74LVC2G08DCUR", "package": "SSOP-8"}, 99),
                        {"title": "74LVC2G08 双与门 SOP8 逻辑芯片"}, {})[0], "H02")
 
+print("== XLSX 多工作表合并（2026-11-11）==")
+# 以前只读 sheetnames[0]，多页 BOM（主板/电源板）第 2 页起的行静默消失。
+import io as _io
+
+from openpyxl import Workbook as _Workbook
+
+_wb = _Workbook()
+_ws1 = _wb.active
+_ws1.title = "主板"
+_ws1.append(["Comment", "Footprint", "Quantity", "Value"])
+_ws1.append(["100nF", "C0402", "8", "100nF"])
+_ws2 = _wb.create_sheet("电源板")
+_ws2.append(["Comment", "Footprint", "Quantity", "Value"])
+_ws2.append(["10uF", "C0603", "3", "10uF"])
+_ws3 = _wb.create_sheet("说明")
+_ws3.append(["注意事项"])
+_ws3.append(["这是多页 BOM 的说明页"])
+_buf = _io.BytesIO()
+_wb.save(_buf)
+_res_multi = engine.parse_workbook("multi.xlsx", _buf.getvalue())
+eq("两个工作表都解析出来", len(_res_multi["rows"]), 2)
+eq("行号自动连续", [r["line_no"] for r in _res_multi["rows"]], [1, 2])
+eq("合并了 2 个工作表", any("已合并 2 个工作表" in w for w in _res_multi["warnings"]), True)
+eq("表头不一致的页被提示", any("说明" in w for w in _res_multi["warnings"]), True)
+
 print()
 print(f"RESULT: {PASS} passed, {FAIL} failed")
 sys.exit(0 if FAIL == 0 else 1)

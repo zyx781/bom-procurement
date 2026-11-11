@@ -1452,6 +1452,11 @@ class SessionRunner:
                         "pack_size": prev.get("pack_size"),
                         "actual_pcs": prev.get("actual_pcs"),
                         "screenshot": prev.get("screenshot"),
+                        # 续跑行也要把「选了哪个 SKU / 靠什么确认加购」带回来，
+                        # 否则界面上这条记录只剩金额，导出 CSV 的 SKU、确认方式两列是空的。
+                        "sku": prev.get("sku") or [],
+                        "cart_verified_via": prev.get("cart_verified_via"),
+                        "query": prev.get("query"),
                     }
                 )
             else:
@@ -1507,6 +1512,8 @@ class SessionRunner:
 
     def _save_progress(self):
         """把已定局（ok/failed/uncertain）的行按 line_no 存盘，供下次续跑跳过。"""
+        prior_data = load_batch_progress() or {}
+        prior_lines = prior_data.get("lines") or {}
         with self._state_lock:
             rows = {}
             for r in self._batch.get("results") or []:
@@ -1515,7 +1522,7 @@ class SessionRunner:
                 ln = r.get("line_no")
                 if ln is None:
                     continue
-                rows[str(ln)] = {
+                payload = {
                     "status": r["status"],
                     "headline": r.get("headline"),
                     "message": r.get("message"),
@@ -1526,6 +1533,10 @@ class SessionRunner:
                     "unit_price": r.get("unit_price"),
                     "pack_size": r.get("pack_size"),
                     "actual_pcs": r.get("actual_pcs"),
+                    # 选了哪个 SKU、靠什么信号确认加购：续跑/导出都要用，缺了就查不出买了什么规格
+                    "sku": r.get("sku") or [],
+                    "cart_verified_via": r.get("cart_verified_via"),
+                    "query": r.get("query"),
                     # uncertain 行要留着候选和截图，续跑跳过时还能让人核对
                     "candidate": r.get("candidate"),
                     "screenshot": r.get("screenshot"),
@@ -1537,6 +1548,20 @@ class SessionRunner:
                     "add_ms": r.get("add_ms"),
                     "attempts_n": len(r.get("attempts") or []),
                 }
+                if r.get("resumed"):
+                    # 续跑跳过的行：结论是从进度文件里读出来的，别拿它覆盖上一轮的
+                    # 真实记录（message 会变成「续跑跳过」、耗时全变 null）。
+                    # 只有结论真的变了（收尾对账把 ok 降成 uncertain）才写回，
+                    # 而且明细沿用上一轮，免得把 SKU/金额/截图抹掉。
+                    prev = prior_lines.get(str(ln)) or {}
+                    if (prev.get("status") or "") == payload["status"]:
+                        continue
+                    for key, val in prev.items():
+                        if key in ("status", "message"):
+                            continue
+                        if val not in (None, "", [], {}):
+                            payload[key] = val
+                rows[str(ln)] = payload
             data = {
                 "updated_at": datetime.now().isoformat(timespec="seconds"),
                 "total": self._batch.get("total") or 0,
@@ -1551,13 +1576,12 @@ class SessionRunner:
         # 购物车直接翻倍。所以这里先把旧文件读出来合并。
         if not rows:
             return
-        prior = load_batch_progress().get("lines") or {}
-        merged = dict(prior)
+        merged = dict(prior_lines)
         merged.update(rows)  # 本轮的结论覆盖旧结论（失败转成功要生效）
         save_batch_progress(
             {
                 "updated_at": data["updated_at"],
-                "total": data["total"] or (load_batch_progress().get("total") or 0),
+                "total": data["total"] or prior_data.get("total") or 0,
                 "lines": merged,
                 # I7：时间戳也落盘，重启后状态机能还原「这轮什么时候开始/结束」
                 "started_at": data.get("started_at"),
@@ -1616,15 +1640,36 @@ class SessionRunner:
             if self._batch.get("stopped_reason"):
                 return
             for i, line in enumerate(lines):
+                _skip_why = ""
                 with self._state_lock:
                     if self._batch.get("stopped_reason"):
                         break
                     if self._batch["results"][i].get("resumed"):
                         # 上次已经加过的行：直接跳过，不重复下单
                         continue
-                    self._batch["index"] = i
-                    self._batch["phase"] = f"第 {i + 1}/{len(lines)} 行"
-                    self._batch["results"][i]["status"] = "running"
+                    if not (
+                        line.get("query_plan")
+                        or (line.get("decision") or {}).get("search_queries")
+                    ):
+                        # 残缺行（型号/名称/参数都空，只剩一个封装）：没有搜索词可搜，
+                        # 跑下去只会在 search() 里抛 NO_QUERY，白等一轮再记一条「失败」。
+                        # 直接标「跳过」并写清原因，让人回去补 BOM。
+                        _skip_why = (
+                            "；".join(line.get("blocking") or [])
+                            or "该行没有可用搜索词（型号/名称/参数都为空）"
+                        )
+                        self._batch["results"][i].update(
+                            status="skipped", message=f"跳过：{_skip_why}"
+                        )
+                    else:
+                        self._batch["index"] = i
+                        self._batch["phase"] = f"第 {i + 1}/{len(lines)} 行"
+                        self._batch["results"][i]["status"] = "running"
+                if _skip_why:
+                    self._append_log(
+                        f"[batch] line #{line.get('line_no')} 跳过（无搜索词）：{_skip_why}"
+                    )
+                    continue
                 if ran:
                     # 行间留一点间隔：连续狂翻商品页最容易触发滑块验证。
                     # 淘宝的限速看着是「短窗口内导航次数」——实测 1.0s/行 跑十行左右
@@ -1747,7 +1792,11 @@ class SessionRunner:
                     _slow_streak = 0
                 with self._state_lock:
                     self._batch["done"] = sum(
-                        1 for r in self._batch["results"] if r["status"] in ("ok", "failed", "uncertain")
+                        1
+                        for r in self._batch["results"]
+                        # skipped 也算「处理过了」：无搜索词的残缺行和用户中途
+                        # 停止后剩下的行都是 skipped，不算进去的话进度条永远差几行。
+                        if r["status"] in ("ok", "failed", "uncertain", "skipped")
                     )
                 # 每行都落盘：随时暂停/关机都不丢进度，下次接着跑
                 # 演练模式不写进度：否则假的「ok 无金额」会覆盖真实进度

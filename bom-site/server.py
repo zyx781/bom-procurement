@@ -61,9 +61,28 @@ def _shutdown_service() -> None:
     threading.Timer(0.6, _run).start()  # 留出 0.6 s 让 HTTP 响应先写回去
 
 
+def _int_field(body: dict, key: str, low: int, high: int, label: str | None = None) -> int:
+    """把请求体里的整数字段取出来并校验范围。
+
+    以前直接 `int(body.get("index"))`：字段没传时是 None，int(None) 抛 TypeError，
+    被最外层 except 兜成 500「服务端异常」—— 前端只能显示一句含糊的报错。
+    这里统一转成 ValueError（400 + 明确的 code）。
+    """
+    name = label or key
+    raw = body.get(key)
+    if raw is None or raw == "":
+        raise ValueError(f"缺少 {name}")
+    try:
+        val = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name} 必须是整数") from None
+    if val < low or val > high:
+        raise ValueError(f"{name} 必须在 {low}–{high} 之间")
+    return val
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "BomSite/0.1"
-
     # ---------------- 基础 ----------------
     def log_message(self, fmt, *args):  # 静默常规访问日志，只留错误
         pass
@@ -205,13 +224,7 @@ class Handler(BaseHTTPRequestHandler):
                     raw = base64.b64decode(b64, validate=True)
                 except Exception:
                     raise ValueError("文件内容不是有效的 base64")
-                try:
-                    text_preview = raw[:2000].decode("utf-8-sig")
-                except UnicodeDecodeError:
-                    text_preview = ""
                 result = engine.parse_workbook(filename, raw)
-                if result["rows"] and text_preview:
-                    pass
                 return self._send(200, result)
 
             if path == "/api/analyze":
@@ -299,17 +312,15 @@ class Handler(BaseHTTPRequestHandler):
                 if path == "/api/taobao/search":
                     return self._send(200, tr.RUNNER.search(line, body.get("query")))
                 if path == "/api/taobao/open":
-                    return self._send(200, tr.RUNNER.open_item(line, int(body.get("index"))))
+                    return self._send(200, tr.RUNNER.open_item(line, _int_field(body, "index", 0, 999)))
                 if path == "/api/taobao/add":
-                    qty = int(body.get("qty") or 0)
-                    if qty < 1 or qty > 99999:
-                        raise ValueError("qty 必须是 1–99999 的正整数")
+                    qty = _int_field(body, "qty", 1, 99999, label="qty")
                     selections = body.get("selections") or []
                     return self._send(
                         200,
                         tr.RUNNER.add_to_cart(
                             line,
-                            int(body.get("index")),
+                            _int_field(body, "index", 0, 999),
                             selections,
                             qty,
                             auto_qty=bool(body.get("auto")),

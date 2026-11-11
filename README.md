@@ -97,7 +97,7 @@ bom-site/                     本地网站与调度
   taobao_runner.py            批量调度、SKU 决策、加购确认、对账
   window_pos.py               调试浏览器窗口显隐（跑批时不抢前台）
   static/                     前端（无框架）
-  test_*.py                   469 项测试
+  test_*.py                   514 项测试
   samples/                    示例 BOM / 候选
 Taobao-Search-Skill/scripts/  淘宝执行层（Playwright over CDP）
 taobao-bom-procurement/       决策层 SKILL 文档
@@ -107,9 +107,9 @@ taobao-bom-procurement/       决策层 SKILL 文档
 
 ```bash
 cd bom-site
-python test_engine.py             # 172 项：解析与规则
+python test_engine.py             # 176 项：解析与规则
 python test_sku_selection.py      #  73 项：SKU 选择与门禁
-python test_runner.py             # 129 项：调度、对账、进度
+python test_runner.py             # 148 项：调度、对账、进度、续跑
 python test_verification_recovery.py  # 27 项
 python test_window_focus.py       #  54 项
 python test_click_guard.py        #  14 项
@@ -127,6 +127,7 @@ GitHub Actions 在 Windows runner 上跑全部 7 套（见 `.github/workflows/te
 | 加购频繁「无回执」 | 多为限流前兆，程序会自动降温；可调 `TAOBAO_LINE_GAP`、`TAOBAO_COOL_*` 环境变量放慢 |
 | 浏览器被关掉 | 网页里点「启动淘宝会话」会自动重开；窗口默认藏在屏幕外，需要点「显示淘宝窗口」 |
 | 解析少行 | 多工作表 XLSX 会自动合并（表头不一致的页会在警告里点名）；若仍少行，检查表头是否被识别 |
+| 批量跑完有几行显示「跳过」 | 型号/名称/参数都空的行没有搜索词，跑也搜不到东西，会直接跳过并在行上写明缺什么；补好 BOM 再跑 |
 | 购物车越跑越多 | 用「购物车维护」按关键字删除，或跑批前清空；开跑前会自动看件数，≥190 直接不启动（淘宝上限约 200 行） |
 
 ## 可调参数（环境变量）

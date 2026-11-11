@@ -664,7 +664,7 @@ runner.send = lambda *a, **k: _cv_calls.append(a) or {"data": {"cart_item_count"
 runner._save_run_metrics = lambda: None
 runner.cleanup_screenshots = lambda: None
 try:
-    runner._run_batch([{"line_no": 1}], True, 3, dry_run=True)
+    runner._run_batch([{"line_no": 1, "query_plan": ["0603 10kΩ"]}], True, 3, dry_run=True)
     check("演练模式不读购物车对账", not _cv_calls, _cv_calls)
     check("演练行保持 ok 不被降级", runner._batch["results"][0]["status"] == "ok",
           runner._batch["results"][0])
@@ -732,6 +732,115 @@ check("表头 10 列", len(_rows[0]) == 10, _rows[0])
 check("ok 行字段齐全", _rows[1][0] == "3" and _rows[1][6] == "1.28" and _rows[1][7] == "xhr", _rows[1])
 check("备注里的换行被压平", "\n" not in _rows[1][9], _rows[1][9])
 check("pending 行不导出", all(r[0] != "5" for r in _rows[1:]), _rows)
+
+print("== 续跑行带 SKU / 不覆盖进度（2026-11-11） ==")
+# 以前 resume 时只把金额搬回来，SKU 和 cart_verified_via 丢了 —— 界面上那条记录
+# 只剩价格，导出 CSV 的「SKU」「确认方式」两列是空的；而且续跑行会被重新落盘，
+# 把上一轮真实的 message/耗时覆盖成「续跑跳过」+ null。
+_orig_lbp_resume = tr.load_batch_progress
+_orig_sbp_resume = tr.save_batch_progress
+_orig_sbl_resume = tr.save_batch_lines
+_bak_batch_r = runner._batch
+_bak_run_r = runner._run_batch
+_bak_clean_r = runner.cleanup_screenshots
+_saved = []
+tr.load_batch_progress = lambda: {
+    "lines": {
+        "1": {
+            "status": "ok",
+            "headline": "0603 10kΩ ×2",
+            "message": "已加入购物车",
+            "sku": [{"label": "阻值", "value": "10kΩ"}],
+            "cart_verified_via": "xhr",
+            "cost": 1.28,
+            "final_price": 1.28,
+            "total_ms": 5234,
+        }
+    }
+}
+tr.save_batch_lines = lambda lines: None
+tr.save_batch_progress = lambda payload: _saved.append(payload)
+runner._browser_gone = False
+runner._browser_unreachable = lambda *a, **k: False
+runner._run_batch = lambda *a, **k: None
+runner.cleanup_screenshots = lambda: None
+try:
+    _st = runner.start_batch(
+        [{"line_no": 1, "qty": 2, "query_plan": ["0603 10kΩ"],
+          "decision": {"headline": "0603 10kΩ ×2"}}],
+        resume=True,
+    )
+    _r1 = (_st.get("results") or [{}])[0]
+    check("续跑行带回 SKU", _r1.get("sku") == [{"label": "阻值", "value": "10kΩ"}], _r1.get("sku"))
+    check("续跑行带回确认方式", _r1.get("cart_verified_via") == "xhr", _r1.get("cart_verified_via"))
+    # 续跑行不能覆盖磁盘上的真实记录
+    runner._save_progress()
+    _persisted = {}
+    for _p in _saved:
+        _persisted.update(_p.get("lines") or {})
+    check("续跑行不重新落盘（message 不被冲掉）", "1" not in _persisted, _persisted.keys())
+    # 结论真的变了（收尾对账把 ok 降成 uncertain）还是要落盘，但明细沿用上一轮
+    _saved.clear()
+    runner._batch["results"][0].update(status="uncertain",
+                                       message="收尾对账：购物车里没找到该商品")
+    runner._save_progress()
+    _persisted = {}
+    for _p in _saved:
+        _persisted.update(_p.get("lines") or {})
+    _row1 = _persisted.get("1") or {}
+    check("降级后的结论会落盘", _row1.get("status") == "uncertain", _row1.get("status"))
+    check("新 message 生效", "购物车里没找到" in (_row1.get("message") or ""), _row1.get("message"))
+    check("明细沿用上一轮（SKU 还在）", _row1.get("sku") == [{"label": "阻值", "value": "10kΩ"}], _row1.get("sku"))
+    check("耗时不被抹成 null", _row1.get("total_ms") == 5234, _row1.get("total_ms"))
+finally:
+    tr.load_batch_progress = _orig_lbp_resume
+    tr.save_batch_progress = _orig_sbp_resume
+    tr.save_batch_lines = _orig_sbl_resume
+    runner._run_batch = _bak_run_r
+    runner.cleanup_screenshots = _bak_clean_r
+    runner._batch = _bak_batch_r
+
+print("== 没有搜索词的行直接跳过（2026-11-11） ==")
+# 残缺行（型号/名称/参数全空，只剩封装）没有 query_plan，跑下去只会抛 NO_QUERY，
+# 白等一轮再记一条「失败」。现在直接标 skipped，并且不去点搜索/加购。
+_bak_batch_q = runner._batch
+_calls_q = []
+_bak_add_q = runner._add_line_to_cart
+runner._add_line_to_cart = lambda *a, **k: _calls_q.append(a) or {
+    "line_no": 2, "status": "ok", "message": "已加入购物车", "attempts": [],
+}
+runner.send = lambda *a, **k: {"data": {"cart_item_count": 0, "rows": []}}
+runner._save_run_metrics = lambda: None
+runner.cleanup_screenshots = lambda: None
+runner._precheck_cart_limit = lambda *a, **k: None
+runner.hide_browser = lambda: None
+runner._batch = {
+    "running": True, "total": 2, "done": 0, "index": -1, "phase": "",
+    "results": [{"line_no": 1, "status": "pending", "message": ""},
+                {"line_no": 2, "status": "pending", "message": ""}],
+    "stopped_reason": "",
+}
+try:
+    runner._run_batch(
+        [
+            {"line_no": 1, "qty": 30, "package": "SOT-23", "status": "needs_user",
+             "blocking": ["整行没有可用信息"], "query_plan": [], "decision": {}},
+            {"line_no": 2, "qty": 1, "query_plan": ["0603 10kΩ"],
+             "decision": {"headline": "0603 10kΩ"}},
+        ],
+        True, 3, dry_run=True,
+    )
+    _r_skip = runner._batch["results"][0]
+    check("无搜索词行标 skipped", _r_skip["status"] == "skipped", _r_skip)
+    check("跳过原因写进 message", "整行没有可用信息" in (_r_skip.get("message") or ""), _r_skip.get("message"))
+    check("跳过的行不去搜索加购", len(_calls_q) == 1, len(_calls_q))
+    check("有搜索词的行照常跑", runner._batch["results"][1]["status"] == "ok",
+          runner._batch["results"][1])
+finally:
+    runner._add_line_to_cart = _bak_add_q
+    for _attr in ("_save_run_metrics", "cleanup_screenshots", "_precheck_cart_limit", "hide_browser"):
+        runner.__dict__.pop(_attr, None)
+    runner._batch = _bak_batch_q
 
 print()
 print(f"RESULT: {PASS} passed, {FAIL} failed")

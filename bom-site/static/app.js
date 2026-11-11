@@ -969,6 +969,13 @@
     if (!state.result) return toast("先分析 BOM");
     if (!sessionReady) return toast("先启动淘宝会话");
     const lines = state.result.lines;
+    // 型号/名称/参数全空的行没有搜索词，跑起来必然搜不出东西：提前说清楚会被跳过
+    const noQuery = lines.filter(
+      (l) => !((l.query_plan && l.query_plan.length) || (l.decision && (l.decision.search_queries || []).length))
+    );
+    const skipTip = noQuery.length
+      ? `\n\n其中 ${noQuery.length} 行（#${noQuery.map((l) => l.line_no).join("、#")}）型号/名称都没填，没有搜索词，会被直接跳过。`
+      : "";
     const pg = batchProgress || {};
     const resumeN = pg.ok_count || 0;
     let ok;
@@ -978,12 +985,14 @@
       ok = window.confirm(
         `上次已完成 ${resumeN} 行（已加入购物车），这次接着跑剩下的 ${rest} 行` +
           (nextNo ? `，从 #${nextNo} 开始` : "") +
-          `。\n\n已完成的不会被重复加购。\n只到购物车，不结算、不付款。继续？`
+          `。\n\n已完成的不会被重复加购。\n只到购物车，不结算、不付款。继续？` +
+          skipTip
       );
     } else {
       const list = lines.map((l) => `#${l.line_no} ${l.decision.headline} ×${l.qty ?? "?"}`).join("\n");
       ok = window.confirm(
-        `按顺序把 ${lines.length} 行逐个加入购物车：\n\n${list}\n\n每行取「通过硬门槛的候选里最便宜的一个」，失败自动换下一个候选。\n只到购物车，不结算、不付款。开始？`
+        `按顺序把 ${lines.length} 行逐个加入购物车：\n\n${list}\n\n每行取「通过硬门槛的候选里最便宜的一个」，失败自动换下一个候选。\n只到购物车，不结算、不付款。开始？` +
+          skipTip
       );
     }
     if (!ok) return;
@@ -1079,7 +1088,13 @@
       const money = st.cost_total
         ? `，合计 ${fmtMoney(st.cost_total)}${st.cost_lines ? `（${st.cost_lines} 行有实付价）` : ""}`
         : "";
-      $("#batch-note").textContent = `上次批量：已加购 ${okn} 行${money}${st.stopped_reason ? "（" + st.stopped_reason + "）" : ""}${tail}`;
+      // 跳过/失败的行要在收尾一句话里点名，否则「已加购 108 行」看不出还有 11 行没处理
+      const skipped = (st.results || []).filter((r) => r.status === "skipped").length;
+      const failed = (st.results || []).filter((r) => r.status === "failed").length;
+      const aside = [skipped ? `跳过 ${skipped} 行` : "", failed ? `失败 ${failed} 行` : ""].filter(Boolean).join("、");
+      $("#batch-note").textContent =
+        `上次批量：已加购 ${okn} 行${money}${aside ? `，${aside}` : ""}` +
+        `${st.stopped_reason ? "（" + st.stopped_reason + "）" : ""}${tail}`;
     } else if (st.progress && st.progress.ok_count > 0) {
       const money = st.cost_total ? `，合计 ${fmtMoney(st.cost_total)}` : "";
       $("#batch-note").textContent = `有上次的进度：已完成 ${st.progress.ok_count} 行${money}，点「继续加购」从断点接着跑`;

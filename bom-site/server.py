@@ -99,6 +99,20 @@ class Handler(BaseHTTPRequestHandler):
             return target
         return None
 
+    def _origin_ok(self) -> bool:
+        """同源校验（CSRF 防线）。
+
+        浏览器发起的跨站请求**一定**带 Origin；命令行/脚本（curl、urllib）不带。
+        所以：没有 Origin → 放行（本地脚本）；有 Origin 且不是本机同源 → 拒绝。
+        只靠「必须 JSON」不够：恶意页面可以用 fetch + text/plain 发简单请求，
+        不触发预检，就能把 body 原样塞进来（删购物车、关服务都够用）。
+        """
+        origin = (self.headers.get("Origin") or "").strip().lower()
+        if not origin:
+            return True
+        port = getattr(self.server, "server_port", 8765)
+        return origin in {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
+
     def _read_json(self):
         n = int(self.headers.get("Content-Length") or 0)
         if n <= 0:
@@ -114,12 +128,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._file(STATIC / "index.html")
         if path == "/api/health":
             return self._send(200, {"ok": True, "engine": engine.ENGINE_VERSION, "offline": False})
-        if path == "/api/shutdown":
-            # 网页里的「退出服务」：不用再去双击 停止BOM选型台.bat
-            print("[site] shutdown requested (web)", flush=True)
-            self._send(200, {"ok": True, "message": "服务正在关闭"})
-            _shutdown_service()  # 0.6 s 后停会话/关浏览器/退进程
-            return
+        # 注意：/api/shutdown **不能**挂在 GET 上 —— 任意网页放一个
+        # <img src="http://127.0.0.1:8765/api/shutdown"> 就能把服务关掉。
+        # 只保留 POST + 同源校验（见 do_POST）。
         if path == "/api/session/status":
             return self._send(200, tr.RUNNER.status())
         if path == "/api/taobao/batch":
@@ -143,10 +154,13 @@ class Handler(BaseHTTPRequestHandler):
     # ---------------- POST ----------------
     def do_POST(self):
         path = urlparse(self.path).path
+        if not self._origin_ok():
+            print(f"[site] cross-origin POST blocked: {path}", flush=True)
+            return self._send(403, {"error": "跨站请求被拒绝", "code": "CROSS_ORIGIN_BLOCKED"})
         try:
             body = self._read_json()
             if path == "/api/shutdown":
-                # 网页里的「退出服务」（前端用 POST）——GET 分支里也有一份
+                # 网页里的「退出服务」（前端用 POST；同源校验已在入口做掉）
                 print("[site] shutdown requested (web)", flush=True)
                 self._send(200, {"ok": True, "message": "服务正在关闭"})
                 _shutdown_service()  # 0.6 s 后停会话/关浏览器/退进程

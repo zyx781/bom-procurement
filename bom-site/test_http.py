@@ -86,4 +86,29 @@ print("BATCH EMPTY", code, err.get("error"))
 
 print("BATCH STATUS", json.loads(get("/api/taobao/batch")[1]).keys())
 
+# ---- CSRF 防线（2026-11-11）----
+# 1) 关服务不能挂在 GET 上：否则任意网页 <img src=".../api/shutdown"> 就能关掉服务
+try:
+    code = get("/api/shutdown")[0]
+    print("SHUTDOWN VIA GET", code, "(应 404)")
+except urllib.error.HTTPError as e:
+    print("SHUTDOWN VIA GET", e.code, "(应 404)")
+
+# 2) 跨站 POST 必须被拒：恶意页面可用 fetch + text/plain 绕过 JSON 预检
+req = urllib.request.Request(
+    BASE + "/api/taobao/cart-remove",
+    data=json.dumps({"all": True, "confirm": "清空"}).encode("utf-8"),
+    headers={"Content-Type": "text/plain", "Origin": "https://evil.example"},
+    method="POST",
+)
+try:
+    with urllib.request.urlopen(req, timeout=10) as r:
+        print("CROSS-ORIGIN POST", r.status, "(应 403)")
+except urllib.error.HTTPError as e:
+    body = e.read().decode("utf-8")
+    print("CROSS-ORIGIN POST", e.code, body[:60], "(应 403)")
+
+# 3) 同源（无 Origin 的命令行调用）照常放行：这里是只读接口
+print("SAME-ORIGIN STILL OK", post("/api/type-check", {})[0], "(404 = 路由不存在，说明没被 403 误杀)")
+
 print("ALL HTTP TESTS DONE")

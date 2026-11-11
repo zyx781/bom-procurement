@@ -132,6 +132,9 @@
     try {
       const result = await api("/api/analyze", { rows: scaleRows(rows, state.sets) });
       state.result = result;
+      // 换了一份 BOM：立刻用服务端算过的进度摘要，别让旧的「已完成 N 行」
+      // 继续把按钮写成「继续加购」、把人骗进一次整批空跑。
+      if (result.progress) batchProgress = result.progress;
       state.activeIndex = result.lines.length ? 0 : -1;
       state.lastScore = null;
       render();
@@ -1004,7 +1007,8 @@
         lines,
         prefer_cheap: true,
         max_candidates: 3,
-        resume: true,
+        // 进度属于另一份 BOM 时显式从头跑（服务端也有一层指纹兜底）
+        resume: !(batchProgress && batchProgress.stale),
       });
       batchRunning = !!st.running;
       renderBatch(st);
@@ -1120,7 +1124,10 @@
     renderVerifyBanner(st);
     syncBatchButtons();
     $("#btn-batch-stop").disabled = !batchRunning;
-    if (batchRunning) {
+    if (st.warning) {
+      // 整批空跑 / 进度错配这类严重情况，直接把原因摆在进度条上
+      $("#batch-note").textContent = st.warning;
+    } else if (batchRunning) {
       const money = st.cost_total ? `，已花 ${fmtMoney(st.cost_total)}` : "";
       $("#batch-note").textContent = `${st.phase || "进行中"}，已完成 ${st.done}/${st.total}${money}；每行约 20 到 60 秒，浏览器窗口请别关`;
     } else if (st.total) {

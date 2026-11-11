@@ -29,7 +29,7 @@ import taobao_runner as tr
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
 SAMPLES = ROOT / "samples"
-RUNS = ROOT / "runs"
+RUNS = Path(os.environ.get("TAOBAO_RUNS_DIR") or (ROOT / "runs")).resolve()
 MAX_BODY = 25 * 1024 * 1024
 
 if os.environ.get("TAOBAO_FAKE_SESSION") == "1":
@@ -173,8 +173,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, tr.RUNNER.status())
         if path == "/api/taobao/batch":
             data = tr.RUNNER.batch_status()
-            # 附带「上次进度」：前端据此把按钮改成「继续加购（从第 N 行）」
-            data["progress"] = tr.batch_progress_summary()
+            # 附带「上次进度」：前端据此把按钮改成「继续加购（从第 N 行）」。
+            # 带上当前 BOM 指纹，换表后旧进度对外不可见（但文件保留，精准清车还要用）。
+            data["progress"] = tr.batch_progress_summary(
+                active_fingerprint=tr.active_bom_fingerprint()
+            )
             return self._send(200, data)
         if path == "/api/taobao/batch/export.csv":
             # 跑完一轮要人工核对上百行，屏幕上滚太痛苦 —— 导出后和 BOM 并排 diff
@@ -231,7 +234,12 @@ class Handler(BaseHTTPRequestHandler):
                 rows = body.get("rows")
                 if not isinstance(rows, list) or not rows:
                     raise ValueError("没有可分析的行")
-                return self._send(200, engine.analyze(rows))
+                result = dict(engine.analyze(rows))
+                # 记住当前这份 BOM；换表后把上一批进度隐藏掉，否则前端会弹
+                # 「上次已完成 N 行，接着跑」，实际一行都不会执行。
+                fp = tr.set_active_bom(result.get("lines") or [])
+                result["progress"] = tr.batch_progress_summary(active_fingerprint=fp)
+                return self._send(200, result)
 
             if path == "/api/score":
                 line = body.get("line")
@@ -291,7 +299,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/taobao/batch-start":
                 lines = body.get("lines")
                 if (not isinstance(lines, list) or not lines) and bool(body.get("resume", True)):
-                    # 服务重启后前端没重传行时，用上次落盘的行接着跑，不用重新上传 BOM
+                    # 服务重启后前端没重传行时，用上次落盘的行接着跑，不用重新上传 BOM。
+                    # 但必须是同一份 BOM：否则会拿上一批的行去跑新表（或跑出测试数据）。
+                    active_fp = tr.active_bom_fingerprint()
+                    saved_fp = tr.load_batch_lines_meta().get("fingerprint") or ""
+                    if active_fp and saved_fp and active_fp != saved_fp:
+                        raise ValueError("检测到 BOM 已更换，请重新分析后再启动批量")
                     lines = tr.load_batch_lines()
                 if not isinstance(lines, list) or not lines:
                     raise ValueError("没有可执行的行")
@@ -311,7 +324,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/taobao/batch-reset":
                 # 只清进度文件，不动购物车 —— 界面会提示先清购物车再重头跑
                 tr.clear_batch_progress()
-                return self._send(200, {"ok": True, "progress": tr.batch_progress_summary()})
+                return self._send(
+                    200,
+                    {"ok": True, "progress": tr.batch_progress_summary(
+                        active_fingerprint=tr.active_bom_fingerprint()
+                    )},
+                )
 
             if path == "/api/taobao/batch-stop":
                 return self._send(200, tr.RUNNER.stop_batch())

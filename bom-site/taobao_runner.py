@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import queue
@@ -34,8 +35,10 @@ except Exception:  # noqa: BLE001  pragma: no cover
 BASE = Path(__file__).resolve().parent
 REPO = Path(os.environ.get("TAOBAO_SKILL_REPO") or (BASE.parent / "Taobao-Search-Skill")).resolve()
 ARTIFACTS = (REPO / "scripts" / ".cache" / "taobao-search-skill" / "artifacts").resolve()
-RUNS = BASE / "runs"
-RUNS.mkdir(exist_ok=True)
+# 测试/演练可通过 TAOBAO_RUNS_DIR 把批量进度隔离到临时目录，
+# 否则集成测试会把用户真实的 batch-progress.json 覆盖成 1 行假数据。
+RUNS = Path(os.environ.get("TAOBAO_RUNS_DIR") or (BASE / "runs")).resolve()
+RUNS.mkdir(parents=True, exist_ok=True)
 SETTINGS_FILE = BASE / "settings.json"
 
 
@@ -105,7 +108,11 @@ def save_batch_lines(lines: list) -> None:
     try:
         RUNS.mkdir(parents=True, exist_ok=True)
         tmp = BATCH_LINES_FILE.with_suffix(".json.tmp")
-        payload = {"saved_at": datetime.now().isoformat(timespec="seconds"), "lines": lines}
+        payload = {
+            "saved_at": datetime.now().isoformat(timespec="seconds"),
+            "fingerprint": batch_fingerprint(lines),
+            "lines": lines,
+        }
         tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         tmp.replace(BATCH_LINES_FILE)
     except Exception:
@@ -122,20 +129,151 @@ def load_batch_lines() -> list:
     return lines if isinstance(lines, list) else []
 
 
-def batch_progress_summary() -> dict:
-    """给前端/接口用的进度摘要。"""
+def batch_fingerprint(lines: list) -> str:
+    """这一批 BOM 的身份指纹（16 位十六进制）。
+
+    续跑只能复用「同一份 BOM」的进度。踩过的坑：换了一份同样是 19 行的新表，
+    done_map 只按 line_no 匹配，把上一批 19 条结果整套套过来 —— 一行都不跑，
+    收尾对账又拿旧候选商品去购物车里找，19 行全降级成「待核对」。
+    指纹只取 BOM 身份字段，不含候选/价格/搜索词（那些会随引擎版本变化，
+    同表重跑却变了指纹会导致重复加购）。
+    """
+    parts = []
+    for ln in lines or []:
+        if not isinstance(ln, dict):
+            continue
+        dec = ln.get("decision") or {}
+        parts.append(
+            "\x1f".join(
+                [
+                    str(ln.get("line_no") or ""),
+                    str(ln.get("mpn") or "").strip(),
+                    str(ln.get("desc") or "").strip(),
+                    str(ln.get("package") or "").strip(),
+                    str(ln.get("params") or "").strip(),
+                    str(ln.get("qty") or ""),
+                    str(dec.get("headline") or "").strip(),
+                ]
+            )
+        )
+    return hashlib.sha256("\x1e".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def load_batch_lines_meta() -> dict:
+    """上一次「开跑」时存下的 BOM 指纹（只读元信息，不返回整份行数据）。"""
+    try:
+        data = json.loads(BATCH_LINES_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        "saved_at": data.get("saved_at"),
+        "fingerprint": str(data.get("fingerprint") or ""),
+    }
+
+
+def progress_belongs_to(prior: dict, lines: list) -> tuple[bool, str]:
+    """这份进度是不是当前 BOM 跑出来的？返回 (是否匹配, 判定依据)。
+
+    老版本进度文件里没有 fingerprint，退化成按 line_no 比对 headline：
+    只要有一条对不上就说明换过 BOM（同一份表的 headline 不会变）。
+    """
+    prior = prior if isinstance(prior, dict) else {}
+    rows = prior.get("lines") or {}
+    if not rows:
+        return True, "无进度"
+    fp = batch_fingerprint(lines)
+    prior_fp = prior.get("fingerprint") or ""
+    if prior_fp:
+        return (prior_fp == fp), "fingerprint"
+    compared = 0
+    for ln in lines or []:
+        if not isinstance(ln, dict):
+            continue
+        rec = rows.get(str(ln.get("line_no"))) or {}
+        old_head = str(rec.get("headline") or "").strip()
+        new_head = str((ln.get("decision") or {}).get("headline") or "").strip()
+        if old_head and new_head:
+            compared += 1
+            if old_head != new_head:
+                return False, "headline"
+    return True, ("legacy-headline" if compared else "legacy-unknown")
+
+
+def should_clear_stale_progress(batch_state: dict, ran: int) -> bool:
+    """整批一行没跑、且所有「续跑跳过」的行都没在购物车里找到 → 清掉错配进度。
+
+    典型场景就是换 BOM 或购物车被清空过：留着这份进度，下次点「继续加购」
+    还是整批空跑，用户会反复看到「全识别成功、一件没加」。
+    """
+    state = batch_state or {}
+    rec = state.get("reconcile") or {}
+    downgraded = rec.get("downgraded") or []
+    resumed_n = sum(1 for r in (state.get("results") or []) if r.get("resumed"))
+    return bool(ran == 0 and resumed_n and downgraded and len(downgraded) >= resumed_n)
+
+
+def batch_progress_summary(active_fingerprint: str = "") -> dict:
+    """给前端/接口用的进度摘要。
+
+    传入 active_fingerprint（当前这份 BOM）时，若进度属于另一份 BOM，
+    对外表现成「没有进度」：否则前端会弹「上次已完成 N 行，接着跑」，
+    用户以为跑过了，实际一行都不会执行。
+    """
     data = load_batch_progress()
     rows = data.get("lines") or {}
     ok = [k for k, v in rows.items() if (v or {}).get("status") == "ok"]
     bad = [k for k, v in rows.items() if (v or {}).get("status") in ("failed", "uncertain")]
+    fp = str(data.get("fingerprint") or "")
+    stale = bool(active_fingerprint and fp and fp != active_fingerprint)
+    if stale:
+        ok, bad = [], []
     return {
-        "has_progress": bool(rows),
+        "has_progress": bool(rows) and not stale,
         "updated_at": data.get("updated_at"),
         "total": data.get("total") or 0,
         "ok_count": len(ok),
         "problem_count": len(bad),
         "ok_line_nos": sorted(int(k) for k in ok if str(k).isdigit()),
+        "fingerprint": fp,
+        "stale": stale,
     }
+
+
+# 当前界面上正在看的那份 BOM（由 /api/analyze 写入）。
+# 持久化到 runs/，服务重启后进度摘要也不会误报「上次已完成 N 行」。
+ACTIVE_BOM_FILE = RUNS / "active-bom.json"
+ACTIVE_BOM_FINGERPRINT = ""
+
+
+def set_active_bom(lines: list) -> str:
+    global ACTIVE_BOM_FINGERPRINT
+    ACTIVE_BOM_FINGERPRINT = batch_fingerprint(lines)
+    try:
+        RUNS.mkdir(parents=True, exist_ok=True)
+        ACTIVE_BOM_FILE.write_text(
+            json.dumps(
+                {
+                    "fingerprint": ACTIVE_BOM_FINGERPRINT,
+                    "updated_at": datetime.now().isoformat(timespec="seconds"),
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+    return ACTIVE_BOM_FINGERPRINT
+
+
+def active_bom_fingerprint() -> str:
+    if ACTIVE_BOM_FINGERPRINT:
+        return ACTIVE_BOM_FINGERPRINT
+    try:
+        return str(json.loads(ACTIVE_BOM_FILE.read_text(encoding="utf-8")).get("fingerprint") or "")
+    except Exception:
+        return ""
 
 
 _RE_ITEM_ID = re.compile(r"[?&](?:id|itemId)=(\d+)")
@@ -1538,8 +1676,26 @@ class SessionRunner:
                 "淘宝浏览器已关闭，先点「启动淘宝会话」重建会话（会自动重开浏览器）",
                 "BROWSER_GONE",
             )
-        save_batch_lines(lines)
+        fp = batch_fingerprint(lines)
+        # 必须在覆盖 batch-lines.json 之前读：里面存的是「上一次开跑」的 BOM 指纹。
+        # 只看进度文件不够 —— 用户可能已经手动点过「重置进度」，但界面内存里
+        # 还留着上一批的 ok_count，照样会被骗进一次整批空跑。
+        prev_lines_meta = load_batch_lines_meta()
         prior = load_batch_progress() if resume else {}
+        stale_progress = False
+        if resume and (prior.get("lines") or {}):
+            belongs, why = progress_belongs_to(prior, lines)
+            prev_fp = prev_lines_meta.get("fingerprint") or ""
+            # 新进度文件自带明确指纹时以它为准；只有老进度（无 fingerprint）
+            # 才需要拿 batch-lines 里「上次开跑的 BOM」当佐证。
+            if not prior.get("fingerprint") and prev_fp and prev_fp != fp:
+                belongs, why = False, "上次开跑的 BOM 指纹"
+            if not belongs:
+                stale_progress = True
+                prior = {}
+                clear_batch_progress()
+                _log(f"[batch] 检测到 BOM 已更换（{why} 不一致），旧进度作废，本批从头跑")
+        save_batch_lines(lines)
         done_map = done_map_from_progress(prior)
         results, resumed = [], 0
         for ln in lines:
@@ -1604,12 +1760,18 @@ class SessionRunner:
                 "phase": (
                     "演练准备中（不点加购）"
                     if dry_run
-                    else (f"准备中（续跑，跳过已完成 {resumed} 行）" if resumed else "准备中")
+                    else (
+                        "准备中（新 BOM，旧进度已作废）"
+                        if stale_progress
+                        else (f"准备中（续跑，跳过已完成 {resumed} 行）" if resumed else "准备中")
+                    )
                 ),
                 "dry_run": bool(dry_run),
                 "prefer_cheap": bool(prefer_cheap),
                 "results": results,
                 "resumed": resumed,
+                "fingerprint": fp,
+                "stale_progress_dropped": stale_progress,
                 "started_at": datetime.now().isoformat(timespec="seconds"),
                 "finished_at": None,
                 "stopped_reason": None,
@@ -1701,6 +1863,8 @@ class SessionRunner:
                 "updated_at": data["updated_at"],
                 "total": data["total"] or prior_data.get("total") or 0,
                 "lines": merged,
+                # 绑定 BOM 身份：换表后这份进度必须整体作废，不能按行号套用
+                "fingerprint": self._batch.get("fingerprint") or prior_data.get("fingerprint") or "",
                 # I7：时间戳也落盘，重启后状态机能还原「这轮什么时候开始/结束」
                 "started_at": data.get("started_at"),
                 "finished_at": data.get("finished_at"),
@@ -1948,6 +2112,18 @@ class SessionRunner:
                     self._reconcile_cart(cdata)
                     if not dry_run:
                         self._save_progress()  # 降级结果也要落盘，续跑时才不会误当 ok 跳过
+                    # 兜底：一行没跑、所有「续跑跳过」的行又都没在购物车里找到，
+                    # 说明进度与购物车严重错配（换 BOM / 购物车被清空过）。
+                    # 留着这份进度，下次点「继续加购」还是整批空跑，直接清掉。
+                    if should_clear_stale_progress(self._batch, ran):
+                        clear_batch_progress()
+                        msg = (
+                            "本批没有实际执行任何行：上一批进度里的商品在购物车里都找不到，"
+                            "已清空旧进度，请重新点「一键全部加购」从头跑。"
+                        )
+                        with self._state_lock:
+                            self._batch["warning"] = msg
+                        _log("[batch] 整批未执行且对账全降级 → 已清空错配进度")
             except Exception as exc:  # noqa: BLE001
                 _log(f"[batch] cart count skipped: {exc}")
             if dry_run:

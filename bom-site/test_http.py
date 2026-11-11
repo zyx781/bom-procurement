@@ -81,7 +81,9 @@ print("CART REMOVE NO ARG", code, err.get("error"))
 code, err = post("/api/taobao/cart-remove", {"all": True})
 print("CART CLEAR NO CONFIRM", code, err.get("error"))
 
-code, err = post("/api/taobao/batch-start", {"lines": []})
+# 必须显式关掉 resume：空 lines + resume=True 会让服务端拿磁盘上「上次的行」
+# 真的启动一批（曾经把测试数据写进真实进度、还跑了一次淘宝搜索）。
+code, err = post("/api/taobao/batch-start", {"lines": [], "resume": False})
 print("BATCH EMPTY", code, err.get("error"))
 
 print("BATCH STATUS", json.loads(get("/api/taobao/batch")[1]).keys())

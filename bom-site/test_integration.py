@@ -17,6 +17,7 @@ import pathlib
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -24,10 +25,17 @@ import urllib.request
 BASE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE))
 
+# A 段在本进程跑批量，B 段还会真起一个 server 子进程；两边都会往 runs/ 写
+# 批量进度。不隔离就会把用户真实的 batch-progress.json / batch-lines.json
+# 覆盖成 1 行假数据（2026-11-11 实测踩到），下次真跑会被当成「已完成」空跑。
+os.environ["TAOBAO_RUNS_DIR"] = tempfile.mkdtemp(prefix="bom-test-runs-")
+
 import engine  # noqa: E402
 import taobao_runner as tr  # noqa: E402
 
 PASS = FAIL = 0
+
+assert tr.PROGRESS_FILE.parent != BASE / "runs", "集成测试必须隔离 runs 目录"
 
 
 def check(name, cond, extra=""):
@@ -200,6 +208,23 @@ try:
 
     code, body = get("/api/taobao/batch/export.csv")
     check("导出 CSV 200 + 表头", code == 200 and "行号" in body.decode("utf-8-sig").splitlines()[0], code)
+
+    # 换 BOM 防护：空 lines + resume 默认开启时，服务端不能拿磁盘上旧 BOM 的行
+    # 偷偷起一批（真实事故里测试数据就是这么混进真实进度的）。
+    def _one(mpn, headline):
+        return {
+            "line_no": 1, "mpn": mpn, "desc": mpn, "package": "0603", "params": "",
+            "qty": 1, "query_plan": [mpn],
+            "decision": {"headline": headline, "search_queries": [mpn]},
+        }
+
+    tr.save_batch_lines([_one("OLD-PART", "旧表的一行")])
+    tr.set_active_bom([_one("NEW-PART", "新表的一行")])
+    code, err = post("/api/taobao/batch-start", {"lines": []})
+    check("换 BOM 时空 lines 被拒，不偷跑旧表", code == 400 and "BOM" in str(err.get("error")), (code, err))
+    code, raw = get("/api/taobao/batch")
+    st = json.loads(raw.decode("utf-8"))
+    check("拒跑后批量仍是未开始", st.get("total") == 0 and st.get("running") is False, st.get("phase"))
 
     code, err = post("/api/shutdown", {})
     check("命令行关服务仍放行（无 Origin）", code == 200, (code, err))

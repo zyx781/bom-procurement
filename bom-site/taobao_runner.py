@@ -382,6 +382,7 @@ class SessionRunner:
             "started_at": None,
             "finished_at": None,
             "stopped_reason": None,
+            "verification": None,
         }
         # I7：把上次的进度装回状态机。否则重启后前端只看到 0/0，
         # 分不清「没跑过」和「跑了一半」，也没法判断 running 是真在跑还是残留。
@@ -698,6 +699,7 @@ class SessionRunner:
                 "started_at": None,
                 "finished_at": None,
                 "stopped_reason": "会话已结束，批量任务中止" if was_running else None,
+                "verification": None,
             }
         while True:
             try:
@@ -899,15 +901,14 @@ class SessionRunner:
         解除后第一条命令自动复位闸门 —— 所以这里只要反复 ping，成功即代表恢复。
         """
         deadline = time.monotonic() + (max_s if max_s is not None else VERIFY_WAIT_S)
-        # 要人工点图了：守卫先退场（否则用户一点浏览器就被压回去），窗口移回屏幕内
+        # 守卫先退场：用户自己点开窗口操作时，不会被「防抢焦点」压回去。
         guard = self._guard
         if guard is not None:
             guard.pause("等人工过验证")
-        self.show_browser()
         try:
             return self._wait_verification_loop(deadline, poll_s)
         finally:
-            self.hide_browser()  # 结束（解除/超时/人停）都把窗口藏回屏幕外
+            self.hide_browser()  # 用户手动打开过的话，结束（解除/超时/人停）后藏回屏幕外
             if guard is not None:
                 guard.resume()
 
@@ -926,28 +927,50 @@ class SessionRunner:
 
     def _wait_verification_loop(self, deadline: float, poll_s: float) -> bool:
         last_log = 0.0
-        while time.monotonic() < deadline:
-            with self._state_lock:
-                if self._batch.get("stopped_reason"):
-                    return False  # 人主动停了，别再等
-            time.sleep(poll_s)
-            try:
-                resp = self.send({"cmd": "ping"}, timeout=25)
-            except SessionError as exc:
-                if exc.code in ("SESSION_NOT_STARTED", "SESSION_DESYNCED"):
-                    return False
-                continue
-            if resp.get("status") != "error":
-                print("[batch] 验证已解除，继续", flush=True)
-                return True
-            now = time.monotonic()
-            if now - last_log > 30:
-                last_log = now
-                left = int(deadline - now)
+        total = max(0, int(deadline - time.monotonic()))
+        # 不再自动弹窗（太突兀）：挂一个状态出去，前端弹站内提示，
+        # 用户点「打开淘宝窗口」才真的把窗口移进来。
+        with self._state_lock:
+            self._batch["verification"] = {
+                "waiting": True,
+                "reason": "刷新后仍无商品，需要人工完成淘宝验证",
+                "total_s": total,
+                "remaining_s": total,
+                "since": datetime.now().isoformat(timespec="seconds"),
+            }
+        self._append_log(
+            f"[batch] 刷新后仍无商品 → 需要你手动完成验证（最多等 {total // 60} 分钟）"
+        )
+        try:
+            while time.monotonic() < deadline:
                 with self._state_lock:
-                    self._batch["phase"] = f"刷新后仍无商品，等人工验证（剩余 {left}s）"
-                print(f"[batch] 仍在等验证… 剩余 {left}s", flush=True)
-        return False
+                    if self._batch.get("stopped_reason"):
+                        return False  # 人主动停了，别再等
+                time.sleep(poll_s)
+                try:
+                    resp = self.send({"cmd": "ping"}, timeout=25)
+                except SessionError as exc:
+                    if exc.code in ("SESSION_NOT_STARTED", "SESSION_DESYNCED"):
+                        return False
+                    continue
+                if resp.get("status") != "error":
+                    self._append_log("[batch] 验证已解除，从断行继续")
+                    return True
+                now = time.monotonic()
+                left = max(0, int(deadline - now))
+                with self._state_lock:
+                    v = self._batch.get("verification") or {}
+                    v["remaining_s"] = left
+                    self._batch["verification"] = v
+                if now - last_log > 30:
+                    last_log = now
+                    with self._state_lock:
+                        self._batch["phase"] = f"刷新后仍无商品，等人工验证（剩余 {left}s）"
+                    print(f"[batch] 仍在等验证… 剩余 {left}s", flush=True)
+            return False
+        finally:
+            with self._state_lock:
+                self._batch["verification"] = None
 
     def persist_screenshot(self, path: str | None) -> str | None:
         if not path:

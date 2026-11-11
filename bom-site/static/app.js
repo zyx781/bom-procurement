@@ -1024,6 +1024,47 @@
     }
   }
 
+  const BASE_TITLE = document.title;
+  let verifyTitleTimer = null;
+
+  /** 批量停在「等你手动过验证」时，页面顶部一直挂着提示条 + 倒计时。 */
+  function renderVerifyBanner(st) {
+    const el = $("#verify-banner");
+    if (!el) return;
+    const v = st && st.verification;
+    const waiting = !!(v && v.waiting);
+    el.classList.toggle("hidden", !waiting);
+
+    if (!waiting) {
+      if (verifyTitleTimer) {
+        clearInterval(verifyTitleTimer);
+        verifyTitleTimer = null;
+        document.title = BASE_TITLE;
+      }
+      return;
+    }
+
+    const left = Math.max(0, Number(v.remaining_s) || 0);
+    const mm = String(Math.floor(left / 60)).padStart(2, "0");
+    const ss = String(left % 60).padStart(2, "0");
+    const timer = $("#verify-timer");
+    if (timer) timer.textContent = `${mm}:${ss}`;
+    const sub = $("#verify-sub");
+    if (sub) {
+      const mins = Math.max(1, Math.round((Number(v.total_s) || 1800) / 60));
+      sub.textContent =
+        `刷新后仍没出商品。窗口在屏幕外，点「打开淘宝窗口」去完成验证，最多等你 ${mins} 分钟`;
+    }
+    // 标签页不在前台时也能看到
+    if (!verifyTitleTimer) {
+      let flip = false;
+      verifyTitleTimer = setInterval(() => {
+        document.title = flip ? "需要完成淘宝验证" : BASE_TITLE;
+        flip = !flip;
+      }, 1600);
+    }
+  }
+
   function renderBatch(st) {
     const box = $("#batch-progress");
     const results = (st && st.results) || [];
@@ -1076,6 +1117,7 @@
     batchRunning = !!st.running;
     batchProgress = st.progress || batchProgress;
     renderBatch(st);
+    renderVerifyBanner(st);
     syncBatchButtons();
     $("#btn-batch-stop").disabled = !batchRunning;
     if (batchRunning) {
@@ -1347,6 +1389,8 @@
     $("#btn-cart-view").addEventListener("click", execCart);
     $("#btn-cart-remove").addEventListener("click", () => cartRemove(false));
     $("#btn-cart-remove-batch").addEventListener("click", cartRemoveLastBatch);
+    $("#btn-verify-show").addEventListener("click", showBrowserWindow);
+    $("#btn-verify-recheck").addEventListener("click", recheckVerification);
     $("#btn-cart-clear").addEventListener("click", () => cartRemove(true));
     $("#btn-exec-search").addEventListener("click", execSearch);
     $("#btn-exec-open").addEventListener("click", execOpen);

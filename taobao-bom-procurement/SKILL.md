@@ -3,7 +3,7 @@ name: taobao-bom-procurement
 description: 把硬件 BOM（CSV/Excel：型号、数量、封装、参数、位号）蒸馏为逐行采购意图，驱动本地已登录的淘宝会话（Taobao-Search-Skill v4 session 模式）完成搜索、候选评估、SKU 匹配与加购；结算与付款永远由人工完成。当用户上传 BOM 并要求「按 BOM 采购 / 配单 / 询价 / 比价 / 加购物车 / 找替代料」，或提到阻容感、MCU、功率器件、连接器等电子元器件采购时使用。禁止自动支付、模拟登录、Cookie 劫持、验证码绕过与平台风控规避。
 ---
 
-# 淘宝 BOM 采购（决策层 Skill）v0.9
+# 淘宝 BOM 采购（决策层 Skill）v0.9.1
 
 > **绑定实现**：执行层 Taobao-Search-Skill v4.0.0（`scripts/taobao.py` session 模式）
 > ＋ 决策引擎 `bom-site/engine.py`（`ENGINE_VERSION = "0.1.0"`）
@@ -852,6 +852,11 @@ select-sku → final_price（选完 SKU 的每份价）
    人工解决后从该行重试（最多 `TAOBAO_VERIFY_HUMAN_RETRY`=3 次）。
    **已点过「加入购物车」的行绝不重跑**，避免重复下单。刷新不等于绕过：不自动点验证码、
    不破解、不改指纹，只是把被扣住的那次请求重来一次。
+   **等待期间不自动把浏览器窗口翻到屏幕内**（v0.9.1 起，太突兀会打断用户正在做的事）：
+   批量状态里挂 `verification: {waiting, reason, total_s, remaining_s, since}`，
+   前端据此在页面顶部常驻提示条（含倒计时、标签页标题闪烁），用户点「打开淘宝窗口」
+   才移窗口（`POST /api/taobao/window {action:"show"}`），点「我已完成，重新检测」
+   立刻复核（`POST /api/session/recheck`）。验证解除后提示条自动消失、标题复原。
 2. **节奏参数**：`TAOBAO_LINE_GAP`（默认 1.2 s/行）、`TAOBAO_COOLDOWN_EVERY`（20 行）、
    `TAOBAO_COOLDOWN_SEC`（40 s）。实测 0.7 s/行连跑几十行会被盯上，1.2 s 稳。
 3. **精密容差**：BOM 要求 ≤0.5% 而全店只有 ±1%/±5% 时判 `unresolved`（不自动买）。

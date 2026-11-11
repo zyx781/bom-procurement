@@ -15,6 +15,7 @@
 import inspect
 import pathlib
 import sys
+import time
 
 BASE = pathlib.Path(__file__).parent
 sys.path.insert(0, str(BASE))
@@ -250,17 +251,37 @@ def test_runner():
         check("show_browser 把窗口移回屏幕内", runner.show_browser())
         check("show 传到屏幕坐标", fake_wp.calls[-1][2] == (80, 80), str(fake_wp.calls))
 
-        # 等人工验证：先让守卫退场 + 显示窗口，结束后藏回去 + 恢复守卫
+        # 等人工验证：守卫退场，但**不自动把窗口翻到屏幕内**（2026-11-11 改：
+        # 太突兀，改成前端弹站内提示，用户点「打开淘宝窗口」才移）
         order = []
         runner.show_browser = lambda *a, **k: order.append("show") or True
         runner.hide_browser = lambda *a, **k: order.append("hide") or True
+        orig_loop = runner._wait_verification_loop
         runner._wait_verification_loop = lambda deadline, poll_s: order.append("wait") or False
         ok = runner.wait_verification(max_s=0)
+        runner._wait_verification_loop = orig_loop  # 后面要测真实现，先还原
         check("wait_verification 超时返回 False", ok is False)
-        check("等人工时先显示窗口再等", order[:2] == ["show", "wait"], str(order))
+        check("等人工时不再自动弹窗", "show" not in order, str(order))
+        check("等人工时只等待", order[:1] == ["wait"], str(order))
         check("等完把窗口藏回去", order[-1] == "hide", str(order))
         check("等人工时守卫暂停一次", fake_guard.pauses == 1, str(fake_guard.pauses))
         check("等完守卫恢复一次", fake_guard.resumes == 1, str(fake_guard.resumes))
+
+        # 等待期间要挂出结构化状态，前端据此弹提示条；结束后必须清掉
+        seen = {}
+        orig_send = runner.send
+        def _fake_send(req, **kw):
+            seen["v"] = dict(runner._batch.get("verification") or {})
+            return {"status": "error", "error": {"code": "VERIFICATION_REQUIRED"}}
+        runner.send = _fake_send
+        try:
+            runner._wait_verification_loop(time.monotonic() + 0.12, 0.01)
+        finally:
+            runner.send = orig_send
+        check("等待时挂出 verification 状态", (seen.get("v") or {}).get("waiting") is True, seen)
+        check("状态里有剩余秒数", isinstance((seen.get("v") or {}).get("remaining_s"), int), seen)
+        check("等待结束清空 verification", runner._batch.get("verification") is None,
+              runner._batch.get("verification"))
 
         # 浏览器被手动关掉：status 里要看得出来（否则用户点了加购才看到报错）
         fake_wp.alive = False

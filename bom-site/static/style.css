@@ -34,6 +34,7 @@
   --warn:#8a5604;
   --warn-wash:#f6eeda;
   --warn-rule:#e6d5ae;
+  --warn-deep:#6b4304;
   --bad:#9c2a20;
   --bad-wash:#f8e7e4;
   --bad-rule:#ecc9c3;
@@ -112,6 +113,37 @@ code,pre{font-family:var(--font-mono)}
 .engine{font-family:var(--font-mono);font-size:var(--fs-11);color:var(--ink-3)}
 .engine b{color:var(--ink-2);font-weight:600}
 .engine-sep{width:1px;height:18px;background:var(--rule)}
+
+/* ============================================================
+   verification banner
+   ============================================================ */
+.verify-banner{
+  position:sticky;top:0;z-index:60;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:12px 28px;
+  background:var(--warn-wash);
+  border-bottom:1px solid var(--warn-rule);
+  color:var(--warn);
+}
+.vb-icon{width:20px;height:20px;flex:0 0 auto}
+.vb-copy{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1 1 260px}
+.vb-copy b{font-size:var(--fs-13);font-weight:600}
+.vb-copy span{font-size:var(--fs-11);color:var(--warn);opacity:.85;overflow-wrap:anywhere}
+.vb-timer{
+  font-family:var(--font-mono);font-size:var(--fs-16);font-weight:600;
+  font-variant-numeric:tabular-nums;letter-spacing:.4px;
+}
+.verify-banner .vb-go{
+  min-height:32px;padding:0 16px;
+  border:1px solid var(--warn);
+  border-radius:var(--r-sm);
+  background:var(--warn);color:var(--signal-on);
+  font-size:var(--fs-12);font-weight:600;
+  transition:background-color var(--dur-micro) ease,border-color var(--dur-micro) ease;
+}
+.verify-banner .vb-go:hover{background:var(--warn-deep);border-color:var(--warn-deep)}
+.verify-banner .ghost{background:var(--surface);border-color:var(--warn-rule);color:var(--warn)}
+.verify-banner .ghost:hover{background:var(--surface);border-color:var(--warn);color:var(--warn-deep)}
 
 /* ============================================================
    the sheet
@@ -308,7 +340,6 @@ textarea::placeholder{color:var(--ink-4)}
   padding:8px 12px;
 }
 .ledger-head{
-  position:sticky;top:0;z-index:1;
   background:var(--surface-sunk);
   border-bottom:1px solid var(--rule);
   font-size:var(--fs-11);color:var(--ink-2);
@@ -784,6 +815,7 @@ details summary:hover{color:var(--ink)}
   .comp-grid > div:nth-child(2n){border-right:0;margin-right:0;padding-right:0}
 }
 @media (max-width:640px){
+  .verify-banner{padding:12px 16px;gap:8px}
   .wrap{width:calc(100% - 24px);margin:12px auto 20px}
   /* 汇总条换行后行首不该留竖线 */
   .chip + .chip{border-left:0;padding-left:0}

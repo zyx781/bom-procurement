@@ -28,6 +28,21 @@
   </div>
 </header>
 
+<div class="verify-banner hidden" id="verify-banner" role="alert" aria-live="assertive">
+  <svg class="vb-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+    <circle cx="10" cy="10" r="8.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <path d="M10 5.8v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    <circle cx="10" cy="14" r="1" fill="currentColor"/>
+  </svg>
+  <div class="vb-copy">
+    <b>淘宝出现验证，需要你手动完成</b>
+    <span id="verify-sub">窗口默认在屏幕外，点右边按钮打开</span>
+  </div>
+  <span class="vb-timer" id="verify-timer" aria-label="剩余时间">--:--</span>
+  <button class="vb-go" id="btn-verify-show">打开淘宝窗口</button>
+  <button class="ghost small" id="btn-verify-recheck">我已完成，重新检测</button>
+</div>
+
 <main class="wrap">
 
   <section class="panel" id="input-panel">
@@ -215,7 +230,7 @@
 </main>
 
 <footer class="foot">
-  <span>规则源 taobao-bom-procurement SKILL v0.9</span>
+  <span>规则源 taobao-bom-procurement SKILL v0.9.1</span>
   <span>本地运行 · 127.0.0.1:8765</span>
 </footer>
 

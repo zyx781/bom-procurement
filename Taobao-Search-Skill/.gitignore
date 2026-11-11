@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.cache/
+.pytest_cache/
+.venv/
+venv/
+env/
+.playwright/
+.github/**/__pycache__/
+.claude/
+task_test.json
+docs/
+scripts/sku_debug.json

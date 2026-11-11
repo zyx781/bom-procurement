@@ -1,0 +1,7 @@
+# 运行网站与执行层需要
+playwright==1.64.1
+openpyxl==3.1.5
+
+# playwright 的间接依赖（锁定版本，避免解析差异）
+greenlet==3.5.6
+pyee==14.0.0

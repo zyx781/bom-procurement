@@ -466,6 +466,8 @@ class SessionRunner:
                     stderr=subprocess.PIPE,
                     text=True,
                     encoding="utf-8",
+                    # 子进程偶尔会按控制台编码（GBK）输出中文，严格 utf-8 解码会
+                    # 在读取线程里抛 UnicodeDecodeError（日志直接断掉）。替换掉就好。
                     errors="replace",
                     bufsize=1,
                     env=env,

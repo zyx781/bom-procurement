@@ -134,7 +134,7 @@ def _query_edge_pids(port: int) -> set[int]:
             ["powershell", "-NoProfile", "-Command",
              "(Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | "
              f"Where-Object {{ $_.CommandLine -match '{mark}' }}).ProcessId"],
-            capture_output=True, text=True, timeout=20,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20,
             creationflags=CREATE_NO_WINDOW,
         ).stdout
     except Exception:
@@ -169,7 +169,8 @@ def close(pids: set[int] | None = None, force: bool = True) -> bool:
         if force:
             args.append("/F")
         try:
-            r = subprocess.run(args, capture_output=True, text=True, timeout=15)
+            r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=15)
             killed = killed or r.returncode == 0
         except Exception:
             pass

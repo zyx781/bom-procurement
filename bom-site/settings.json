@@ -1,0 +1,13 @@
+{
+  "cdp_url": "http://127.0.0.1:9222",
+  "pace": "fast",
+  "speed": 0.2,
+  "idle_timeout": 2,
+  "screenshot_keep": 0,
+  "max_line_cost": {
+    "passive": 200,
+    "connector": 300,
+    "other": 200,
+    "default": 5000
+  }
+}

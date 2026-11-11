@@ -182,9 +182,10 @@
           <input id="cart-keyword" type="text" placeholder="按标题关键字删除，例如 0603、STM32、IRF540">
           <button class="ghost small" id="btn-cart-view">查看明细</button>
           <button class="ghost small" id="btn-cart-remove">删除匹配项</button>
+          <button class="ghost small" id="btn-cart-remove-batch" title="只删上一批批量加购进去的商品，你自己加的一件不动">删上次加购的</button>
           <button class="ghost small danger" id="btn-cart-clear">清空购物车</button>
         </div>
-        <div id="cart-remove-result" class="fineprint">删除只影响淘宝购物车，不可撤销；清空会连同你自己加的商品一起删掉。</div>
+        <div id="cart-remove-result" class="fineprint">「删上次加购的」只动本工具上一批加进去的商品：按商品 id 精确匹配；你后来又往同一行加过数量的会跳过并说明原因；更早批次加的商品和你的其它商品都不会动。删除不可撤销。</div>
       </div>
     </details>
 
@@ -214,7 +215,7 @@
 </main>
 
 <footer class="foot">
-  <span>规则源 taobao-bom-procurement SKILL v0.8.1</span>
+  <span>规则源 taobao-bom-procurement SKILL v0.9</span>
   <span>本地运行 · 127.0.0.1:8765</span>
 </footer>
 

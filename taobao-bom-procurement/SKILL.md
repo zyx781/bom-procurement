@@ -3,7 +3,7 @@ name: taobao-bom-procurement
 description: 把硬件 BOM（CSV/Excel：型号、数量、封装、参数、位号）蒸馏为逐行采购意图，驱动本地已登录的淘宝会话（Taobao-Search-Skill v4 session 模式）完成搜索、候选评估、SKU 匹配与加购；结算与付款永远由人工完成。当用户上传 BOM 并要求「按 BOM 采购 / 配单 / 询价 / 比价 / 加购物车 / 找替代料」，或提到阻容感、MCU、功率器件、连接器等电子元器件采购时使用。禁止自动支付、模拟登录、Cookie 劫持、验证码绕过与平台风控规避。
 ---
 
-# 淘宝 BOM 采购（决策层 Skill）v0.8.1
+# 淘宝 BOM 采购（决策层 Skill）v0.9
 
 > **绑定实现**：执行层 Taobao-Search-Skill v4.0.0（`scripts/taobao.py` session 模式）
 > ＋ 决策引擎 `bom-site/engine.py`（`ENGINE_VERSION = "0.1.0"`）
@@ -802,6 +802,34 @@ select-sku → final_price（选完 SKU 的每份价）
 | `CART_ADD_REJECTED` | 点击后页面明确提示失败（下架 / 库存不足 / 不能购买 / 请稍后再试） | `retryable: false`，换下一个候选；**不重试同一家** |
 | `INVALID_SELECTIONS` | `select-sku` 收到的 selections 里有该商品不存在的规格组或值 | 不点加购，回到 SKU 面板重新选 |
 | `SESSION_ERROR` | 会话进程已退出、命令通道断开或返回体无法解析 | 批量暂停并落盘，提示重启会话；**不当作该行失败** |
+
+### 19.4.2 只删本批：`cart-remove` 的 `items` 模式
+
+不是「清空购物车」，也不是「按关键字删」，而是**只删上一批加购进去的那些**，
+用户自己的商品和更早批次加的一件都不碰。前端按钮叫「删上次加购的」。
+
+```json
+{"cmd": "cart-remove", "dry": true,
+ "items": [{"item_id": "9513106599", "title": "…", "qty": 2}]}
+```
+
+| 环节 | 规则 |
+|---|---|
+| 目标来源 | `batch-progress.json` 里 **status=ok** 的行；`uncertain` 连加没加上都不确定，不参与删除 |
+| 匹配 | 优先按 `candidate.url` 的商品 id 精确匹配；记录没存 url 的老批次退回标题归一化匹配 |
+| **数量守卫** | 购物车里这一行的件数 **多于** 记录里的份数 → 说明用户自己也加过同款，**跳过不删**，原因写进 `skip` |
+| 同款合并 | 同一商品买过多次时购物车只有一行：第二个目标记为 `merged`，不当成丢件 |
+| 两段式 | `dry:true` 只扫描并返回 `delete/skip/merged/missing` 四张清单，一个按钮都不点 |
+| 核对 | 删完回读「全部商品(N)」，`after < before` 才算 `verified` |
+
+返回结构：`delete[]`（将删/已删）、`skip[]`（含 reason）、`merged[]`、`missing[]`、
+`removed` / `removed_titles` / `before` / `after` / `verified`。
+失败码沿用 §19.4：`CART_ROWS_NOT_RENDERED`、`CART_DELETE_NOT_EFFECTIVE`；
+本模式独有的 `NO_BATCH_RECORD`（没有任何 ok 行可删）。
+
+> 实测（2026-11-11）：购物车 24 件（含用户自己的鼠标、键盘）→ 删 21 件，
+> 24 → 3。剩下 3 件 = 用户 2 件 + 一件**更早批次**加的 0402 100nF（不在本批记录里），
+> 正是「只删本批」的预期行为。重复点击第二次返回 0 件待删（幂等）。
 
 ### 19.5 批量状态机（I7）
 

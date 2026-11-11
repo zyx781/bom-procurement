@@ -45,6 +45,85 @@ def _same_item_url(current: str, target: str) -> bool:
     return bool(ca.netloc) and ca.netloc == cb.netloc and ca.path == cb.path
 
 
+def _plan_cart_removal(rows: list[dict[str, Any]], targets: list[dict[str, Any]]) -> dict[str, Any]:
+    """决定「只删本工具加购的那几件」时，购物车里哪些行该删、哪些该留。
+
+    rows    购物车行（cart-view 的 rows：index / title / qty / url）
+    targets 要删的目标（item_id / title / qty）；qty 是当时加购的份数
+
+    返回 {"delete": [...], "skip": [...], "missing": [...]}
+
+    1. 有 item_id 就按 id 精确匹配，同款不同卖家不会混；老记录没存 url，
+       退回标题归一化包含匹配。
+    2. **数量守卫**：车里这行的件数多于本工具当时加的份数，说明用户自己也加过同款，
+       跳过不删并把原因写进 skip —— 这是「不动我其他东西」的关键。
+    3. 匹配不到的目标进 missing，不静默吞掉。
+    """
+    def norm(text: Any) -> str:
+        return re.sub(r"\s+", "", str(text or "")).lower()
+
+    by_id: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        iid = _item_id(r.get("url") or "")
+        if iid:
+            by_id.setdefault(iid, r)
+
+    delete: list[dict[str, Any]] = []
+    skip: list[dict[str, Any]] = []
+    missing: list[dict[str, Any]] = []
+    merged: list[dict[str, Any]] = []
+    taken: set[Any] = set()
+
+    for t in targets:
+        tid = str(t.get("item_id") or "").strip()
+        want_qty = int(t.get("qty") or 0)
+        row = by_id.get(tid) if tid else None
+        occupied = row is not None and row.get("index") in taken
+        if occupied:
+            row = None
+
+        if row is None and not tid:
+            nt = norm(t.get("title"))
+            if nt:
+                for r in rows:
+                    rt = norm(r.get("title"))
+                    # 两边都可能被淘宝改写，用「互相包含」或前缀一致做兜底
+                    if not (rt and (nt in rt or rt in nt or (len(nt) >= 12 and nt[:12] == rt[:12]))):
+                        continue
+                    if r.get("index") in taken:
+                        # 同款买过多次时购物车会合并成一行：不是丢件，是同一行
+                        occupied = True
+                        continue
+                    row = r
+                    break
+
+        if row is None:
+            if occupied:
+                merged.append({"item_id": tid, "title": str(t.get("title") or "")[:60]})
+            else:
+                missing.append({"item_id": tid, "title": str(t.get("title") or "")[:60]})
+            continue
+
+        taken.add(row.get("index"))
+        got_qty = int(row.get("qty") or 0)
+        entry = {
+            "item_id": _item_id(row.get("url") or "") or tid,
+            "title": str(row.get("title") or "")[:80],
+            "row_qty": got_qty,
+            "expect_qty": want_qty,
+        }
+        if want_qty and got_qty > want_qty:
+            entry["reason"] = (
+                f"车里这行有 {got_qty} 件，本工具只加了 {want_qty} 件，"
+                "可能你自己也加过同款"
+            )
+            skip.append(entry)
+        else:
+            delete.append(entry)
+
+    return {"delete": delete, "skip": skip, "missing": missing, "merged": merged}
+
+
 # 加购确认策略：fast（默认，点击即记账）/ strict（每行都开购物车页对账）
 CART_VERIFY_STRICT = (os.environ.get("TAOBAO_CART_VERIFY") or "fast").strip().lower() in (
     "strict", "1", "true", "on",
@@ -1210,8 +1289,30 @@ class SessionHandler:
         const m = priceText.match(/[￥¥]\\s*(\\d+)\\s*(?:\\.\\s*(\\d+))?/);
         if (m) price = parseFloat(m[1] + '.' + (m[2] || '0'));
         let qty = null;
-        const qi = r.querySelector('input[class*="countValue"], input[class*="quantity"], input[class*="itemAmount"]');
-        if (qi) { const v = parseInt(qi.value, 10); if (!isNaN(v)) qty = v; }
+        // 数量控件在各版本购物车里形态不同：老版是 countValue/itemAmount，
+        // 2026 版是 antd 的 <input class="ant-input inputWrapper-...">（class 里
+        // 根本没有 count/quantity 字样）。所以按「排除勾选框 + 认 ant-input」找。
+        const qis = Array.from(r.querySelectorAll('input'));
+        const qi = qis.find((e) => {
+          if (e.type === 'checkbox' || e.type === 'radio' || e.type === 'hidden') return false;
+          if (e.type === 'number') return true;
+          return /countValue|quantity|itemAmount|ant-input|inputWrapper|num/i.test(String(e.className));
+        });
+        if (qi && String(qi.value).trim() !== '') {
+          const v = parseInt(String(qi.value).replace(/\\D/g, ''), 10);
+          if (!isNaN(v)) qty = v;
+        }
+        if (qty === null) {
+          const qd = r.querySelector('[class*="countValue"], [class*="itemAmount"], [class*="quantity"]');
+          if (qd) {
+            const m = clean(qd.innerText || qd.textContent || qd.value || '').match(/(\\d+)/);
+            if (m) qty = parseInt(m[1], 10);
+          }
+        }
+        if (qty === null) {
+          const m2 = clean(r.innerText || '').match(/(?:[x×]\\s*(\\d+)\\s*件?|数量[：:]\\s*(\\d+))/);
+          if (m2) qty = parseInt(m2[1] || m2[2], 10);
+        }
         return {
           index: i,
           title: q('a[class*="title"]') || q('a[href*="item.htm"]'),
@@ -1426,9 +1527,12 @@ class SessionHandler:
 
         keyword = str(req.get("keyword") or "").strip()
         all_flag = bool(req.get("all"))
-        if not keyword and not all_flag:
+        items_req = [x for x in (req.get("items") or []) if isinstance(x, dict)]
+        dry = bool(req.get("dry"))
+        if not keyword and not all_flag and not items_req:
             self._error(
-                "Refusing an implicit cart clear: pass 'keyword' (title substring) or 'all': true.",
+                "Refusing an implicit cart clear: pass 'keyword' (title substring), "
+                "'items' (exact list) or 'all': true.",
                 code="CART_REMOVE_AMBIGUOUS",
             )
             return
@@ -1467,6 +1571,13 @@ class SessionHandler:
             self.browser._human_wait(2.5, 4.0)
 
         before = self._wait_cart_count(page, timeout_s=15.0)
+
+        # 「只删本工具加购的那几件」走独立路径：按商品 id 精确匹配 + 数量守卫，
+        # 不污染按关键字删 / 清空这两条老路。
+        if items_req and not all_flag and not keyword:
+            self._cart_remove_selected(page, items_req, before, dry)
+            return
+
         if rows is None:
             # I5：以前这里不管有没有货都回「购物车里没有可删除的条目」——
             # 页面没渲染出来的时候，人以为删干净了，其实一件没删。
@@ -1651,6 +1762,180 @@ class SessionHandler:
                 "message": message,
                 "code": code,
             },
+        )
+
+    def _cart_remove_selected(
+        self, page, items: list[dict[str, Any]], before: int, dry: bool
+    ) -> None:
+        """只删 items 指定的商品，其余（含用户自己加的）一律不碰。
+
+        items 每项：{"item_id": "123", "title": "...", "qty": 2}
+        dry=True 只返回计划、不点任何按钮，让用户先看清「会删哪几件」。
+        """
+        from taobao_selectors import (
+            CART_DELETE_CONFIRM_BUTTONS,
+            CART_ITEM_ROW_SELECTORS,
+            CART_ROW_DELETE_BUTTONS,
+        )
+
+        snapshot = self._cart_rows_all(page)
+        rows_now = snapshot.get("rows") or []
+        degraded = bool(snapshot.get("degraded"))
+        plan = _plan_cart_removal(rows_now, items)
+        base = {
+            "before": before,
+            "cart_rows": len(rows_now),
+            "cart_degraded": degraded,
+            "delete": plan["delete"],
+            "skip": plan["skip"],
+            "missing": plan["missing"],
+            "merged": plan.get("merged") or [],
+            "targets": len(items),
+        }
+
+        if degraded:
+            self._respond(
+                screenshot=self._screenshot("cart_remove_degraded"),
+                page_text=self.browser.get_page_text(1200),
+                data=dict(
+                    base,
+                    removed=0,
+                    after=before,
+                    verified=False,
+                    dry=dry,
+                    code="CART_ROWS_NOT_RENDERED",
+                    message=(
+                        f"购物车里有 {before} 件，但一行都没读到（DOM 可能改名）"
+                        "—— 没有执行删除，请刷新后重试"
+                    ),
+                ),
+            )
+            return
+
+        if dry:
+            self._respond(
+                data=dict(
+                    base,
+                    removed=0,
+                    after=before,
+                    verified=False,
+                    dry=True,
+                    code=None,
+                    message=(
+                        f"计划删除 {len(plan['delete'])} 件，"
+                        f"跳过 {len(plan['skip'])} 件，"
+                        f"已合并不重复删 {len(plan.get('merged') or [])} 件，"
+                        f"找不到 {len(plan['missing'])} 件"
+                    ),
+                ),
+            )
+            return
+
+        ids = [d["item_id"] for d in plan["delete"] if d.get("item_id")]
+        if not ids:
+            self._respond(
+                data=dict(
+                    base,
+                    removed=0,
+                    after=before,
+                    verified=False,
+                    dry=False,
+                    code="CART_NO_MATCH",
+                    message="上一批记录里没有能在购物车定位到的商品，没有执行删除",
+                ),
+            )
+            return
+
+        # 扫描可能已经翻过页，回第一页再动手
+        page.goto("https://cart.taobao.com/cart.htm", wait_until="commit", timeout=45000)
+        with suppress(Exception):
+            page.wait_for_load_state("domcontentloaded", timeout=30000)
+        self.browser._human_wait(1.5, 2.5)
+
+        # 用 href 里的商品 id 精确定位行；id 后面一定是 & ? # 或链接结尾
+        href_sel = ", ".join(
+            f'a[href*="id={i}&"], a[href*="id={i}?"], a[href$="id={i}"]' for i in ids
+        )
+
+        def _targets():
+            for sel in CART_ITEM_ROW_SELECTORS:
+                loc = page.locator(sel)
+                with suppress(Exception):
+                    if not loc.count():
+                        continue
+                hit = loc.filter(has=page.locator(href_sel))
+                with suppress(Exception):
+                    if hit.count():
+                        return hit
+            return None
+
+        # 回第一页后要等它渲染出行来：购物车首屏 3–5s 才出内容，
+        # 直接找会空手而归、然后一声不响地判「没删掉」。
+        for _ in range(20):
+            if _targets() is not None:
+                break
+            self.browser._human_wait(0.8, 1.5)
+
+        removed_titles: list[str] = []
+        for _ in range(len(ids) + 6):
+            hit = _targets()
+            if hit is None:
+                break
+            row = hit.first
+            with suppress(Exception):
+                title = (row.inner_text() or "").split("\n")[0][:60]
+                if title:
+                    removed_titles.append(title)
+            link = None
+            for sel in CART_ROW_DELETE_BUTTONS:
+                with suppress(Exception):
+                    cand = row.locator(sel)
+                    if cand.count():
+                        link = cand.first
+                        break
+            if link is None:
+                break
+            link.click()
+            self.browser._human_wait(0.7, 1.2)
+            for sel in CART_DELETE_CONFIRM_BUTTONS:
+                clicked = False
+                with suppress(Exception):
+                    loc = page.locator(sel)
+                    if loc.count() and loc.first.is_visible():
+                        loc.first.click()
+                        clicked = True
+                if clicked:
+                    break
+            self.browser._human_wait(1.0, 1.6)
+
+        after = self._wait_cart_count(page, timeout_s=12.0)
+        verified = after < before
+        if verified:
+            message = (
+                f"已删除 {len(removed_titles)} 件本工具加购的商品，"
+                f"购物车 {before} → {after} 件"
+            )
+            code = None
+        else:
+            message = (
+                f"点了删除，但件数没降（{before} → {after}）"
+                "—— 可能没删掉，请刷新购物车核对"
+            )
+            code = "CART_DELETE_NOT_EFFECTIVE"
+
+        self._respond(
+            screenshot=self._screenshot("cart_remove_selected"),
+            page_text=self.browser.get_page_text(1200),
+            data=dict(
+                base,
+                removed=len(removed_titles),
+                removed_titles=removed_titles,
+                after=after,
+                verified=verified,
+                dry=False,
+                message=message,
+                code=code,
+            ),
         )
 
     def _cmd_dom(self, req: dict[str, Any]) -> None:

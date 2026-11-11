@@ -138,6 +138,50 @@ def batch_progress_summary() -> dict:
     }
 
 
+_RE_ITEM_ID = re.compile(r"[?&](?:id|itemId)=(\d+)")
+
+
+def _item_id_of(url: str) -> str:
+    """从商品链接里取商品 id（淘宝 item.htm?id= / 天猫 detail.tmall.com）。"""
+    m = _RE_ITEM_ID.search(url or "")
+    return m.group(1) if m else ""
+
+
+def batch_removal_targets(prog: dict | None = None) -> list[dict]:
+    """从上次批量记录里挑出「本工具加进去的商品」，供购物车精准删除。
+
+    只取 status=ok 的行：uncertain 连"到底加没加上"都不确定，不能凭它去删东西。
+    2026-11 起加购记录里带 `candidate.url`，用商品 id 精确匹配；
+    更早的进度没有 url，退回标题匹配（由执行层做数量守卫兜底）。
+    """
+    data = prog if isinstance(prog, dict) else load_batch_progress()
+    rows = data.get("lines") or {}
+    keys = sorted(
+        rows.keys(),
+        key=lambda x: (0, int(x)) if str(x).isdigit() else (1, 0),
+    )
+    out: list[dict] = []
+    for key in keys:
+        rec = rows.get(key) or {}
+        if (rec.get("status") or "") != "ok":
+            continue
+        cand = rec.get("candidate") or {}
+        title = str(cand.get("title") or "").strip()
+        url = str(cand.get("url") or "").strip()
+        item_id = _item_id_of(url)
+        if not item_id and not title:
+            continue
+        out.append(
+            {
+                "item_id": item_id,
+                "title": title[:120],
+                "qty": int(rec.get("qty") or 0),
+                "line_no": key,
+            }
+        )
+    return out
+
+
 def done_map_from_progress(prior: dict) -> dict:
     """续跑时哪些行可以跳过。
 
@@ -1336,6 +1380,57 @@ class SessionRunner:
             "page_text": resp.get("page_text_summary"),
         }
 
+    def cart_remove_last_batch(self, dry: bool = False) -> dict:
+        """只删「上一批加购进去」的那些商品，用户自己加的保持不动。
+
+        dry=True 时执行层只扫描并返回计划（会删哪几件、跳过哪几件），
+        一个按钮都不点 —— 前端先用它给用户看清，再决定要不要真删。
+        """
+        targets = batch_removal_targets()
+        if not targets:
+            return {
+                "ok": False,
+                "code": "NO_BATCH_RECORD",
+                "message": "没有可用的批量加购记录：上次批量没有成功加购的行",
+                "delete": [],
+                "skip": [],
+                "missing": [],
+                "merged": [],
+            }
+        resp = self.send(
+            {"cmd": "cart-remove", "items": targets, "dry": dry}, timeout=240
+        )
+        if resp.get("status") == "error":
+            err = resp.get("error") or {}
+            return {
+                "ok": False,
+                "code": err.get("code") or "CART_REMOVE_FAILED",
+                "message": err.get("message") or "删除购物车条目失败",
+                "screenshot": self.persist_screenshot(
+                    err.get("screenshot") or resp.get("screenshot")
+                ),
+            }
+        data = resp.get("data") or {}
+        return {
+            "ok": True,
+            "dry": bool(data.get("dry")),
+            "targets": data.get("targets"),
+            "delete": data.get("delete") or [],
+            "skip": data.get("skip") or [],
+            "missing": data.get("missing") or [],
+            "merged": data.get("merged") or [],
+            "removed": data.get("removed"),
+            "removed_titles": data.get("removed_titles") or [],
+            "before": data.get("before"),
+            "after": data.get("after"),
+            "verified": data.get("verified"),
+            "cart_rows": data.get("cart_rows"),
+            "cart_degraded": data.get("cart_degraded"),
+            "code": data.get("code"),
+            "message": data.get("message"),
+            "screenshot": self.persist_screenshot(resp.get("screenshot")),
+        }
+
     # ---------------- 批量加购 ----------------
     def batch_status(self) -> dict:
         with self._state_lock:
@@ -2140,6 +2235,7 @@ class SessionRunner:
                         "index": cand.get("index"),
                         "title": cand.get("title"),
                         "price": cand.get("price"),
+                        "url": cand.get("url"),
                         "score": cand.get("score"),
                     },
                     sku=selections,
@@ -2197,6 +2293,7 @@ class SessionRunner:
                             "index": cand.get("index"),
                             "title": cand.get("title"),
                             "price": cand.get("price"),
+                            "url": cand.get("url"),
                             "score": cand.get("score"),
                         },
                         sku=sels,
@@ -2219,6 +2316,7 @@ class SessionRunner:
                             "index": cand.get("index"),
                             "title": cand.get("title"),
                             "price": cand.get("price"),
+                            "url": cand.get("url"),
                             "score": cand.get("score"),
                         },
                         sku=sels,
@@ -2244,6 +2342,7 @@ class SessionRunner:
                     "index": cand.get("index"),
                     "title": cand.get("title"),
                     "price": cand.get("price"),
+                    "url": cand.get("url"),
                     "score": cand.get("score"),
                 },
                 detail_price=opened.get("detail_price"),

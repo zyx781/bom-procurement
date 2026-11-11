@@ -269,10 +269,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, tr.RUNNER.cart_view())
 
             if path == "/api/taobao/cart-remove":
+                source = str(body.get("source") or "").strip()
+                dry = bool(body.get("dry"))
+                # 只删「上一批加购进去的」：按商品 id 精确匹配 + 数量守卫，
+                # 用户自己加的商品保持不动。dry=true 只返回计划、不点按钮。
+                if source == "last_batch":
+                    return self._send(
+                        200, tr.RUNNER.cart_remove_last_batch(dry=dry)
+                    )
                 keyword = str(body.get("keyword") or "").strip()
                 remove_all = bool(body.get("all"))
                 if not keyword and not remove_all:
-                    raise ValueError("必须给 keyword（标题关键字）或 all=true，拒绝隐式清空购物车")
+                    raise ValueError(
+                        "必须给 keyword（标题关键字）、source=\"last_batch\" 或 all=true，"
+                        "拒绝隐式清空购物车"
+                    )
                 if remove_all and str(body.get("confirm") or "") != "清空":
                     raise ValueError("清空整个购物车需要 confirm=\"清空\"")
                 return self._send(200, tr.RUNNER.cart_remove(keyword=keyword or None, remove_all=remove_all))

@@ -1167,6 +1167,69 @@
     }
   }
 
+  /** 只删上一批加购进去的商品：先预览（dry），确认后再真删。 */
+  async function cartRemoveLastBatch() {
+    if (!sessionReady) return toast("先启动淘宝会话");
+    const box = $("#cart-remove-result");
+    box.textContent = "正在核对上一批的加购记录…（会打开购物车页面）";
+
+    let plan;
+    try {
+      plan = await api("/api/taobao/cart-remove", { source: "last_batch", dry: true });
+    } catch (e) {
+      box.innerHTML = `<span class="sess-warn">${esc(e.message)}</span>`;
+      return;
+    }
+    if (!plan.ok) {
+      box.innerHTML =
+        `<span class="sess-warn">${esc(plan.message || "没有可删除的记录")}` +
+        `${plan.code ? `［${esc(plan.code)}］` : ""}</span>`;
+      return;
+    }
+
+    const del = plan.delete || [];
+    const skip = plan.skip || [];
+    const miss = plan.missing || [];
+    const merged = plan.merged || [];
+    const shown = del.slice(0, 8).map((d) => `<li>${esc(d.title)}（${d.row_qty} 件）</li>`).join("");
+    box.innerHTML =
+      `<div class="exec-result ${del.length ? "ok" : "bad"}">` +
+      `<b>将删除 ${del.length} 件</b>：本工具上一批加进去的商品` +
+      (skip.length
+        ? `<br>跳过 ${skip.length} 件（你自己也往这些行加过数量）：${esc(
+            skip.map((s) => `${s.title}（${s.reason || ""}）`).join("；")
+          )}`
+        : "") +
+      (merged.length ? `<br>已合并 ${merged.length} 条（同一商品买过多次，购物车里只有一行）` : "") +
+      (miss.length ? `<br>没找到 ${miss.length} 件（可能已手动删过，或在购物车其它页）` : "") +
+      (del.length ? `<ul>${shown}${del.length > 8 ? `<li>…还有 ${del.length - 8} 件</li>` : ""}</ul>` : "") +
+      `</div>`;
+
+    if (!del.length) return;
+    if (!window.confirm(`确认删除这 ${del.length} 件？只删本工具加购的，其余不动。`)) {
+      box.insertAdjacentHTML("beforeend", `<div class="fineprint">已取消，未删除任何商品。</div>`);
+      return;
+    }
+
+    box.insertAdjacentHTML("beforeend", `<div class="fineprint">删除中…</div>`);
+    try {
+      const d = await api("/api/taobao/cart-remove", { source: "last_batch" });
+      const n = d.removed || 0;
+      box.innerHTML =
+        `<div class="exec-result ${n > 0 && d.verified ? "ok" : "bad"}">` +
+        `<b>${n > 0 ? `已删除 ${n} 件` : "没有删除成功"}</b>｜购物车 ${d.before ?? "?"} → ${d.after ?? "?"}` +
+        (d.verified ? "（已回读确认）" : "（件数未回读，请看截图核对）") +
+        (d.code ? `［${esc(d.code)}］` : "") +
+        (d.skip && d.skip.length ? `<br>跳过 ${d.skip.length} 件（你加过同款，未动）` : "") +
+        (d.merged && d.merged.length ? `<br>已合并 ${d.merged.length} 条（本来就只有一行）` : "") +
+        (d.missing && d.missing.length ? `<br>没找到 ${d.missing.length} 件` : "") +
+        `</div>` +
+        (d.screenshot ? `<img class="shot" src="${d.screenshot}">` : "");
+    } catch (e) {
+      box.innerHTML = `<span class="sess-warn">${esc(e.message)}</span>`;
+    }
+  }
+
   /* ---------- 事件 ---------- */
 
   function wire() {
@@ -1283,6 +1346,7 @@
       });
     $("#btn-cart-view").addEventListener("click", execCart);
     $("#btn-cart-remove").addEventListener("click", () => cartRemove(false));
+    $("#btn-cart-remove-batch").addEventListener("click", cartRemoveLastBatch);
     $("#btn-cart-clear").addEventListener("click", () => cartRemove(true));
     $("#btn-exec-search").addEventListener("click", execSearch);
     $("#btn-exec-open").addEventListener("click", execOpen);

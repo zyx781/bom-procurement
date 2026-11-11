@@ -28,11 +28,16 @@
     if (pollTimer) clearInterval(pollTimer);
     document.body.insertAdjacentHTML(
       "beforeend",
-      `<div class="byebye"><div>
+      `<div class="byebye">
+         <svg class="mark" viewBox="0 0 28 28" aria-hidden="true" focusable="false">
+           <rect x="8.5" y="8.5" width="11" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.7"/>
+           <path d="M11 8.5V4.5M17 8.5V4.5M11 23.5v-4M17 23.5v-4M8.5 11h-4M8.5 17h-4M23.5 11h-4M23.5 17h-4"
+                 stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+         </svg>
          <h1>服务已关闭</h1>
          <p>本地网站和淘宝浏览器都停了，这个页面可以直接关掉。</p>
-         <p class="fineprint">要用的时候再双击「启动BOM选型台.bat」。</p>
-       </div></div>`
+         <p class="fineprint">下次使用，双击「启动BOM选型台.bat」。</p>
+       </div>`
     );
   }
 
@@ -190,7 +195,7 @@
     const s = r.summary;
     const cats = Object.entries(r.categories || {})
       .map(([k, v]) => `${catLabel(k)} ${v}`)
-      .join(" · ");
+      .join("，");
     let html = `
       <div class="chip"><b>${s.total}</b>行</div>
       <div class="chip ok"><b>${s.ready}</b>可执行</div>
@@ -213,23 +218,32 @@
     return { passive: "被动件", ic: "芯片", power: "功率", connector: "连接器", module: "模组", other: "其他" }[c] || c;
   }
 
+  // 封装列只留第一个词：「0603 (1608)」→「0603」，宽度才够排五列
+  function shortPkg(pkg) {
+    return String(pkg || "").trim().split(/[\s(（]/)[0] || "—";
+  }
+
   function renderLineList() {
     const lines = state.result.lines;
-    $("#line-list").innerHTML = lines
-      .map((ln, i) => {
-        const status = ln.status === "ready" ? "ready" : "needs_user";
-        const critical = ln.criticality === "critical" ? `<span class="badge critical">关键</span>` : "";
-        return `<button class="line-item ${i === state.activeIndex ? "active" : ""}" data-idx="${i}">
-          <span class="dot ${status}"></span>
+    const head = `<div class="ledger-head"><span>行</span><span>用料</span><span>封装</span><span>数量</span><span>状态</span></div>`;
+    $("#line-list").innerHTML =
+      head +
+      lines
+        .map((ln, i) => {
+          const status = ln.status === "ready" ? "ready" : "needs_user";
+          const critical = ln.criticality === "critical" ? `<span class="li-flag">关键</span>` : "";
+          return `<button class="line-item ${i === state.activeIndex ? "active" : ""}" data-idx="${i}">
+          <span class="li-no">${String(ln.line_no ?? i + 1).padStart(2, "0")}</span>
           <span class="li-body">
-            <span class="li-title">#${ln.line_no} ${esc(ln.decision.headline || ln.mpn || "未识别")}</span>
-            <span class="li-sub">${esc(catLabel(ln.category))} · ${esc(ln.package || "封装未识别")} · ×${ln.qty ?? "?"}</span>
+            <span class="li-title">${esc(ln.decision.headline || ln.mpn || "未识别")}${critical}</span>
+            <span class="li-sub">${esc(ln.mpn || catLabel(ln.category))}</span>
           </span>
-          ${critical}
+          <span class="li-pkg">${esc(shortPkg(ln.package))}</span>
+          <span class="li-qty">${ln.qty ?? "—"}</span>
           <span class="badge ${status}">${status === "ready" ? "可执行" : "待确认"}</span>
         </button>`;
-      })
-      .join("");
+        })
+        .join("");
 
     $("#line-list").querySelectorAll("[data-idx]").forEach((btn) => {
       btn.addEventListener("click", () => renderDetail(Number(btn.dataset.idx)));
@@ -250,7 +264,7 @@
         ? `<span class="badge">可执行</span>`
         : `<span class="badge needs_user">待确认</span>`;
     const critBadge =
-      ln.criticality === "critical" ? `<span class="badge critical">关键件 · G3 逐行</span>` : "";
+      ln.criticality === "critical" ? `<span class="badge critical">关键件，G3 逐行</span>` : "";
     const meta = [
       ln.mpn ? `<span>型号 <b>${esc(ln.mpn)}</b></span>` : "",
       ln.qty ? `<span>数量 <b>${esc(ln.qty)}</b></span>` : `<span>数量 <b>缺失</b></span>`,
@@ -287,9 +301,9 @@
     $("#line-detail").innerHTML = `
       <div class="detail-head">
         <div>
-          <div class="kicker">第 ${ln.line_no} 行 · ${esc(catLabel(ln.category))} · ${esc(
-      ln.params_text || ""
-    )}</div>
+          <div class="kicker"><span>第 ${ln.line_no} 行</span><span>${esc(
+      catLabel(ln.category)
+    )}</span>${ln.params_text ? `<span>${esc(ln.params_text)}</span>` : ""}</div>
           <h3>${esc(d.headline)}</h3>
         </div>
         <div class="detail-badges">${statusBadge}${critBadge}</div>
@@ -311,8 +325,8 @@
       <h4>风险提示</h4>
       <div class="risks">${risks}</div>
       <div class="detail-foot">
-        <span>人工门：${esc(d.gate)} · manual_approval_required = true</span>
-        <button class="ghost small" data-score-idx="${idx}">用这行评分 →</button>
+        <span>人工门：${esc(d.gate)}；manual_approval_required = true</span>
+        <button class="ghost small" data-score-idx="${idx}">用这行评分</button>
       </div>`;
 
     $("#line-detail")
@@ -333,7 +347,7 @@
   function renderScoreSelect() {
     const sel = $("#score-line");
     sel.innerHTML = state.result.lines
-      .map((ln, i) => `<option value="${i}">#${ln.line_no} · ${esc(ln.decision.headline)}</option>`)
+      .map((ln, i) => `<option value="${i}">#${ln.line_no} ${esc(ln.decision.headline)}</option>`)
       .join("");
     if (state.activeIndex >= 0) sel.value = String(state.activeIndex);
   }
@@ -376,7 +390,7 @@
            <div class="stat">P25–P75 <b>${fmtMoney(st.p25)} – ${fmtMoney(st.p75)}</b></div>
            <div class="stat">P90 <b>${fmtMoney(st.p90)}</b></div>`
         : `<div class="stat">价格结论 <b>样本 &lt;5，不下结论</b></div>`,
-      `<div class="stat">权重 一致性 <b>${data.weights.match}</b> · 店铺 <b>${data.weights.shop}</b> · 评价 <b>${data.weights.review}</b> · 价格 <b>${data.weights.price}</b> · 销量 <b>${data.weights.sales}</b></div>`,
+      `<div class="stat">权重：一致性 <b>${data.weights.match}</b>，店铺 <b>${data.weights.shop}</b>，评价 <b>${data.weights.review}</b>，价格 <b>${data.weights.price}</b>，销量 <b>${data.weights.sales}</b></div>`,
     ].join("");
 
     const cards = data.candidates
@@ -415,7 +429,7 @@
     $("#score-result").innerHTML = `
       <div class="verdict ${cls}">${esc(data.verdict)}</div>
       <div class="statline">${stats}</div>
-      <div class="fineprint" style="margin-bottom:10px">${esc(data.note)}</div>
+      <div class="fineprint note-gap">${esc(data.note)}</div>
       ${cards}`;
   }
 
@@ -511,7 +525,7 @@
     sel.innerHTML = state.result.lines
       .map(
         (ln, i) =>
-          `<option value="${i}">#${ln.line_no} · ${esc(ln.decision.headline)}${
+          `<option value="${i}">#${ln.line_no} ${esc(ln.decision.headline)}${
             ln.status === "ready" ? "" : "（待确认）"
           }</option>`
       )
@@ -559,7 +573,7 @@
       dot.classList.add("bad");
     }
     text.textContent = label;
-    task.textContent = st.task_id ? `${st.task_id} · pid ${st.pid || "-"}` : "";
+    task.textContent = st.task_id ? `${st.task_id}  pid ${st.pid || "-"}` : "";
     warn.textContent = st.verification
       ? "请在浏览器里手动完成验证，完成后点右侧按钮（或等它自动恢复）。"
       : st.browser_gone
@@ -675,7 +689,7 @@
       $("#exec-search-note").innerHTML = `<span class="sess-warn">${esc(e.message)}</span>`;
     } finally {
       btn.disabled = false;
-      btn.textContent = "1 · 搜索候选";
+      btn.textContent = "搜索候选";
       pollSession();
     }
   }
@@ -702,11 +716,11 @@
           <input type="radio" name="exec-cand" value="${c.index}" ${sel ? "checked" : ""} ${dead ? "disabled" : ""}>
           <span class="score">${c.score}</span>
           <span class="title">${esc(c.title)}<br>
-            <span class="cand-meta">销量 ${fmtNum(c.sales)} · 好评 ${
+            <span class="cand-meta">销量 ${fmtNum(c.sales)}，好评 ${
           c.rating != null ? Math.round(c.rating * 100) + "%" : "—"
-        } · ${c.is_tmall ? "天猫" : "店铺未知"}${
-          c.pack_size ? ` · ${c.pack_size}只/份` : ""
-        }${c.actual_pcs ? ` · 到手 ${c.actual_pcs} 只` : ""}</span>${
+        }，${c.is_tmall ? "天猫" : "店铺未知"}${
+          c.pack_size ? `，${c.pack_size}只/份` : ""
+        }${c.actual_pcs ? `，到手 ${c.actual_pcs} 只` : ""}</span>${
           over ? `<span class="cand-flag">超量 ${over >= 10 ? Math.round(over) : over.toFixed(1)} 倍</span>` : ""
         }</span>
           <span class="price">${fmtMoney(c.price)}${
@@ -727,7 +741,7 @@
       });
     });
     $("#btn-exec-open").disabled = exec.chosen === null;
-    note.textContent = `搜索词「${data.query}」· ${data.items_count} 条 · ${data.verdict}`;
+    note.textContent = `搜索词「${data.query}」，${data.items_count} 条，${data.verdict}`;
   }
 
   async function execOpen() {
@@ -745,7 +759,7 @@
       $("#exec-detail").innerHTML = `<div class="exec-result bad">${esc(e.message)}</div>`;
     } finally {
       btn.disabled = false;
-      btn.textContent = "2 · 打开选中并匹配 SKU";
+      btn.textContent = "打开选中项并匹配规格";
       pollSession();
     }
   }
@@ -773,7 +787,7 @@
         const bad = unresolved[g.label];
         return `<div class="sku-item ${bad ? "warn" : ""}">
           <label>${esc(g.label)}</label>
-          <select data-group="${esc(g.label)}"><option value="">— 请选择 —</option>${opts}</select>
+          <select data-group="${esc(g.label)}"><option value="">请选择</option>${opts}</select>
           ${bad ? `<div class="why">自动匹配失败：${esc(bad.reason || "")}</div>` : ""}
         </div>`;
       })
@@ -784,7 +798,7 @@
     $("#exec-detail").innerHTML = `
       <div class="sku-panel">
         <div class="kicker">已打开商品</div>
-        <h3 style="margin:2px 0 6px;font-size:15px;line-height:1.45">${esc(item.title || "")}</h3>
+        <h3 class="sku-title">${esc(item.title || "")}</h3>
         <div class="detail-meta">
           <span>详情价 <b>${fmtMoney(data.detail_price)}</b></span>
           ${packInfo ? `<span>每份 <b>${packInfo} 只</b></span>` : ""}
@@ -794,7 +808,7 @@
         </div>
         ${
           packInfo
-            ? `<div class="alert" style="margin:6px 0">识别到<b>整包卖</b>：1 份 = ${packInfo} 只${
+            ? `<div class="alert tight">识别到<b>整包卖</b>：1 份 = ${packInfo} 只${
                 data.pack_source ? `（依据「${esc(data.pack_source)}」）` : ""
               }。BOM 要 ${data.bom_qty || "?"} 只 → 加购 <b>${data.suggested_qty}</b> 份，实际到手 <b>${actual}</b> 只${
                 actual && data.bom_qty ? `（多 ${actual - data.bom_qty} 只）` : ""
@@ -813,7 +827,7 @@
               : "按 BOM 用量；整包/起订量请按实际改"
           }</span>
         </div>
-        <button class="primary" id="btn-exec-add" ${groups.length ? "" : "disabled"}>3 · 加入购物车</button>
+        <button class="primary" id="btn-exec-add" ${groups.length ? "" : "disabled"}>加入购物车</button>
         <div id="exec-add-result"></div>
         ${data.screenshot ? `<img class="shot" src="${data.screenshot}">` : ""}
       </div>`;
@@ -862,7 +876,7 @@
       $("#exec-add-result").innerHTML = `<div class="exec-result bad">${esc(e.message)}</div>`;
     } finally {
       btn.disabled = false;
-      btn.textContent = "3 · 加入购物车";
+      btn.textContent = "加入购物车";
       pollSession();
     }
   }
@@ -889,7 +903,7 @@
           <li>购物车是终点：结算、付款、地址、发票请你在淘宝完成。</li>
         </ul></div>` +
       (data.screenshot ? `<img class="shot" src="${data.screenshot}">` : "") +
-      `<div class="row" style="justify-content:flex-start;margin-top:8px"><button class="ghost small" id="btn-exec-cart">查看购物车</button></div>`;
+      `<div class="row row-left"><button class="ghost small" id="btn-exec-cart">查看购物车</button></div>`;
     const b = $("#btn-exec-cart");
     if (b) b.addEventListener("click", execCart);
   }
@@ -1018,9 +1032,11 @@
         const price = cand.price != null ? fmtMoney(cand.price) : r.price_from != null ? "起 " + fmtMoney(r.price_from) : "";
         const unit =
           r.unit_price != null && r.pack_size && r.pack_size > 1 ? `单只 ${fmtMoney(r.unit_price)}` : "";
-        const sku = (r.sku || []).map((s) => `${s.label}=${s.value}`).join(" · ");
-        const qty = r.qty
-          ? `×${r.qty}${r.pack_size && r.pack_size > 1 ? ` 份（1份=${r.pack_size}只，到手${r.actual_pcs || r.qty * r.pack_size}只）` : ""}`
+        const sku = (r.sku || []).map((s) => `${s.label}=${s.value}`).join("，");
+        // 标题里已经带了需要量（×120），这里只在买了多份或一份多只时才补一句
+        const multi = r.pack_size && r.pack_size > 1;
+        const qty = r.qty && (r.qty > 1 || multi)
+          ? `买 ${r.qty} 份${multi ? `（1份=${r.pack_size}只，到手${r.actual_pcs || r.qty * r.pack_size}只）` : ""}`
           : "";
         const tries = (r.attempts || []).length > 1 ? `试了 ${r.attempts.length} 个候选` : "";
         const sub = [r.message, sku, tries].filter(Boolean).join(" ｜ ");
@@ -1054,16 +1070,16 @@
     syncBatchButtons();
     $("#btn-batch-stop").disabled = !batchRunning;
     if (batchRunning) {
-      const money = st.cost_total ? ` · 已花 ${fmtMoney(st.cost_total)}` : "";
-      $("#batch-note").textContent = `${st.phase || "进行中"} · 已完成 ${st.done}/${st.total}${money} · 每行约 20–60 秒，浏览器窗口请别关`;
+      const money = st.cost_total ? `，已花 ${fmtMoney(st.cost_total)}` : "";
+      $("#batch-note").textContent = `${st.phase || "进行中"}，已完成 ${st.done}/${st.total}${money}；每行约 20 到 60 秒，浏览器窗口请别关`;
     } else if (st.total) {
       const okn = st.ok_count != null ? st.ok_count : (st.results || []).filter((r) => r.status === "ok").length;
       const pg = st.progress || {};
-      const tail = pg.ok_count > 0 ? ` · 进度已保存，下次点「继续加购」从断点接着跑` : "";
+      const tail = pg.ok_count > 0 ? `；进度已保存，下次点「继续加购」从断点接着跑` : "";
       const money = st.cost_total
-        ? ` · 合计 ${fmtMoney(st.cost_total)}${st.cost_lines ? `（${st.cost_lines} 行有实付价）` : ""}`
+        ? `，合计 ${fmtMoney(st.cost_total)}${st.cost_lines ? `（${st.cost_lines} 行有实付价）` : ""}`
         : "";
-      $("#batch-note").textContent = `上次批量：${okn}/${st.total} 行已加购${money}${st.stopped_reason ? "（" + st.stopped_reason + "）" : ""}${tail}`;
+      $("#batch-note").textContent = `上次批量：已加购 ${okn} 行${money}${st.stopped_reason ? "（" + st.stopped_reason + "）" : ""}${tail}`;
     } else if (st.progress && st.progress.ok_count > 0) {
       const money = st.cost_total ? `，合计 ${fmtMoney(st.cost_total)}` : "";
       $("#batch-note").textContent = `有上次的进度：已完成 ${st.progress.ok_count} 行${money}，点「继续加购」从断点接着跑`;
@@ -1075,7 +1091,7 @@
     const pg = batchProgress || {};
     const n = pg.ok_count || 0;
     btn.disabled = !sessionReady || !state.result || batchRunning;
-    btn.textContent = !batchRunning && n > 0 ? `继续加购（已完成 ${n} 行）` : "一键全部加购";
+    btn.textContent = !batchRunning && n > 0 ? `继续加购 ${n} 行` : "一键全部加购";
     const reset = $("#btn-batch-reset");
     if (reset) reset.classList.toggle("hidden", !(n > 0) || batchRunning);
   }

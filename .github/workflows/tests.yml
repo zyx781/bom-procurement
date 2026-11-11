@@ -1,0 +1,37 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 纯 Python 套件：不需要浏览器，也不联网
+      - name: Unit & rule tests
+        working-directory: bom-site
+        run: |
+          python test_engine.py
+          python test_sku_selection.py
+          python test_runner.py
+          python test_verification_recovery.py
+          python test_window_focus.py
+          python test_click_guard.py
+
+      # 端到端：起假会话 + 临时 server 进程，验证调度闭环与 HTTP 路由
+      - name: Integration (fake session)
+        working-directory: bom-site
+        run: python test_integration.py

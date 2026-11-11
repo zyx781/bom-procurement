@@ -111,9 +111,11 @@ python test_runner.py             # 129 项：调度、对账、进度
 python test_verification_recovery.py  # 27 项
 python test_window_focus.py       #  54 项
 python test_click_guard.py        #  14 项
+python test_integration.py        #  22 项：假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
 ```
 
 纯 Python 用例不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+GitHub Actions 在 Windows runner 上跑全部 7 套（见 `.github/workflows/tests.yml`）。
 
 ## 常见问题
 
@@ -137,4 +139,6 @@ python test_click_guard.py        #  14 项
 
 ## License
 
-未指定许可证（默认保留所有权利）。如需开源请自行添加 LICENSE 文件。
+[MIT](LICENSE) © 2026 zyx781
+
+> 仅限个人学习与自用采购辅助；请遵守目标网站服务条款，风险自负。

@@ -642,13 +642,15 @@ class BrowserAdapter:
 
     def wait_for_cards(self, timeout_ms: int = 12000, poll_ms: int = 200,
                        settle_ms: int = 3000) -> int:
-        """等待商品卡出现。三态返回（I2）：
+        """等待商品卡出现。四态返回：
 
         >= 0 : 已有商品卡，值是耗时 ms
-        -1   : 没有卡、也没有「明确空结果」→ 慢渲染或页面异常，上层换词/重导航
+        -1   : 没有卡、也没有「明确空结果」→ 慢渲染或页面异常，上层先重导航再换词
         -2   : 页面明确写了没有结果，通常 ≤2s 就返回，上层直接换词
         -3   : 风控中间页（_____tmd_____）接管了结果接口 —— 页面不弹窗、永远
-               「加载中…」。这是硬拦，必须停下来等人工，不能换词硬撞。
+               「加载中…」。上层**先刷新自恢复**（v0.8 起，见 `_recover_cards` /
+               `recover_from_verification`，默认 2 次）：刷出商品就继续，
+               仍无商品才转人工，不许换词硬撞。
 
         以前只有 -1，而且 `_cmd_search` 还会再叠一次 `wait_for_results()`
         （domcontentloaded 10s + networkidle 10s），一条真空结果行白烧 12–22s。

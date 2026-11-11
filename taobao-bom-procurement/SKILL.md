@@ -3,7 +3,7 @@ name: taobao-bom-procurement
 description: 把硬件 BOM（CSV/Excel：型号、数量、封装、参数、位号）蒸馏为逐行采购意图，驱动本地已登录的淘宝会话（Taobao-Search-Skill v4 session 模式）完成搜索、候选评估、SKU 匹配与加购；结算与付款永远由人工完成。当用户上传 BOM 并要求「按 BOM 采购 / 配单 / 询价 / 比价 / 加购物车 / 找替代料」，或提到阻容感、MCU、功率器件、连接器等电子元器件采购时使用。禁止自动支付、模拟登录、Cookie 劫持、验证码绕过与平台风控规避。
 ---
 
-# 淘宝 BOM 采购（决策层 Skill）v0.8
+# 淘宝 BOM 采购（决策层 Skill）v0.8.1
 
 > **绑定实现**：执行层 Taobao-Search-Skill v4.0.0（`scripts/taobao.py` session 模式）
 > ＋ 决策引擎 `bom-site/engine.py`（`ENGINE_VERSION = "0.1.0"`）
@@ -701,23 +701,23 @@ select-sku → final_price（选完 SKU 的每份价）
 | 11 | 模拟人手点击按贝塞尔逐点移动 15–30 步，详情页每次 `mouse.move` ≈1 s → **单行 24 s 全耗在这里** | 单次移动 + 点击；实测点击 24 s → 0.08–0.16 s | `_human_click` |
 | 12 | 加购证据图 png 编码 2–3 s/张 | 批量用 `jpeg(q=45)`，约 0.3 s/张 | `capture_viewport_screenshot(jpeg=True)` |
 | 13 | 搜索被风控扣住时，连「清点/清理购物车」也返回 `VERIFICATION_REQUIRED` | `cart-view` / `cart-remove` 走白名单，阻断态下照常执行（两者自己导航 `cart.taobao.com`，进页后仍查验证弹层） | `SessionHandler._CART_SAFE_CMDS` |
+| 14 | CDP 附着时取 `pages[0]`，浏览器里有残留空白标签就抓到错页 → 永远「首屏没卡」 | `_pick_page`：优先取 URL 含 `taobao.com`/`tmall.com` 的标签；只选不关用户的标签，多标签时打印清单 | `browser_adapter._pick_page` |
 | 15 | 加购成功判定「任一命中即成功」且**点了就算成功**：`querybagcount`（查数量）也被当加购证据，10 行 ok 里 5 行购物车里没有 | 只认三处强信号（页面提示/角标 +1/**加购接口** 2xx）；查询接口排除；兜底改 `CART_UNCONFIRMED` → `uncertain`；收尾对账 ok 行逐条跟购物车行比对，找不到就降级 | `_on_resp`、`_cmd_cart_add`、`taobao_runner._reconcile_cart` |
 | 16 | 精密档容差「没标注就放行」：SKU 只写 24.9K 实际 ±1% 照买（#70 形态） | 最终选中的 SKU **组合文本**读不到容差 → 不自动买（`unresolved`）；组合级判断避免误杀「容值/容差独立组」 | `suggest_sku`（`_precision` 收口） |
 | 17 | 介质（C0G/NP0 vs X7R/X5R）完全不参与匹配：1nF C0G 5% 买成 X7R（#8） | BOM 解析 `params.dielectric`（NP0/COG/NPO 归一 C0G）；候选标题/SKU 明确写了别的介质 → veto；没写 → 挂「介质未标注」备注 | `engine.parse_dielectric`、`_dielectric_verdict`、`_sku_veto`、`_candidate_veto` |
-| 28 | 电解电容/电感只看电气参数：25V 220µF 6×8mm 买成 80V 220µF 13×20mm、15µH 7.1×6.6 焊盘买成 13.5×12.6mm —— 参数全对但**装不上** | 新增 `_size_verdict`：从封装（`CAP-TH_BD6.3`/`IND-SMD_L7.1-W6.6`）和 MPN（`...M6x8`）抠尺寸，候选尺寸超 1.35 倍即 veto；电解再判耐压，多档电压标题（10/16/25/35V）不按首个数字误杀，改由 SKU 实际选中值判 | `_size_verdict`、`_size_pairs`、`_candidate_veto`、`_sku_veto` |
-| 29 | 连接器只比间距针数：XH 4P 买成 KF2510 4P（同为 2.54 但外壳互不兼容） | 新增 `_conn_family`（XH/PH/ZH/SH/EH/GH/KF2510/KF128-2EDG/VH/MX1.25），BOM 与候选中都认得出且不同族 → veto；KF128 与 2EDG 归同族放行 | `_conn_family`、`_CONN_FAMILY_PATTERNS` |
-| 30 | 尺寸校验只在标题层做不够：`80v220uf 体积：13*20mm` 这种只写在 SKU 选项里 | `_sku_veto` 同样跑尺寸/耐压与系列校验 | `_sku_veto` |
-| 24 | 加购点击偶尔「静默无效」：按视口坐标硬点，按钮在折叠线以下/被弹层盖住时点到别处 | `_human_click` 三守卫：先 `scroll_into_view`、判 `is_enabled`、用 `elementFromPoint` 命中测试（换 4 个候选点），命中不上返回 False；调用方 Esc 收浮层后重点一次，仍不行报 `CART_CLICK_BLOCKED`（retryable） | `browser_adapter._human_click`、`taobao._cmd_cart_add` |
-| 25 | 点击「零效果」（无请求/无角标/无 toast）时只判 uncertain，白丢一行 | 零证据时**安全补点一次**（此时车里必然没变化，不会重复下单），1.5 s 后复检 xhr/角标 | `_cmd_cart_add` |
-| 26 | 加购无回执一律 uncertain，其实失败的也没人补，成功的也没人认 | uncertain 时查购物车：有 → 记 ok（`via=cart_check`）；没有且明细可信 → **重试一次**；明细降级 → 保持 uncertain 不下结论 | `taobao_runner._cart_contains`、`_add_line_to_cart` |
-| 27 | 限流前兆（加购耗时爬升）无预警；SKU 被页面重置导致「请选择规格」；购物车满误判 | 加购 >5 s 连续 2 行 → 预热降温 120 s；「请选择规格」→ 重放 SKU 选择再点一次；「已满/上限」→ `CART_FULL` 不重试 | `_run_batch`、`_cmd_cart_add` |
+| 18 | 验证等待期 cart 命令把人工正在解的验证页导航走；进度恢复无条件写「server restarted」；tmd 惩罚帧残留导致永等 | cart 命令阻断态走临时标签页（`_cart_page`）；已跑完的批不写重启（P2-4）；主文档有商品卡则 tmd 帧按残留处理（P2-1） | `SessionHandler._cart_page`、`_restore_batch_from_progress`、`_looks_access_blocked` |
 | 19 | 空购物车被报成 `rows_degraded=true`（读不到），且每次空车 cart-view 白等 15 s 权威计数 | 空车先认「空空如也」文案：`cart_empty=true`、`rows_degraded=false`、计数直接 0；实测 11.5 s → 5.1 s | `_CART_ROWS_JS`、`_cart_is_empty`、`_wait_cart_count` |
 | 20 | 演练（dry-run）也跑收尾对账，把不点加购的演练行全降级成 uncertain | dry-run 跳过 `_reconcile_cart`，演练行保持 ok（`dry_run=true`） | `_run_batch` finally |
 | 21 | 加购实际成功但 550 ms 观察窗没抓到回执 → 报 uncertain，收尾对账又只查 ok 行，真成功反而无人认 | 无信号时补看 1.2 s（角标 +1 也算证据）；对账额外核对 uncertain 行，找到就记 `cart_found=true` 并在 message 里补证 **但不改状态** | `_cmd_cart_add`、`_reconcile_cart` |
 | 22 | 400 参数错误的响应体没有 `code`，前端只能显示「未知错误」 | 400 统一带 `code`（缺省 `BAD_REQUEST`） | `server.py` 异常分支 |
 | 23 | 「查看购物车」只在加购成功后动态出现，平时没有入口；且容器不存在时点它会 JS 崩 | 购物车维护区加常驻「查看购物车明细」按钮；`execCart` 容器缺失时兜底写入维护区 | `index.html`、`app.js::execCart` |
-| 18 | 验证等待期 cart 命令把人工正在解的验证页导航走；进度恢复无条件写「server restarted」；tmd 惩罚帧残留导致永等 | cart 命令阻断态走临时标签页（`_cart_page`）；已跑完的批不写重启（P2-4）；主文档有商品卡则 tmd 帧按残留处理（P2-1） | `SessionHandler._cart_page`、`_restore_batch_from_progress`、`_looks_access_blocked` |
-| 14 | CDP 附着时取 `pages[0]`，浏览器里有残留空白标签就抓到错页 → 永远「首屏没卡」 | `_pick_page`：优先取 URL 含 `taobao.com`/`tmall.com` 的标签；只选不关用户的标签，多标签时打印清单 | `browser_adapter._pick_page` |
+| 24 | 加购点击偶尔「静默无效」：按视口坐标硬点，按钮在折叠线以下/被弹层盖住时点到别处 | `_human_click` 三守卫：先 `scroll_into_view`、判 `is_enabled`、用 `elementFromPoint` 命中测试（换 4 个候选点），命中不上返回 False；调用方 Esc 收浮层后重点一次，仍不行报 `CART_CLICK_BLOCKED`（retryable） | `browser_adapter._human_click`、`taobao._cmd_cart_add` |
+| 25 | 点击「零效果」（无请求/无角标/无 toast）时只判 uncertain，白丢一行 | 零证据时**安全补点一次**（此时车里必然没变化，不会重复下单），1.5 s 后复检 xhr/角标 | `_cmd_cart_add` |
+| 26 | 加购无回执一律 uncertain，其实失败的也没人补，成功的也没人认 | uncertain 时查购物车：有 → 记 ok（`via=cart_check`）；没有且明细可信 → **重试一次**；明细降级 → 保持 uncertain 不下结论 | `taobao_runner._cart_contains`、`_add_line_to_cart` |
+| 27 | 限流前兆（加购耗时爬升）无预警；SKU 被页面重置导致「请选择规格」；购物车满误判 | 加购 >5 s 连续 2 行 → 预热降温 120 s；「请选择规格」→ 重放 SKU 选择再点一次；「已满/上限」→ `CART_FULL` 不重试 | `_run_batch`、`_cmd_cart_add` |
+| 28 | 电解电容/电感只看电气参数：25V 220µF 6×8mm 买成 80V 220µF 13×20mm、15µH 7.1×6.6 焊盘买成 13.5×12.6mm —— 参数全对但**装不上** | 新增 `_size_verdict`：从封装（`CAP-TH_BD6.3`/`IND-SMD_L7.1-W6.6`）和 MPN（`...M6x8`）抠尺寸，候选尺寸超 1.35 倍即 veto；电解再判耐压，多档电压标题（10/16/25/35V）不按首个数字误杀，改由 SKU 实际选中值判 | `_size_verdict`、`_size_pairs`、`_candidate_veto`、`_sku_veto` |
+| 29 | 连接器只比间距针数：XH 4P 买成 KF2510 4P（同为 2.54 但外壳互不兼容） | 新增 `_conn_family`（XH/PH/ZH/SH/EH/GH/KF2510/KF128-2EDG/VH/MX1.25），BOM 与候选中都认得出且不同族 → veto；KF128 与 2EDG 归同族放行 | `_conn_family`、`_CONN_FAMILY_PATTERNS` |
+| 30 | 尺寸校验只在标题层做不够：`80v220uf 体积：13*20mm` 这种只写在 SKU 选项里 | `_sku_veto` 同样跑尺寸/耐压与系列校验 | `_sku_veto` |
 
 **v0.7（2026-11-07 深夜）**：#15–#18 来自独立评审的问题报表（P0-1/3/4、P2-1/3/4）；前端已接 `rows` 与错误码。
 
@@ -748,7 +748,7 @@ select-sku → final_price（选完 SKU 的每份价）
 ### 19.3 `cart-view` 返回结构（I4）
 
 ```json
-{"cart_item_count": 6, "rows_page": 6, "rows_total": 6, "pages_read": 1,
+{"cart_item_count": 6, "cart_empty": false, "rows_page": 6, "rows_total": 6, "pages_read": 1,
  "rows_degraded": false, "rows_selector": "[class*=\"cartItemInfoContainer\"]",
  "rows": [{"index": 0, "title": "原装 0603贴片电容 10nF(103) ±10% 50V X7R",
            "spec": "封装规格：100只/包 颜色分类：30PF",
@@ -793,6 +793,15 @@ select-sku → final_price（选完 SKU 的每份价）
 | `CART_NO_MATCH` | 读到了行，但没有标题含 keyword 的 | 否 |
 | `CART_MATCH_FOUND_BUT_NO_ROW` | 标题匹配上了，但行内「删除」按钮没点上 | 否 |
 | `CART_DELETE_NOT_EFFECTIVE` | 点了删除，`after` 没变小 | 否（可能部分） |
+| `CART_REMOVE_AMBIGUOUS` | 既没给 `keyword` 也没给 `all:true` | 否（拒绝执行） |
+
+### 19.4.1 加购与会话类错误码
+
+| code | 含义 | 上层动作 |
+|---|---|---|
+| `CART_ADD_REJECTED` | 点击后页面明确提示失败（下架 / 库存不足 / 不能购买 / 请稍后再试） | `retryable: false`，换下一个候选；**不重试同一家** |
+| `INVALID_SELECTIONS` | `select-sku` 收到的 selections 里有该商品不存在的规格组或值 | 不点加购，回到 SKU 面板重新选 |
+| `SESSION_ERROR` | 会话进程已退出、命令通道断开或返回体无法解析 | 批量暂停并落盘，提示重启会话；**不当作该行失败** |
 
 ### 19.5 批量状态机（I7）
 
@@ -860,3 +869,19 @@ select-sku → final_price（选完 SKU 的每份价）
 `TAOBAO_VERIFY_HUMAN_RETRY`（默认 3）。
 
 **没有改变的边界**：不自动点验证码、不破解、不改指纹/代理/频率；刷新只是重发一次被拦住的请求。
+
+---
+
+## 22. v0.8.1 补丁（文档与代码对齐审计）
+
+2026-11-11 对「文档声明 vs 代码实现」做了一次逐条核对，只改文档，不改行为：
+
+| 项 | 发现 | 处理 |
+|---|---|---|
+| 错误码覆盖 | 代码会返回 `CART_ADD_REJECTED` / `CART_REMOVE_AMBIGUOUS` / `INVALID_SELECTIONS` / `SESSION_ERROR`，文档一处没写 | §19.4 补 `CART_REMOVE_AMBIGUOUS`，新增 §19.4.1 收录另外三个 |
+| `cart-view` 示例 | 正文讲了 `cart_empty`，JSON 示例里没有 | 示例补上该字段 |
+| §18 变更表 | 30 条编号齐全但顺序错乱（1-13,15-17,28-30,24-27,19-23,18,14） | 按编号重排 |
+| `wait_for_cards` 注释 | docstring 写「三态返回」且称 `-3` 必须等人工，与 v0.8 实际行为（先刷新自救）相反 | 代码注释改为四态并说明上层动作 |
+
+**核对结果**：11 个绑定函数全部存在；10 个环境变量全部被读取且默认值与文档一致；
+文档里的错误码除 1 个封装名误匹配外全部能在代码中定位。

@@ -56,6 +56,12 @@ os.environ["FAKE_CART_GROW"] = "1"  # 让 cart-add 真的往假购物车里塞
 _bak_save, _bak_load = tr.save_batch_progress, tr.load_batch_progress
 tr.save_batch_progress = lambda data: None
 tr.load_batch_progress = lambda: {}
+# 假会话没有真实 CDP 浏览器，别让 runner 去拉一个真的 Edge：
+# 本机碰巧能拉起来时测试会「通过」，CI 上没有 GUI 浏览器就会在 start_batch
+# 被「淘宝浏览器已关闭」守卫拦住，变成看机器脸色通过的假绿灯。
+tr.cdp_endpoint_ok = lambda *a, **k: True          # 跳过自动拉起调试浏览器
+tr.ensure_debug_browser = lambda *a, **k: None
+tr._window_pos = None                              # 关掉窗口/浏览器存活守卫
 runner = _runner()
 try:
     runner.start()

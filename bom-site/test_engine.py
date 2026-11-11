@@ -421,21 +421,19 @@ _q53 = engine.analyze_line({"refs": "Q1", "desc": "AO3400A MODE open drain", "mp
 eq("AO3400A 不再带假电流", "id_a" in _q53["params"], False)
 
 print("== 模块类：标题不写型号时按特征匹配 ==")
-import json as _json
-
-# runs/batch-lines.json 会被「只跑一个子集」的批量任务覆盖成那几行，测试就找不到
-# 107 号行了。这里优先用完整母版，取不到再退回上次跑批落盘的行。
-_lines = []
-for _cand in ("runs/bom-lines-master.json", "runs/batch-lines.json"):
-    try:
-        with open(_cand, encoding="utf-8") as _f:
-            _data = _json.load(_f)
-        _lines = _data["lines"] if isinstance(_data, dict) else _data
-        if any(x.get("line_no") == 107 for x in _lines):
-            break
-    except (OSError, ValueError, KeyError):
-        continue
-_m107 = next(x for x in _lines if x["line_no"] == 107)
+# 这里原来读 runs/bom-lines-master.json —— 那个文件是真实 BOM，不进仓库，
+# 干净克隆会直接 StopIteration。改成把用到的那一行内联，测试自给自足。
+_m107 = engine.analyze_line(
+    {
+        "refs": "U300",
+        "desc": "E104-BT40 / CLASSIC SPP",
+        "mpn": "",
+        "package": "MainParts:E104_BT40_PROVISIONAL",
+        "params": "E104-BT40 / CLASSIC SPP",
+        "qty": 1,
+    },
+    107,
+)
 eq("亿佰特双模蓝牙 SPP 模块通过",
    engine._check_title(_m107, {"title": "亿佰特双模蓝牙BLE5.4透传从机模块低功耗SPP3.0协议AT指令配置"}, {})[0], None)
 eq("不相干的无线模块仍拒绝",

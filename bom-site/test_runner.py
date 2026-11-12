@@ -740,10 +740,14 @@ print("== 续跑行带 SKU / 不覆盖进度（2026-11-11） ==")
 _orig_lbp_resume = tr.load_batch_progress
 _orig_sbp_resume = tr.save_batch_progress
 _orig_sbl_resume = tr.save_batch_lines
+_orig_lblm_resume = tr.load_batch_lines_meta
 _bak_batch_r = runner._batch
 _bak_run_r = runner._run_batch
 _bak_clean_r = runner.cleanup_screenshots
 _saved = []
+# 不读磁盘上真实的 batch-lines.json：用户跑过一批之后，那份指纹跟这里的假行
+# 天然对不上，续跑会被正确判成「换了 BOM」而作废 —— 这是产品行为，不是测试场景。
+tr.load_batch_lines_meta = lambda: {}
 tr.load_batch_progress = lambda: {
     "lines": {
         "1": {
@@ -796,6 +800,7 @@ finally:
     tr.load_batch_progress = _orig_lbp_resume
     tr.save_batch_progress = _orig_sbp_resume
     tr.save_batch_lines = _orig_sbl_resume
+    tr.load_batch_lines_meta = _orig_lblm_resume
     runner._run_batch = _bak_run_r
     runner.cleanup_screenshots = _bak_clean_r
     runner._batch = _bak_batch_r

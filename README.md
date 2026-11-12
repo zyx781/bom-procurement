@@ -107,7 +107,7 @@ bom-site/                     本地网站与调度
   taobao_runner.py            批量调度、SKU 决策、加购确认、对账
   window_pos.py               调试浏览器窗口显隐（跑批时不抢前台）
   static/                     前端（无框架）
-  test_*.py                   584 项断言（9 套纯 Python 测试）
+  test_*.py                   621 项断言（10 套纯 Python 测试）
   samples/                    示例 BOM / 候选
 Taobao-Search-Skill/scripts/  淘宝执行层（Playwright over CDP）
 taobao-bom-procurement/       决策层 SKILL 文档
@@ -127,13 +127,14 @@ python test_window_focus.py            #  58 项：窗口显隐与不抢前台
 python test_click_guard.py              #  14 项：点击三守卫
 python test_cart_cleanup.py             #  24 项：精准清车不误删
 python test_batch_progress_guard.py     #  40 项：换 BOM 不误用上一批进度
+python test_procurement_guard.py        #  37 项：采购正确性（设计值/单价/候选降级）
 python test_integration.py             #  24 项：假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
 ```
 
-以上 9 套共 584 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+以上 10 套共 621 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
 另有 `python test_http.py`：需要服务**已经在 8765 跑着**，只做 HTTP 冒烟打印，不断言，故不进 CI。
 所有测试都把批量进度隔离到临时目录，不会碰到 `runs/` 里的真实进度。
-GitHub Actions 在 Windows runner 上跑 9 套测试 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。
+GitHub Actions 在 Windows runner 上跑 10 套测试 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。
 
 ## 常见问题
 
@@ -151,6 +152,7 @@ GitHub Actions 在 Windows runner 上跑 9 套测试 + 启动器语法/体检（
 | 批量跑完有几行显示「跳过」 | 型号/名称/参数都空的行没有搜索词，跑也搜不到东西，会直接跳过并在行上写明缺什么；补好 BOM 再跑 |
 | 购物车越跑越多 | 用「购物车维护」按关键字删除，或跑批前清空；开跑前会自动看件数，≥190 直接不启动（淘宝上限约 200 行） |
 | 换了一份新 BOM 再点加购 | 会按 BOM 指纹识别出「不是上一批」，旧进度自动作废、从头跑；上一批的加购记录仍保留，「删上次加购的」照常可用 |
+| 买到的阻值/型号不对，或单价离谱 | 名称列（`Name`/`Comment`）是设计值时优先按它买，型号复用错会记 `V01` 风险提示；每只单价超过品类常见价（电阻 ¥2、电容 ¥6、开关 ¥15）直接不买；评分 20 分以下、或单规格商品标题核实不到规格的候选也不会自动加购。这类行会停在「失败」并写明原因，交人工挑 |
 
 ## 可调参数（环境变量）
 

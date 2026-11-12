@@ -819,6 +819,46 @@ _RE_POWER_PKG = re.compile(r"TDSON|TO-?220|TO-?252|TO-?263|LFPAK|DPAK|POWERPAK",
 
 # 看起来像“纯数值”的 Comment：40MHz / 100nF / 1kΩ
 _RE_VALUE_ONLY = re.compile(r"^[\d\.]+\s*[a-zA-ZΩµμ%]{0,3}$")
+# 设计值写法还包括 4K7 / 2R2 这种小数点塞在单位里的
+_RE_DESIGN_VALUE = re.compile(r"^(?:[\d\.]+\s*[a-zA-ZΩµμ%]{0,3}|\d+[kKmMrR]\d+)$")
+
+
+def _fmt_param_value(key: str, val) -> str:
+    """把参数值按品类格式化成 470Ω / 10nF / 4.7µH，只用于提示文案。"""
+    try:
+        v = float(val)
+    except (TypeError, ValueError):
+        return str(val)
+    if key == "resistance_ohm":
+        return fmt_resistance(v)
+    if key == "capacitance_f":
+        return fmt_capacitance(v)
+    if key == "inductance_h":
+        return fmt_inductance(v)
+    return f"{v:g}"
+
+
+def _design_value_from_text(text: str, subtype: str) -> dict:
+    """把名称列的纯数值解析成参数。
+
+    `470` 这种裸数字只有电阻能无歧义地当阻值（470 = 470Ω）；电容的裸数字
+    分不清是 pF 还是 nF，电感分不清 µH 还是 mH —— 宁可不猜，交给型号。
+    """
+    t = str(text or "").strip()
+    if not t:
+        return {}
+    got = parse_params(t, "passive")
+    if got:
+        return got
+    if subtype != "resistor":
+        return {}
+    if re.fullmatch(r"\d+(?:\.\d+)?", t):
+        return {"resistance_ohm": float(t)}
+    m = re.fullmatch(r"(\d+)([kKmM])(\d+)", t)  # 4K7 / 2K2
+    if m:
+        mult = {"k": 1e3, "m": 1e6}[m.group(2).lower()]
+        return {"resistance_ohm": float(f"{m.group(1)}.{m.group(3)}") * mult}
+    return {}
 
 
 def _designator_prefix(refs) -> str:
@@ -965,6 +1005,29 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
 
     params = parse_params(" ".join([combined, mpn]), category)
     subtype = _passive_subtype(refs, combined + " " + desc, category)
+    # 名称列（Altium 的 Name/Comment）才是原理图上的设计值：470 / 2.2K / 5kΩ / 10nF。
+    # Manufacturer Part 常常是从库里复制过来、忘了改的旧型号 —— 实测一份 BOM 里
+    # 5kΩ、470Ω、2.2K 三行的型号全是 MF1/4W-1KΩ±1%T52，按型号解析会把三条线
+    # 全买成 1kΩ（42 只 470Ω 变成 42 只 1kΩ）。买错比买贵严重得多，
+    # 所以名称列是纯数值时以它为准，冲突记进风险里让人复核。
+    design_value: dict = {}
+    value_conflict = ""
+    if category == "passive" and desc and _RE_DESIGN_VALUE.match(desc.strip()):
+        _dv = _design_value_from_text(desc, subtype)
+        for _key in ("resistance_ohm", "capacitance_f", "inductance_h"):
+            if _key not in _dv:
+                continue
+            design_value[_key] = _dv[_key]
+            _old = params.get(_key)
+            if _old is None:
+                params[_key] = _dv[_key]
+            elif not _value_match(float(_old), float(_dv[_key]), 0.005):
+                params[_key] = _dv[_key]
+                if not value_conflict:
+                    value_conflict = (
+                        f"名称列写 {desc}，型号对应 {_fmt_param_value(_key, _old)}，"
+                        f"两者冲突，已按名称列采购，请核对原理图"
+                    )
     # 保险丝的额定电流就是它的规格。不给它一个数值参数，SKU 选择就只能「保留页面默认」，
     # 结果 8A 的位子买成了 0.25A —— 比买贵更糟，是买错。
     if subtype == "fuse" and "current_a" not in params:
@@ -1005,6 +1068,8 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
     gates = _build_gates(category, package, params, mpn, subtype)
     queries = _build_queries(category, package, params, mpn, desc, row.get("brand"), subtype)
     risks = _build_risks(category, package, params, mpn, gates)
+    if value_conflict:
+        risks.append({"code": "V01", "text": value_conflict})
 
     badge = {
         "line_no": row.get("line_no") or fallback_no,
@@ -1018,6 +1083,8 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
         "subtype": subtype,
         "params": params,
         "params_text": params_text(category, params) or desc or mpn,
+        "design_value": design_value or None,
+        "value_conflict": value_conflict or None,
         "qty": qty,
         "refs": str(row.get("refs") or "").strip(),
         "criticality": "critical" if critical else "normal",

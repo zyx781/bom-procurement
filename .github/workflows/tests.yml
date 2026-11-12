@@ -36,6 +36,7 @@ jobs:
           python test_click_guard.py
           python test_cart_cleanup.py
           python test_batch_progress_guard.py
+          python test_procurement_guard.py
 
       # 端到端：起假会话 + 临时 server 进程，验证调度闭环与 HTTP 路由
       - name: Integration (fake session)

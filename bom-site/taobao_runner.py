@@ -1373,6 +1373,33 @@ class SessionRunner:
             except (TypeError, ValueError):
                 price_shift = None
 
+        # 每只单价闸门：整袋/整盘报价会被当成单只价（实测 ¥94 买 2000 只拨动开关，
+        # BOM 只要 1 只）。打包数已知时用「选完 SKU 的每份价 ÷ 每份只数」，
+        # 未知时退回标题价；宁可多拦一次，也不默认把一大袋买回来。
+        _unit_guard = None
+        try:
+            if final_price is not None:
+                _unit_guard = float(final_price) / float(eff_pack or 1)
+            elif price_hint is not None:
+                _unit_guard = float(price_hint) / float(eff_pack or 1)
+        except (TypeError, ValueError, ZeroDivisionError):
+            _unit_guard = None
+        _unit_ceil = _unit_price_ceiling(line)
+        if _unit_guard and _unit_ceil and _unit_guard > float(_unit_ceil):
+            return {
+                "ok": False,
+                "code": "UNIT_PRICE_ANOMALY",
+                "message": (
+                    f"折合每只 ¥{_unit_guard:g}，超过该品类常见价 ¥{_unit_ceil:g}，"
+                    "疑似整袋/整盘报价，已放弃自动加购"
+                ),
+                "unit_price": round(_unit_guard, 6),
+                "unit_cap": _unit_ceil,
+                "pack_size": eff_pack if eff_pack and eff_pack > 1 else None,
+                "actual_pcs": actual_pcs,
+                "screenshot": self.persist_screenshot(resp.get("screenshot")),
+            }
+
         # 金额闸门：贵得离谱就不点加购（真正的钱是在 cart-add 那一下花出去的）
         est_cost = round(float(final_price) * int(qty), 2) if final_price is not None else None
         cap = _line_cost_cap(line.get("category"))
@@ -2336,6 +2363,13 @@ class SessionRunner:
         # 这时只能换店。阻值档位多的品类多试两家，别因为前 3 家都没这一档就整行失败。
         _limit = max(int(max_candidates), 5) if (line.get("category") == "passive") else max_candidates
         _try_list = cands[:_limit]
+        # 兜底候选的规格参照：BOM 自己要求的非数值规格 + 评分最高那条命中的规格项。
+        _need_kinds = _required_spec_kinds(line)
+        _value_kinds = _required_value_kinds(line)
+        _ref_kinds: set = set(_need_kinds)
+        if cands:
+            _best_cand = max(cands, key=lambda c: (c.get("score") or 0))
+            _ref_kinds |= _spec_kinds(_best_cand)
         for _ti, cand in enumerate(_try_list):
             attempt = {
                 "index": cand.get("index"),
@@ -2348,6 +2382,27 @@ class SessionRunner:
                 "message": "",
             }
             base["attempts"].append(attempt)
+            # 淘汰级候选（评分 <60）不自动加购：买错的代价远高于买不到。
+            # 例外是多规格商品 —— 它的规格由 SKU 选中值核实（见下面的 no_sku 分支），
+            # 只要 SKU 能对上具体值就仍然可用；只有「单规格、标题也核实不到」才拒绝。
+            if str(cand.get("decision") or "") == "淘汰" and (cand.get("score") or 0) < 20:
+                attempt["message"] = f"评分 {cand.get('score')} 分（淘汰级），不自动加购"
+                last_message = attempt["message"]
+                continue
+            # 换店可以，换规格不行：型号/针数这类非数值规格必须在标题里核实，
+            # 兜底候选还得命中最优候选命中的那些项。
+            _have_kinds = _spec_kinds(cand)
+            _miss_spec = _need_kinds - _have_kinds
+            if _ti > 0:
+                _miss_spec = _miss_spec | (
+                    (_ref_kinds - _value_kinds) - _have_kinds
+                )
+            if _miss_spec:
+                attempt["message"] = (
+                    "候选标题核实不到关键规格（" + "、".join(sorted(_miss_spec)) + "），不自动加购"
+                )
+                last_message = attempt["message"]
+                continue
             _t_open = time.monotonic()
             opened = None
             # 打开商品时常有偶发故障（店铺页慢、图片卡住、导航超时）。
@@ -2376,6 +2431,40 @@ class SessionRunner:
             base["open_ms"] = (base.get("open_ms") or 0) + int((time.monotonic() - _t_open) * 1000)
             attempt["open_ms"] = int((time.monotonic() - _t_open) * 1000)
             if opened is None:
+                continue
+            # 单规格商品没有 SKU 可核对，标题是唯一的规格来源：标题里读不到 BOM 要的
+            # 那个值，就不加购。实测 5kΩ 搜出来的整页压敏电阻就是从这个口子进去的。
+            if opened.get("no_sku"):
+                _miss_v = _value_kinds - _title_value_kinds(line, cand.get("title"))
+                if _miss_v:
+                    attempt["message"] = (
+                        "单规格商品，标题核实不到"
+                        + "、".join(sorted(_miss_v))
+                        + "，不自动加购"
+                    )
+                    last_message = attempt["message"]
+                    continue
+                if str(cand.get("decision") or "") == "淘汰" and (cand.get("score") or 0) < 60:
+                    attempt["message"] = (
+                        f"评分 {cand.get('score')} 分（淘汰级）且为单规格商品，不自动加购"
+                    )
+                    last_message = attempt["message"]
+                    continue
+            # 包装信息没解析出来、标题价却高得离谱：基本就是「整袋 2000 只」的报价。
+            # 精确判断放在选完 SKU 之后（那时才知道每份多少只），这里先挡明显的。
+            _unit_now = opened.get("unit_price")
+            _ceil_now = _unit_price_ceiling(line)
+            if (
+                _unit_now
+                and _ceil_now
+                and not opened.get("pack_size")
+                and float(_unit_now) > float(_ceil_now) * 3
+            ):
+                attempt["message"] = (
+                    f"折合每只 ¥{float(_unit_now):g}（包装未标明），"
+                    f"疑似整袋报价，换下一家"
+                )
+                last_message = attempt["message"]
                 continue
             unresolved = opened.get("unresolved") or []
             sels = opened.get("suggestions") or []
@@ -2500,10 +2589,12 @@ class SessionRunner:
                         screenshot=added.get("screenshot"),
                     )
                     break
-                if added.get("code") in ("COST_TOO_HIGH", "OVERBUY_TOO_MUCH"):
-                    # 这家买够这一行太贵：还有候选就换下一家，最后一个候选交人工判断
+                if added.get("code") in ("COST_TOO_HIGH", "OVERBUY_TOO_MUCH", "UNIT_PRICE_ANOMALY"):
+                    # 这家买够这一行太贵/单价明显是整包价：还有候选就换下一家，
+                    # 最后一个候选交人工判断
                     attempt["cost"] = added.get("est_cost")
                     attempt["pack_size"] = added.get("pack_size")
+                    attempt["unit_price"] = added.get("unit_price")
                     if _ti < len(_try_list) - 1:
                         attempt["message"] = (added.get("message") or "") + "，换下一家"
                         last_message = attempt["message"]
@@ -2603,6 +2694,124 @@ def _line_cost_cap(category) -> float:
         return _DEFAULT_LINE_CAP.get(cat, _DEFAULT_LINE_CAP["default"])
 
 
+# 每只（每份折合单只）的价格天花板。淘宝常把「整袋 2000 只」的价挂在标题上，
+# 不带包装信息就成了「单只 ¥94 的拨动开关」—— 只看单行总金额（passive 上限 200）
+# 根本拦不住。按品类给常见价上限，超了就是包装没看清，宁可不买。
+_UNIT_PRICE_CEIL = {
+    "resistor": 2.0,
+    "capacitor": 6.0,
+    "inductor": 10.0,
+    "diode": 5.0,
+    "led": 3.0,
+    "bead": 5.0,
+    "fuse": 20.0,
+}
+_SWITCH_CEIL = 15.0
+_CONNECTOR_CEIL = 30.0
+
+
+def _unit_price_ceiling(line: dict) -> float | None:
+    """这一行「每只」价格的合理上限；认不出品类就返回 None（不拦）。"""
+    sub = str(line.get("subtype") or "")
+    if sub in _UNIT_PRICE_CEIL:
+        return _UNIT_PRICE_CEIL[sub]
+    row = line.get("row") or {}
+    blob = " ".join(
+        [str(line.get(k) or "") for k in ("mpn", "desc", "params", "params_text", "package")]
+        + [str(row.get("package") or ""), str(row.get("desc") or "")]
+    ).lower()
+    # 开关在引擎里落在 other/connector，靠封装（SW-TH_…）和位号（SW1）才认得出
+    if re.match(r"\s*SW\d", str(line.get("refs") or ""), re.I) or re.search(
+        r"\bsw[-_]|switch|开关|按键|轻触|拨动", blob
+    ):
+        return _SWITCH_CEIL
+    if str(line.get("category") or "") == "connector" or re.search(
+        r"conn|连接器|插座|针座|端子", blob
+    ):
+        return _CONNECTOR_CEIL
+    return None
+
+
+# 兜底候选必须命中的关键规格项。换一家店可以，换错规格不行 ——
+# 实测最优候选「加购按钮找不到」后，兜底买了 1/8W 的 1K 顶替 1/4W，
+# 评分掉到 65，界面还写「已加入购物车」。
+_SPEC_PREFIXES = ("封装", "阻值", "容值", "感值", "完整型号", "针数", "功率")
+
+
+def _spec_hit_labels(cand: dict) -> set:
+    return {
+        str(x)
+        for x in (cand.get("hits") or [])
+        if str(x).startswith(_SPEC_PREFIXES)
+    }
+
+
+def _spec_kinds(cand: dict) -> set:
+    """候选命中的规格类别（阻值/容值/型号…），比全文比对不受写法差异影响。"""
+    out = set()
+    for label in _spec_hit_labels(cand):
+        for pref in _SPEC_PREFIXES:
+            if label.startswith(pref):
+                out.add(pref)
+                break
+    return out
+
+
+def _required_spec_kinds(line: dict) -> set:
+    """候选标题里**必须**能核实的非数值规格（型号 / 针数）。
+
+    阻值/容值不在这里：淘宝电阻电容普遍是「一个链接挂十几个值」，标题本来
+    就不写单一值，硬要求标题命中会把整类商品拒掉。数值交给 SKU 选中值核实：
+    有 SKU 的链接按选项比对，单规格商品才回头看标题（见 _value_kinds_missing）。
+    """
+    p = line.get("params") or {}
+    need = set()
+    if str(line.get("category") or "") in ("ic", "power") and line.get("mpn"):
+        need.add("完整型号")
+    if p.get("pins"):
+        need.add("针数")
+    return need
+
+
+def _title_value_kinds(line: dict, title: str) -> set:
+    """标题里能否直接读到 BOM 要的数值（单规格商品只能靠这个核实）。
+
+    不用候选自带的 hits：演练/续跑/旧缓存里未必有，直接解析标题更稳。
+    """
+    p = line.get("params") or {}
+    t = str(title or "")
+    out = set()
+    try:
+        if p.get("resistance_ohm") is not None:
+            r = engine._parse_resistance(t)
+            if r is not None and engine._value_match(float(r), float(p["resistance_ohm"]), 0.005):
+                out.add("阻值")
+        if p.get("capacitance_f") is not None:
+            c = engine._parse_capacitance(t)
+            if c is not None and engine._value_match(float(c), float(p["capacitance_f"]), 0.02):
+                out.add("容值")
+        if p.get("inductance_h") is not None:
+            ind = engine._parse_inductance(t)
+            if ind is not None and engine._value_match(float(ind), float(p["inductance_h"]), 0.02):
+                out.add("感值")
+    except Exception:  # noqa: BLE001
+        return out
+    return out
+
+
+def _required_value_kinds(line: dict) -> set:
+    """这一行必须核实到的数值类别（阻值/容值/感值）。"""
+    p = line.get("params") or {}
+    out = set()
+    if p.get("resistance_ohm") is not None:
+        out.add("阻值")
+    if p.get("capacitance_f") is not None:
+        out.add("容值")
+    if p.get("inductance_h") is not None:
+        out.add("感值")
+    return out
+
+
 
 
 def _title_with_spec(line: dict, item: dict) -> str:
@@ -2694,6 +2903,15 @@ def _strip_pkg(text: str) -> str:
 def _sku_resistance(text: str, allow_bare: bool = False):
     t = _strip_pkg(text).replace(" ", "")
     if re.search(r"[pnuµμ]f", t, re.I):
+        return None
+    # 功率不是阻值。卖家常把功率写在前面（「1/4W 470R」「绕线1W 2.2R」），
+    # 而下面的规则都是 ^ 锚定的 —— 不先剔掉，1/4W 里的「1」会被当成 1Ω，
+    # 真正的 470R 永远读不到，整组 SKU 全被判成「与 BOM 冲突」。
+    t = re.sub(r"\d+\s*/\s*\d+\s*[wW]", "", t)
+    t = re.sub(r"\d+(?:\.\d+)?\s*[wW](?![a-zA-Z])", "", t)
+    # 前面的中文/字母（金属膜、绕线、色环）也不该挡住数值
+    t = re.sub(r"^[^0-9Rr]+", "", t)
+    if not t:
         return None
     # 4K7 / 1K2：夹点写法，代表 4.7k / 1.2k
     m = re.match(r"^(\d+)([kKmM])(\d)(?!\d)", t)
@@ -2884,9 +3102,18 @@ def _score_sku_value(line: dict, label: str, text: str) -> float:
         if m:
             score += 15 if float(m.group(1)) >= p["voltage_v"] - 1e-9 else -30
     if "power_w" in p:
-        m = re.search(r"(\d+(?:\.\d+)?)\s*[wW]\b", str(text))
-        if m:
-            score += 10 if float(m.group(1)) >= p["power_w"] * 0.999 else -20
+        # 「1/4W」「1/8W」是卖家的常用写法，直接拿 \d+W 匹配会漏掉，导致 0.25W 的
+        # 位子被 1W/2W 的整包选项顶掉（或者反过来被判成无法确认）。
+        pw = None
+        m = re.search(r"(\d+)\s*/\s*(\d+)\s*[wW](?![a-zA-Z])", str(text))
+        if m and float(m.group(2)):
+            pw = float(m.group(1)) / float(m.group(2))
+        else:
+            m = re.search(r"(\d+(?:\.\d+)?)\s*[wW](?![a-zA-Z])", str(text))
+            if m:
+                pw = float(m.group(1))
+        if pw is not None:
+            score += 10 if pw >= p["power_w"] * 0.999 else -20
     if "current_a" in p:
         # 保险丝：额定电流必须同一个值。页面默认常常是 0.25A，8A 的位子买错就是整批返工。
         amps = engine.title_amps(text)
@@ -3168,6 +3395,12 @@ def _dielectric_verdict(line: dict, text: str) -> str | None:
 
 
 _CONN_FAMILY_PATTERNS = (
+    # USB 系列放最前面：TYPE-C 的封装名是 USB-SMD_KH-TYPE-C-2P，按针数/间距
+    # 打分的话和 VH3.96 二针座一模一样（实测 100 分），只有认家族才拦得住。
+    ("TYPE-C", (r"type\s*-?\s*c(?![a-z0-9])", r"usb\s*-?\s*c(?![a-z0-9])", r"usb\s*3\.[12]")),
+    ("MICRO-USB", (r"micro\s*-?\s*usb",)),
+    ("MINI-USB", (r"mini\s*-?\s*usb",)),
+    ("USB-A", (r"usb\s*-?\s*a(?![a-z0-9])",)),
     ("XH", (r"\bxh\b", r"-xh-", r"xh\s*-?\s*2\.54", r"jst[_\- ]?xh", r"b\d+b-xh")),
     ("PH", (r"phc2\.0", r"-ph-", r"jst[_\- ]?ph\b")),
     ("ZH", (r"zh1\.5", r"-zh-", r"jst[_\- ]?zh\b")),
@@ -3256,6 +3489,13 @@ def _candidate_veto(line: dict, title: str) -> str | None:
     _dv = _dielectric_verdict(line, t)
     if _dv:
         return _dv
+    # 品类不符：5kΩ 这类冷门阻值搜出来整页都是压敏电阻，SKU 里也确有数值选项，
+    # 光看数值能混过去（真机把压敏电阻当 5kΩ 电阻买回来了）。
+    _sub = str(line.get("subtype") or "")
+    if _sub == "resistor" and re.search(r"压敏|热敏|湿敏|光敏|电位器|可调电阻|敏感电阻", t):
+        return "品类不符：要固定电阻，候选是压敏/热敏/可调电阻"
+    if _sub == "capacitor" and re.search(r"压敏电阻|热敏电阻|电阻器", t) and "电容" not in t:
+        return "品类不符：要电容，候选是电阻"
     # 尺寸/耐压（电解、电感）：容值对了也可能装不上，见 _size_verdict 注释
     _sv = _size_verdict(line, t)
     if _sv:

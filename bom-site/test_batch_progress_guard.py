@@ -167,11 +167,18 @@ with tempfile.TemporaryDirectory() as td:
         check("重启后仍能读回当前 BOM 指纹", tr.active_bom_fingerprint() == FP_B)
 
         print("== 5. start_batch：同表续跑 / 换表从头跑 ==")
-        # 同表：应复用 3 行
+        # 同表，只跑了一半：应复用已完成的 2 行。
+        # （3 行全跑完的情况见 §5b —— 那时 resume 会直接拒绝，不再静默空跑）
+        tr.save_batch_progress(prior_for(BOM_A[:2]))
+        tr.save_batch_lines(BOM_A)
         r1 = FakeRunner()
         st1 = r1.start_batch(BOM_A, resume=True)
         resumed1 = [x for x in st1["results"] if x.get("resumed")]
-        check("同 BOM 续跑跳过 3 行", len(resumed1) == 3, st1.get("phase"))
+        check("同 BOM 续跑跳过已完成的 2 行", len(resumed1) == 2, st1.get("phase"))
+        check(
+            "没跑过的第 3 行仍是待跑",
+            [x["status"] for x in st1["results"] if x["line_no"] == 3] == ["pending"],
+        )
         check("同 BOM 不标记 stale_progress_dropped", st1.get("stale_progress_dropped") is False)
 
         # 换表：一行都不许复用
@@ -197,12 +204,15 @@ with tempfile.TemporaryDirectory() as td:
         check("老进度换 BOM 也被拦住", all(not x.get("resumed") for x in st3["results"]))
 
         # 进度自带明确指纹时以它为准，不被 batch-lines 的旧指纹误伤
-        tr.save_batch_progress(prior_for(BOM_B, FP_B))
+        tr.save_batch_progress(prior_for(BOM_B[:2], FP_B))
         tr.save_batch_lines(BOM_A)  # 上次开跑是旧表，但进度明确属于新表
         r4 = FakeRunner()
         st4 = r4.start_batch(BOM_B, resume=True)
         check("明确同表进度不被 batch-lines 误伤", st4.get("stale_progress_dropped") is False)
-        check("明确同表仍正常续跑", all(x.get("resumed") for x in st4["results"]))
+        check(
+            "明确同表仍正常续跑已完成的行",
+            len([x for x in st4["results"] if x.get("resumed")]) == 2,
+        )
 
         # 老进度没有指纹、headline 又被改得一致 → 只能靠 batch-lines 指纹兜底
         legacy3 = prior_for(BOM_A)
@@ -214,6 +224,74 @@ with tempfile.TemporaryDirectory() as td:
         r5 = FakeRunner()
         st5 = r5.start_batch(BOM_B, resume=True)
         check("老进度靠 batch-lines 指纹识破换表", st5.get("stale_progress_dropped") is True)
+
+        print("== 5b. 重跑：全部跑完不许静默空跑 ==")
+        # 用户真实反馈：觉得上次买错了想重跑，点一下按钮，done_map 把 ok 行全跳过，
+        # 瞬间「跑完」—— 一行没动，还以为系统重跑了。
+        tr.save_batch_progress(prior_for(BOM_B, FP_B))
+        tr.save_batch_lines(BOM_B)
+        r7 = FakeRunner()
+        raised = None
+        try:
+            r7.start_batch(BOM_B, resume=True)
+        except tr.SessionError as exc:  # noqa: PERF203
+            raised = exc
+        check("全部跑完再点继续 → 报 BATCH_ALL_DONE 而不是空跑",
+              raised is not None and raised.code == "BATCH_ALL_DONE", raised)
+        check("拒绝时不动进度文件", len((tr.load_batch_progress().get("lines") or {})) == 3)
+        check("拒绝时不起批量任务", not r7._batch.get("running"))
+
+        # 只重跑第 2 行
+        r8 = FakeRunner()
+        st8 = r8.start_batch(BOM_B, resume=True, redo_lines=[2])
+        resumed8 = {x["line_no"] for x in st8["results"] if x.get("resumed")}
+        check("redo_lines 只跳过第 1、3 行", resumed8 == {1, 3}, resumed8)
+        check("被点名的第 2 行回到待跑",
+              [x["status"] for x in st8["results"] if x["line_no"] == 2] == ["pending"])
+        check("状态里记下重跑了哪几行", st8.get("redo_line_nos") == [2], st8.get("redo_line_nos"))
+
+        # 整批重跑
+        tr.save_batch_progress(prior_for(BOM_B, FP_B))
+        r9 = FakeRunner()
+        st9 = r9.start_batch(BOM_B, resume=True, redo=True)
+        check("redo 整批不跳过任何行", all(not x.get("resumed") for x in st9["results"]))
+        check("redo 全部行回到待跑", all(x["status"] == "pending" for x in st9["results"]))
+        check("redo 清空旧进度文件", not tr.PROGRESS_FILE.exists())
+        check("redo 状态标记 drop_prior_progress", st9.get("drop_prior_progress") is True)
+        check("redo 阶段文案说明在重跑", "重新跑全部" in (st9.get("phase") or ""), st9.get("phase"))
+
+        # 重跑落盘不能把上一轮的 ok 继承回来（_save_progress 是合并写）
+        tr.save_batch_progress(prior_for(BOM_B, FP_B))
+        r10 = SavingRunner()
+        r10._batch = {
+            "fingerprint": FP_B,
+            "total": 3,
+            "started_at": "t0",
+            "finished_at": None,
+            "drop_prior_progress": True,
+            "results": [{"line_no": 2, "status": "failed", "headline": "x"}],
+        }
+        r10._save_progress()
+        rows10 = tr.load_batch_progress().get("lines") or {}
+        check("整批重跑后落盘不继承旧 ok 行", set(rows10.keys()) == {"2"}, rows10)
+
+        # 摘要要把问题行号给出来，重跑按钮才知道重跑谁
+        mixed = prior_for(BOM_B, FP_B)
+        mixed["lines"]["1"]["status"] = "uncertain"
+        mixed["lines"]["2"]["status"] = "failed"
+        tr.save_batch_progress(mixed)
+        sum_mixed = tr.batch_progress_summary(active_fingerprint=FP_B)
+        check("摘要给问题行号", sum_mixed["problem_line_nos"] == [1, 2], sum_mixed)
+        check("摘要的 ok 只剩第 3 行", sum_mixed["ok_line_nos"] == [3], sum_mixed)
+
+        # 重跑清进度后，「删除上一批」还要能认出上一批的商品 —— 否则用户想清理
+        # 重复商品时，记录已经被自己清掉了。
+        tr.save_batch_progress(prior_for(BOM_B, FP_B))
+        r11 = FakeRunner()
+        r11.start_batch(BOM_B, resume=True, redo=True)
+        archived = tr.load_archived_progress()
+        check("重跑前留了进度底档", len(archived.get("lines") or {}) == 3, archived)
+        check("清进度后仍能算出要删的商品", len(tr.batch_removal_targets()) == 3)
 
         print("== 6. 落盘时绑定指纹 ==")
         tr.clear_batch_progress()

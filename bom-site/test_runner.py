@@ -771,7 +771,11 @@ runner.cleanup_screenshots = lambda: None
 try:
     _st = runner.start_batch(
         [{"line_no": 1, "qty": 2, "query_plan": ["0603 10kΩ"],
-          "decision": {"headline": "0603 10kΩ ×2"}}],
+          "decision": {"headline": "0603 10kΩ ×2"}},
+         # 第 2 行没有进度：留一行待跑，否则「全部已跑完」会被新的
+         # BATCH_ALL_DONE 闸门直接拒掉（那是产品行为，见 test_batch_progress_guard §5b）
+         {"line_no": 2, "qty": 1, "query_plan": ["0805 100nF"],
+          "decision": {"headline": "0805 100nF ×1"}}],
         resume=True,
     )
     _r1 = (_st.get("results") or [{}])[0]

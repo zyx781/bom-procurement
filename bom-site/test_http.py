@@ -1,3 +1,4 @@
+import atexit
 import base64
 import json
 import os
@@ -8,6 +9,25 @@ import urllib.request
 
 BASE = "http://127.0.0.1:8765"
 ROOT = pathlib.Path(__file__).parent
+
+# 这套测试打的是**正在运行的真实服务**，而 /api/analyze 会写 runs/active-bom.json。
+# 不还原的话，跑完测试用户页面上的「当前 BOM」就被换成了测试表格，
+# 真实进度的指纹对不上 → 界面报「换过 BOM」，19 行进度看着像失效了。
+_ACTIVE_BOM = ROOT / "runs" / "active-bom.json"
+_active_bom_bak = _ACTIVE_BOM.read_bytes() if _ACTIVE_BOM.exists() else None
+
+
+def _restore_active_bom():
+    try:
+        if _active_bom_bak is None:
+            _ACTIVE_BOM.unlink(missing_ok=True)
+        else:
+            _ACTIVE_BOM.write_bytes(_active_bom_bak)
+    except Exception:
+        pass
+
+
+atexit.register(_restore_active_bom)
 
 
 def post(path, payload):
@@ -85,6 +105,19 @@ print("CART CLEAR NO CONFIRM", code, err.get("error"))
 # 真的启动一批（曾经把测试数据写进真实进度、还跑了一次淘宝搜索）。
 code, err = post("/api/taobao/batch-start", {"lines": [], "resume": False})
 print("BATCH EMPTY", code, err.get("error"))
+
+# 重跑参数必须校验：redo_lines 传错类型时要在进执行层之前就 400，
+# 不能带着脏数据去猜「用户大概想重跑哪一行」。
+code, err = post(
+    "/api/taobao/batch-start",
+    {"lines": [{"line_no": 1}], "resume": False, "redo_lines": "1,2"},
+)
+print("BATCH REDO_LINES NOT LIST", code, err.get("error"))
+code, err = post(
+    "/api/taobao/batch-start",
+    {"lines": [{"line_no": 1}], "resume": False, "redo_lines": ["二"]},
+)
+print("BATCH REDO_LINES NOT INT", code, err.get("error"))
 
 print("BATCH STATUS", json.loads(get("/api/taobao/batch")[1]).keys())
 

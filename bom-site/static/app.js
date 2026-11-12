@@ -968,9 +968,10 @@
 
   let batchProgress = null;
 
-  async function startBatch() {
+  async function startBatch(opts) {
     if (!state.result) return toast("先分析 BOM");
     if (!sessionReady) return toast("先启动淘宝会话");
+    const mode = (opts && opts.mode) || "auto"; // auto | redo | retry
     const lines = state.result.lines;
     // 型号/名称/参数全空的行没有搜索词，跑起来必然搜不出东西：提前说清楚会被跳过
     const noQuery = lines.filter(
@@ -981,9 +982,41 @@
       : "";
     const pg = batchProgress || {};
     const resumeN = pg.ok_count || 0;
+    const problemN = pg.problem_count || 0;
+    const problemNos = pg.problem_line_nos || [];
+    const runnableN = lines.length - noQuery.length;
+    // 「都处理过了」= ok + failed/待核对 已经盖住所有可跑行：再点就是重跑，
+    // 不能假装还有活干（服务端也会直接拒绝，见 BATCH_ALL_DONE）。
+    const allProcessed =
+      pg.total > 0 && pg.total === lines.length && runnableN > 0 && resumeN + problemN >= runnableN;
+    const autoRetry = mode === "auto" && allProcessed && problemN > 0;
+    const autoRedo = mode === "auto" && allProcessed && problemN === 0;
     let ok;
-    if (resumeN > 0) {
-      const rest = lines.length - resumeN;
+    let payload = { lines, prefer_cheap: true, max_candidates: 3, resume: true };
+
+    if (mode === "retry" || autoRetry) {
+      // 只重跑问题行：已成功的行照旧跳过，不会重复加购
+      if (!problemNos.length) return toast("没有需要重跑的行");
+      ok = window.confirm(
+        `重跑有问题的 ${problemNos.length} 行：\n#${problemNos.join("、#")}\n\n` +
+          (resumeN > 0 ? `已成功加入购物车的 ${resumeN} 行会跳过，不会重复加购。\n` : "") +
+          `「待核对」的行如果上次其实已经进了购物车，重跑会再加一份 —— 建议先去购物车看一眼。\n\n` +
+          `只到购物车，不结算、不付款。继续？` + skipTip
+      );
+      payload.resume = true;
+      payload.redo_lines = problemNos;
+    } else if (mode === "redo" || autoRedo) {
+      // 整批重跑：必须明确警告，这一步会让购物车里出现重复商品
+      ok = window.confirm(
+        `⚠ 重新跑全部 ${lines.length} 行。\n\n` +
+          `这不会清除购物车 —— 上次加进去的 ${resumeN} 行还在，重跑会**重复加一遍**，数量翻倍。\n` +
+          `正确做法：先用「删除上一批」清掉上次加进购物车的商品，再重跑。\n\n` +
+          `只到购物车，不结算、不付款。确定重跑全部？` + skipTip
+      );
+      payload.resume = false;
+      payload.redo = true;
+    } else if (resumeN > 0) {
+      const rest = runnableN - resumeN;
       const nextNo = (lines.find((l) => !(pg.ok_line_nos || []).includes(l.line_no)) || {}).line_no;
       ok = window.confirm(
         `上次已完成 ${resumeN} 行（已加入购物车），这次接着跑剩下的 ${rest} 行` +
@@ -1003,17 +1036,17 @@
     $("#batch-progress").classList.remove("hidden");
     $("#batch-note").textContent = "正在启动批量任务…";
     try {
-      const st = await api("/api/taobao/batch-start", {
-        lines,
-        prefer_cheap: true,
-        max_candidates: 3,
-        // 进度属于另一份 BOM 时显式从头跑（服务端也有一层指纹兜底）
-        resume: !(batchProgress && batchProgress.stale),
-      });
+      const st = await api("/api/taobao/batch-start", payload);
       batchRunning = !!st.running;
       renderBatch(st);
     } catch (e) {
       toast(e.message);
+      // BATCH_ALL_DONE 说明这批已经处理过：刷一次按钮，让它变成
+      // 「重跑问题行」/「重新跑全部」，别让用户点了没反应还不知道下一步干什么
+      if (/上次已全部跑完/.test(e.message || "")) {
+        $("#btn-batch-start").disabled = false;
+        syncBatchButtons();
+      }
     }
     pollBatch();
   }
@@ -1133,7 +1166,12 @@
     } else if (st.total) {
       const okn = st.ok_count != null ? st.ok_count : (st.results || []).filter((r) => r.status === "ok").length;
       const pg = st.progress || {};
-      const tail = pg.ok_count > 0 ? `；进度已保存，下次点「继续加购」从断点接着跑` : "";
+      const { allProcessed } = batchMode();
+      const tail = allProcessed
+        ? "；这批已跑完，要重跑点「重跑问题行」或「重新跑全部」（会重复加购，先删上一批）"
+        : pg.ok_count > 0
+        ? "；进度已保存，下次点「继续加购」从断点接着跑"
+        : "";
       const money = st.cost_total
         ? `，合计 ${fmtMoney(st.cost_total)}${st.cost_lines ? `（${st.cost_lines} 行有实付价）` : ""}`
         : "";
@@ -1146,18 +1184,50 @@
         `${st.stopped_reason ? "（" + st.stopped_reason + "）" : ""}${tail}`;
     } else if (st.progress && st.progress.ok_count > 0) {
       const money = st.cost_total ? `，合计 ${fmtMoney(st.cost_total)}` : "";
-      $("#batch-note").textContent = `有上次的进度：已完成 ${st.progress.ok_count} 行${money}，点「继续加购」从断点接着跑`;
+      const { allProcessed } = batchMode();
+      $("#batch-note").textContent = allProcessed
+        ? `这批 ${st.progress.ok_count + (st.progress.problem_count || 0)} 行都已处理${money}；要重跑点「重跑问题行」或「重新跑全部」（会重复加购，先删上一批）`
+        : `有上次的进度：已完成 ${st.progress.ok_count} 行${money}，点「继续加购」从断点接着跑`;
     }
+  }
+
+  function batchMode() {
+    const pg = batchProgress || {};
+    const n = pg.ok_count || 0;
+    const p = pg.problem_count || 0;
+    const lines = (state.result && state.result.lines) || [];
+    const runnableN = lines.filter(
+      (l) => (l.query_plan && l.query_plan.length) || (l.decision && (l.decision.search_queries || []).length)
+    ).length;
+    // 「都处理过了」= 进度里的总数和当前行数一致，且 ok + 问题行盖住了所有可跑行
+    const allProcessed = pg.total > 0 && pg.total === lines.length && runnableN > 0 && n + p >= runnableN;
+    return { n, p, runnableN, allProcessed };
   }
 
   function syncBatchButtons() {
     const btn = $("#btn-batch-start");
-    const pg = batchProgress || {};
-    const n = pg.ok_count || 0;
+    const { n, p, runnableN, allProcessed } = batchMode();
     btn.disabled = !sessionReady || !state.result || batchRunning;
-    btn.textContent = !batchRunning && n > 0 ? `继续加购 ${n} 行` : "一键全部加购";
+    if (!batchRunning) {
+      // 都处理过之后按钮不能还是「继续加购」—— 那会跳过全部、一行不跑。
+      // 有问题行就主推「重跑问题行」，全成功才是「重新跑全部」。
+      btn.textContent = allProcessed
+        ? p > 0
+          ? `重跑问题行 ${p}`
+          : `重新跑全部 ${runnableN} 行`
+        : n > 0
+        ? `继续加购 ${n} 行`
+        : "一键全部加购";
+    }
+    const probBtn = $("#btn-batch-retry");
+    if (probBtn) {
+      // 主按钮已经承担「重跑问题行」时不再重复出现
+      probBtn.classList.toggle("hidden", !(p > 0) || allProcessed || batchRunning);
+      probBtn.textContent = `重跑问题行 ${p}`;
+      probBtn.disabled = !sessionReady || !state.result || batchRunning;
+    }
     const reset = $("#btn-batch-reset");
-    if (reset) reset.classList.toggle("hidden", !(n > 0) || batchRunning);
+    if (reset) reset.classList.toggle("hidden", !(n > 0 || p > 0) || batchRunning);
   }
 
   async function resetBatchProgress() {
@@ -1383,7 +1453,9 @@
     }
     const recheckBtn = $("#btn-sess-recheck");
     if (recheckBtn) recheckBtn.addEventListener("click", recheckVerification);
-    $("#btn-batch-start").addEventListener("click", startBatch);
+    $("#btn-batch-start").addEventListener("click", () => startBatch({}));
+    const retryBtn = $("#btn-batch-retry");
+    if (retryBtn) retryBtn.addEventListener("click", () => startBatch({ mode: "retry" }));
     const resetBtn = $("#btn-batch-reset");
     if (resetBtn) resetBtn.addEventListener("click", resetBatchProgress);
     $("#btn-batch-stop").addEventListener("click", stopBatch);

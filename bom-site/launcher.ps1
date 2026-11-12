@@ -119,18 +119,43 @@ function Get-Listener {
 function Resolve-Python {
     # python.exe 用来跑 -c 检查（有控制台，能拿到 stdout）；
     # pythonw.exe 用来起服务（GUI 子系统，不留黑框）。
-    $exe = $null
-    $win = $null
-    $c = Get-Command "python.exe" -ErrorAction SilentlyContinue
-    if ($c) { $exe = $c.Source }
-    $c = Get-Command "pythonw.exe" -ErrorAction SilentlyContinue
-    if ($c) { $win = $c.Source }
-    if (-not $exe -and $win) {
-        $guess = Join-Path (Split-Path $win) "python.exe"
-        if (Test-Path $guess) { $exe = $guess }
+    #
+    # 机器上可能装着多个 Python，PATH 上第一个不一定装了依赖。踩过的坑：
+    # 从 Git Bash 里调启动器时，PATH 上 3.13 排在前面、它没装 openpyxl，
+    # 服务照常起来，但一上传 xlsx 就 500「No module named 'openpyxl'」。
+    # 所以把所有能想到的解释器收集起来，优先选依赖齐全的那个。
+    $cands = @()
+    $seen = @{}
+    foreach ($name in @("python.exe", "pythonw.exe")) {
+        $c = Get-Command $name -ErrorAction SilentlyContinue
+        if (-not $c) { continue }
+        $dir = Split-Path $c.Source
+        $exe = Join-Path $dir "python.exe"
+        $win = Join-Path $dir "pythonw.exe"
+        if ((Test-Path $exe) -and -not $seen.ContainsKey($exe)) {
+            $seen[$exe] = $true
+            $cands += @{ Exe = $exe; Window = $(if (Test-Path $win) { $win } else { $exe }) }
+        }
     }
-    if (-not $win) { $win = $exe }
-    return @{ Exe = $exe; Window = $win }
+    # py 启动器兜底：某些安装（含 Store 版）PATH 里根本没有 python.exe
+    $pyLauncher = Get-Command "py.exe" -ErrorAction SilentlyContinue
+    if ($pyLauncher) {
+        try {
+            $real = (& $pyLauncher.Source -3 -c "import sys;print(sys.executable)" 2>$null | Select-Object -First 1)
+            if ($real) { $real = $real.Trim() }
+            if ($real -and (Test-Path $real) -and -not $seen.ContainsKey($real)) {
+                $seen[$real] = $true
+                $win = Join-Path (Split-Path $real) "pythonw.exe"
+                $cands += @{ Exe = $real; Window = $(if (Test-Path $win) { $win } else { $real }) }
+            }
+        } catch { }
+    }
+    if (-not $cands.Count) { return @{ Exe = $null; Window = $null } }
+    if ($cands.Count -eq 1) { return $cands[0] }
+    foreach ($cand in $cands) {
+        if (Test-PythonDeps $cand.Exe) { return $cand }
+    }
+    return $cands[0]
 }
 
 function Get-PythonVersion([string]$exe) {
@@ -301,8 +326,10 @@ function Start-App {
     if ($depsOk) {
         Write-Row "依赖库" "playwright / openpyxl 已安装" $C_Ok
     } else {
-        Write-Row "依赖库" "缺少依赖，xlsx 与淘宝执行会不可用" $C_Warn
-        Write-Footer "       修复：pip install -r requirements.txt" $C_Dim
+        # 缺依赖还硬起，用户只会看到「上传 xlsx 报服务端异常」，比直接拦住更难查
+        Write-Row "依赖库" "缺少依赖，服务无法正常启动" $C_Warn
+        Fail "Python 缺依赖（playwright / openpyxl）" `
+            "在这个 Python 下执行：`"$($py.Exe)`" -m pip install -r requirements.txt"
     }
 
     $conn = Get-Listener

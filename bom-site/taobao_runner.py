@@ -89,7 +89,41 @@ def save_batch_progress(data: dict) -> None:
         pass
 
 
+def _progress_archive_file() -> Path:
+    """上一批进度的底档路径。
+
+    跟着 PROGRESS_FILE 走（而不是固定写 RUNS）：测试把 PROGRESS_FILE 指到临时目录时，
+    底档也自动落在临时目录，不会污染真实的 runs/。
+    """
+    pf = PROGRESS_FILE
+    return pf.with_name(f"{pf.stem}-prev{pf.suffix}")
+
+
+def load_archived_progress() -> dict:
+    try:
+        data = json.loads(_progress_archive_file().read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {}
+
+
 def clear_batch_progress() -> None:
+    """清进度文件。清之前先留一份底档。
+
+    为什么留底：购物车「删除上一批」要靠进度里的 candidate.url / 标题去精准定位，
+    重跑或重置把进度清掉之后，那些商品就再也认不出来了 —— 而这时恰恰最需要清理，
+    因为重跑会重复加购。
+    """
+    try:
+        data = load_batch_progress()
+        if data.get("lines"):
+            tmp = _progress_archive_file().with_suffix(PROGRESS_FILE.suffix + ".tmp")
+            tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+            tmp.replace(_progress_archive_file())
+    except Exception:
+        pass
     try:
         PROGRESS_FILE.unlink(missing_ok=True)
     except Exception:
@@ -236,6 +270,8 @@ def batch_progress_summary(active_fingerprint: str = "") -> dict:
         "ok_count": len(ok),
         "problem_count": len(bad),
         "ok_line_nos": sorted(int(k) for k in ok if str(k).isdigit()),
+        # 重跑按钮要知道「哪些行是问题行」（失败 + 待核对），否则只能整批重来
+        "problem_line_nos": sorted(int(k) for k in bad if str(k).isdigit()),
         "fingerprint": fp,
         "stale": stale,
     }
@@ -268,12 +304,19 @@ def set_active_bom(lines: list) -> str:
 
 
 def active_bom_fingerprint() -> str:
-    if ACTIVE_BOM_FINGERPRINT:
-        return ACTIVE_BOM_FINGERPRINT
+    """当前界面在看的 BOM 指纹。
+
+    正常流程里内存和磁盘是同一份（`set_active_bom` 同时写两边），谁先谁后无所谓。
+    但磁盘可能被外部改写（比如打真实服务的 HTTP 测试调了 /api/analyze），
+    这时以磁盘为准：内存那份已经失真，而磁盘是下一次重启会读到的值。
+    """
     try:
-        return str(json.loads(ACTIVE_BOM_FILE.read_text(encoding="utf-8")).get("fingerprint") or "")
+        on_disk = str(json.loads(ACTIVE_BOM_FILE.read_text(encoding="utf-8")).get("fingerprint") or "")
     except Exception:
-        return ""
+        on_disk = ""
+    if on_disk and ACTIVE_BOM_FINGERPRINT and on_disk != ACTIVE_BOM_FINGERPRINT:
+        return on_disk
+    return ACTIVE_BOM_FINGERPRINT or on_disk
 
 
 _RE_ITEM_ID = re.compile(r"[?&](?:id|itemId)=(\d+)")
@@ -294,6 +337,10 @@ def batch_removal_targets(prog: dict | None = None) -> list[dict]:
     """
     data = prog if isinstance(prog, dict) else load_batch_progress()
     rows = data.get("lines") or {}
+    if not rows:
+        # 进度刚被「重跑 / 重置」清过，但商品还在购物车里 —— 用底档还能精确删掉。
+        data = load_archived_progress()
+        rows = data.get("lines") or {}
     keys = sorted(
         rows.keys(),
         key=lambda x: (0, int(x)) if str(x).isdigit() else (1, 0),
@@ -320,19 +367,32 @@ def batch_removal_targets(prog: dict | None = None) -> list[dict]:
     return out
 
 
-def done_map_from_progress(prior: dict) -> dict:
+def done_map_from_progress(prior: dict, redo_lines=None) -> dict:
     """续跑时哪些行可以跳过。
 
     ok = 确认已加购；uncertain = 点过「加入购物车」但页面没给确认信号。
-    两者都不能重跑：uncertain 重跑会在购物车里多一份（淘宝同款同 SKU 会叠加数量），
+    两者默认都不能重跑：uncertain 重跑会在购物车里多一份（淘宝同款同 SKU 会叠加数量），
     只能跳过、交给人工核对。
+
+    redo_lines 是用户明确点名「这一行我要重跑」的集合 —— 必须是**显式**的，
+    不能靠猜。踩过的坑：用户觉得某行买错了想重跑，但 resume 把 ok 行全跳过，
+    点一下按钮瞬间「跑完」，实际一行没动，还以为系统跑了。
     """
+    force = {str(x) for x in (redo_lines or []) if str(x).strip()}
     out = {}
     for k, v in ((prior or {}).get("lines") or {}).items():
+        if str(k) in force:
+            continue
         row = v or {}
         if row.get("status") in ("ok", "uncertain"):
             out[str(k)] = row
     return out
+
+
+def line_has_query(line: dict) -> bool:
+    """这行有没有搜索词可搜（型号/名称/参数全空的行跑下去只会白等一轮）。"""
+    ln = line or {}
+    return bool(ln.get("query_plan") or (ln.get("decision") or {}).get("search_queries"))
 
 
 def load_settings() -> dict:
@@ -1687,12 +1747,24 @@ class SessionRunner:
         max_candidates: int = 2,
         resume: bool = True,
         dry_run: bool = False,
+        redo: bool = False,
+        redo_lines: list | None = None,
     ) -> dict:
         """启动批量加购。
 
         resume=True（默认）时读 runs/batch-progress.json，把上次已经「已加入购物车」的行
         直接标成 ok 并跳过 —— 暂停/停止/重启后接着跑，不会从头重复加购。
-        想真正重头来，传 resume=False（或先调 /api/taobao/batch-reset）。
+
+        但「跳过」只在用户**没说要重跑**时才成立，所以有两个显式开关：
+
+        - redo=True：整批重跑。忽略并清空旧进度，一行都不跳过。
+        - redo_lines=[2,15]：只重跑这几行，其余行照旧续跑跳过。
+
+        之所以要显式开关：以前 resume 是唯一行为，用户觉得某行买错了想重跑，
+        点一下按钮，done_map 把 ok 行全跳过，瞬间「跑完」，一行没动 —— 用户
+        以为重跑了，实际什么都没发生。所以：
+        1) 全部可跑行都已定局时，resume 不再静默空跑，直接抛 BATCH_ALL_DONE；
+        2) 重跑必须走 redo / redo_lines，界面上也要弹「会重复加购」的确认。
         """
         if not isinstance(lines, list) or not lines:
             raise SessionError("没有可执行的行", "BATCH_EMPTY")
@@ -1708,8 +1780,15 @@ class SessionRunner:
         # 只看进度文件不够 —— 用户可能已经手动点过「重置进度」，但界面内存里
         # 还留着上一批的 ok_count，照样会被骗进一次整批空跑。
         prev_lines_meta = load_batch_lines_meta()
-        prior = load_batch_progress() if resume else {}
+        force = {str(x) for x in (redo_lines or []) if str(x).strip()}
+        prior = load_batch_progress() if (resume or force) else {}
         stale_progress = False
+        if redo:
+            # 整批重跑：进度必须先清。_save_progress 是「旧文件 + 本轮」合并写，
+            # 不清的话本轮没定局的行会把上一轮的 ok 继承回来，下次续跑又跳过。
+            prior = {}
+            clear_batch_progress()
+            _log("[batch] 用户要求整批重跑，旧进度已清空")
         if resume and (prior.get("lines") or {}):
             belongs, why = progress_belongs_to(prior, lines)
             prev_fp = prev_lines_meta.get("fingerprint") or ""
@@ -1723,7 +1802,19 @@ class SessionRunner:
                 clear_batch_progress()
                 _log(f"[batch] 检测到 BOM 已更换（{why} 不一致），旧进度作废，本批从头跑")
         save_batch_lines(lines)
-        done_map = done_map_from_progress(prior)
+        done_map = done_map_from_progress(prior, redo_lines=redo_lines)
+        if resume and not redo:
+            # 全部可跑行都已定局 → 再跑一遍就是纯重复加购。以前这里静默全跳过，
+            # 用户看到进度条瞬间满格、报告「已跑完」，以为重跑了。
+            runnable = [ln for ln in lines if line_has_query(ln)]
+            if runnable and all(str(ln.get("line_no")) in done_map for ln in runnable):
+                raise SessionError(
+                    f"这批 {len(runnable)} 行上次已全部跑完，直接再跑会重复加购。"
+                    "要重跑请点「重跑问题行」或「重新跑全部」"
+                    "（重跑前建议先删掉上一批加进购物车的商品）",
+                    "BATCH_ALL_DONE",
+                )
+
         results, resumed = [], 0
         for ln in lines:
             key = str(ln.get("line_no"))
@@ -1790,7 +1881,15 @@ class SessionRunner:
                     else (
                         "准备中（新 BOM，旧进度已作废）"
                         if stale_progress
-                        else (f"准备中（续跑，跳过已完成 {resumed} 行）" if resumed else "准备中")
+                        else (
+                            "准备中（重新跑全部，旧进度已清空）"
+                            if redo
+                            else (
+                                f"准备中（重跑 {len(force)} 行，其余续跑跳过）"
+                                if force
+                                else (f"准备中（续跑，跳过已完成 {resumed} 行）" if resumed else "准备中")
+                            )
+                        )
                     )
                 ),
                 "dry_run": bool(dry_run),
@@ -1799,6 +1898,10 @@ class SessionRunner:
                 "resumed": resumed,
                 "fingerprint": fp,
                 "stale_progress_dropped": stale_progress,
+                # 整批重跑时进度落盘不能继承旧行（_save_progress 是合并写）
+                "drop_prior_progress": bool(redo),
+                "redo": bool(redo),
+                "redo_line_nos": sorted(int(x) for x in force if str(x).isdigit()),
                 "started_at": datetime.now().isoformat(timespec="seconds"),
                 "finished_at": None,
                 "stopped_reason": None,
@@ -1820,7 +1923,9 @@ class SessionRunner:
     def _save_progress(self):
         """把已定局（ok/failed/uncertain）的行按 line_no 存盘，供下次续跑跳过。"""
         prior_data = load_batch_progress() or {}
-        prior_lines = prior_data.get("lines") or {}
+        # 整批重跑时不能继承旧行：否则本轮没跑到的行会把上一轮的 ok 带回来，
+        # 下次「继续加购」又把它们当已完成跳过 —— 重跑等于没重跑。
+        prior_lines = {} if self._batch.get("drop_prior_progress") else (prior_data.get("lines") or {})
         with self._state_lock:
             rows = {}
             for r in self._batch.get("results") or []:

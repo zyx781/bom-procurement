@@ -308,6 +308,17 @@ class Handler(BaseHTTPRequestHandler):
                     lines = tr.load_batch_lines()
                 if not isinstance(lines, list) or not lines:
                     raise ValueError("没有可执行的行")
+                # 重跑语义必须显式传，绝不靠"看着像想重跑"来猜：
+                # redo=true 整批重跑（清进度），redo_lines=[2,15] 只重跑这几行。
+                _redo_lines = body.get("redo_lines")
+                if _redo_lines is not None and not isinstance(_redo_lines, list):
+                    raise ValueError("redo_lines 必须是行号数组")
+                _redo_nos = []
+                for _x in _redo_lines or []:
+                    try:
+                        _redo_nos.append(int(_x))
+                    except (TypeError, ValueError):
+                        raise ValueError(f"redo_lines 里的行号不是整数：{_x!r}") from None
                 return self._send(
                     200,
                     tr.RUNNER.start_batch(
@@ -318,6 +329,8 @@ class Handler(BaseHTTPRequestHandler):
                         resume=bool(body.get("resume", True)),
                         # dry_run=True：演练模式，跑完选型但不点加购（回归测速度用）
                         dry_run=bool(body.get("dry_run", False)),
+                        redo=bool(body.get("redo", False)),
+                        redo_lines=_redo_nos,
                     ),
                 )
 

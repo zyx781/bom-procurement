@@ -24,6 +24,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 import engine
+import lcsc
 import taobao_runner as tr
 
 ROOT = Path(__file__).resolve().parent
@@ -228,13 +229,28 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     raise ValueError("文件内容不是有效的 base64")
                 result = engine.parse_workbook(filename, raw)
+                # 嘉立创EDA 导出的 BOM 每行带立创编号（Supplier Part），这里先数一下，
+                # 让用户一眼看出「这张表能不能按编号核准」。
+                result["lcsc_rows"] = sum(1 for r in (result.get("rows") or []) if r.get("lcsc"))
                 return self._send(200, result)
 
             if path == "/api/analyze":
                 rows = body.get("rows")
                 if not isinstance(rows, list) or not rows:
                     raise ValueError("没有可分析的行")
+                # 分析前先用立创商城把「立创编号 / 完整型号」换成权威规格：
+                # 编号命中 → 型号/封装/阻值/耐压/精度/库存都是确定的，不用再从字符串猜。
+                # 查不到（离线、编号失效）就退回纯规则分析，绝不因为联网失败挡住整表。
+                lcsc_stats = {"resolved": 0, "by_code": 0, "by_model": 0, "skipped": [], "failed": []}
+                try:
+                    lcsc_stats = lcsc.enrich_rows(
+                        rows, allow_model=bool(body.get("lcsc_model", True))
+                    )
+                except Exception as exc:  # noqa: BLE001  立创挂了也必须能分析
+                    print(f"[site] lcsc enrich skipped: {exc}", flush=True)
                 result = dict(engine.analyze(rows))
+                result["lcsc"] = lcsc_stats
+                result["lcsc_summary"] = lcsc.summary_text(lcsc_stats)
                 # 记住当前这份 BOM；换表后把上一批进度隐藏掉，否则前端会弹
                 # 「上次已完成 N 行，接着跑」，实际一行都不会执行。
                 fp = tr.set_active_bom(result.get("lines") or [])

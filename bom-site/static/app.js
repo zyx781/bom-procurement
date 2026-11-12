@@ -199,11 +199,20 @@
     const cats = Object.entries(r.categories || {})
       .map(([k, v]) => `${catLabel(k)} ${v}`)
       .join("，");
+    // 立创核准行数：有编号的按编号，没编号的按完整型号，分开数
+    const lcst = r.lcsc || {};
+    const lcCode = lcst.by_code || 0;
+    const lcModel = lcst.by_model || 0;
+    const lcChip =
+      lcCode + lcModel > 0
+        ? `<div class="chip ok" title="${esc(r.lcsc_summary || "")}"><b>${lcCode + lcModel}</b>立创核准</div>`
+        : "";
     let html = `
       <div class="chip"><b>${s.total}</b>行</div>
       <div class="chip ok"><b>${s.ready}</b>可执行</div>
       <div class="chip warn"><b>${s.needs_user}</b>待确认</div>
       <div class="chip ${s.critical ? "bad" : ""}"><b>${s.critical}</b>关键件</div>
+      ${lcChip}
       <div class="chip">${esc(cats)}</div>`;
     $("#summary").innerHTML = html;
 
@@ -239,7 +248,7 @@
           <span class="li-no">${String(ln.line_no ?? i + 1).padStart(2, "0")}</span>
           <span class="li-body">
             <span class="li-title">${esc(ln.decision.headline || ln.mpn || "未识别")}${critical}</span>
-            <span class="li-sub">${esc(ln.mpn || catLabel(ln.category))}</span>
+            <span class="li-sub">${esc(ln.mpn || catLabel(ln.category))}${ln.lcsc && ln.lcsc.code ? ` · ${esc(ln.lcsc.code)}` : ""}</span>
           </span>
           <span class="li-pkg">${esc(shortPkg(ln.package))}</span>
           <span class="li-qty">${ln.qty ?? "—"}</span>
@@ -301,6 +310,32 @@
       )
       .join("");
 
+    // 立创核准：把「编号 → 型号/封装/参数/库存」原样摆出来。
+    // 按编号核对的用绿色左边框；按型号核对的用棕色，因为型号是 BOM 自己写的，
+    // 只证明「这个型号是什么」，不证明「设计上就该用它」。
+    const lc = ln.lcsc || null;
+    let lcBlock = "";
+    if (lc) {
+      const byModel = lc.matched_by === "model";
+      const attrs = Object.entries(lc.attrs || {})
+        .slice(0, 10)
+        .map(([k, v]) => `<span><i>${esc(k)}</i>${esc(v)}</span>`)
+        .join("");
+      lcBlock = `
+      <div class="lcsc-box ${byModel ? "by-model" : "by-code"}">
+        <div class="lcsc-head">
+          <span class="lcsc-tag">${byModel ? "按型号核对" : "立创编号核准"}</span>
+          <b>${esc(lc.code || "—")}</b>
+          <span>${esc(lc.model || "")}</span>
+          ${lc.brand ? `<span>${esc(lc.brand)}</span>` : ""}
+          ${lc.package ? `<span>${esc(lc.package)}</span>` : ""}
+          ${lc.stock != null ? `<span>库存 ${esc(String(lc.stock))}</span>` : ""}
+          ${lc.packet ? `<span>${esc(lc.packet)}</span>` : ""}
+        </div>
+        ${attrs ? `<div class="lcsc-attrs">${attrs}</div>` : ""}
+      </div>`;
+    }
+
     $("#line-detail").innerHTML = `
       <div class="detail-head">
         <div>
@@ -313,6 +348,7 @@
       </div>
       ${blocking}
       <div class="detail-meta">${meta}</div>
+      ${lcBlock}
       <div class="detail-cols">
         <section>
           <h4>采购口径（硬门槛）</h4>

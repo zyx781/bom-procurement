@@ -118,6 +118,15 @@ check("换 BOM 指纹不同", FP_A != FP_B)
 check("只改数量也算换 BOM", FP_A != tr.batch_fingerprint(make_lines(["NE555P", "CD4518BE", "SS34"], qty=9)))
 check("行顺序不同指纹不同", FP_A != tr.batch_fingerprint(make_lines(["CD4518BE", "NE555P", "SS34"])))
 check("空列表不报错", isinstance(tr.batch_fingerprint([]), str) and len(tr.batch_fingerprint([])) == 16)
+# 引擎升级会改 headline（摘要/口径文案）。那不是「换了 BOM」，不能让用户
+# 刷新一次页面就被告知「旧进度作废」——一作废就会整批重跑、重复加购。
+_renamed = make_lines(["NE555P", "CD4518BE", "SS34"])
+for _ln in _renamed:
+    _ln["decision"]["headline"] = "（引擎升级后的新文案）"
+check("引擎改文案不算换 BOM", FP_A == tr.batch_fingerprint(_renamed))
+_with_cand = make_lines(["NE555P", "CD4518BE", "SS34"])
+_with_cand[0]["candidates"] = [{"title": "某商品", "price": 9.9}]
+check("候选商品变化不算换 BOM", FP_A == tr.batch_fingerprint(_with_cand))
 
 print("== 2. 进度归属判定 ==")
 ok, why = tr.progress_belongs_to(prior_for(BOM_A), BOM_A)

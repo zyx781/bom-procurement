@@ -19,6 +19,8 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+import lcsc
+
 ENGINE_VERSION = "0.1.0"
 
 # 容差放宽上限：BOM 要求更严时也接受 ≤这个值的料（用户口径：耐压/数值/封装对就行）
@@ -29,7 +31,7 @@ TOLERANCE_RELAX_PCT = 20.0
 # --------------------------------------------------------------------------
 
 HEADER_ALIASES = {
-    "line_no": ["行号", "序号", "编号", "项次", "line", "line_no", "line no", "no", "no.", "#", "item", "item no", "item_no"],
+    "line_no": ["行号", "序号", "编号", "项次", "line", "line_no", "line no", "no", "no.", "#", "item", "item no", "item_no", "id"],
     "mpn": [
         "型号", "料号", "物料编码", "器件型号", "规格型号", "mpn", "part", "part_number", "part number", "pn",
         "manufacturer part", "manufacturer_part", "manufacturerpart", "mfr part", "mfrpart", "mfg part", "mpn.",
@@ -43,6 +45,18 @@ HEADER_ALIASES = {
     "refs": ["位号", "参考位号", "位号/参考", "refs", "reference", "designator", "ref"],
     "critical": ["关键件", "关键", "critical", "criticality"],
     "brand": ["品牌", "厂商", "制造商", "brand", "mfr", "manufacturer"],
+    # 立创编号：嘉立创EDA 导出 BOM 的 `Supplier Part` 列，形如 C46749。
+    # 这是**唯一确定**物料身份的东西 —— 官方 BOM 规范写明「编号与 Comment/封装
+    # 冲突时以编号为准」，所以必须单独认出来，不能混进通用“编号”列。
+    "lcsc": [
+        "供应商编号", "供应商料号", "供应商零件编号", "供应商物料编号",
+        "立创编号", "立创商城编号", "立创元件编号", "立创料号",
+        "嘉立创编号", "嘉立创元件编号", "嘉立创料号", "嘉立创BOM编号",
+        "supplier part", "supplierpart", "supplier part no", "supplier part number",
+        "lcsc", "lcsc part", "lcscpart", "lcsc part #", "lcscpart#", "lcsc part no",
+        "lcsc part number", "lcsc编号", "lcsc#",
+    ],
+    "supplier": ["供应商", "供应商名称", "供货商", "supplier", "vendor"],
     "substitute": ["替代", "替代策略", "可替代", "substitute", "substitution"],
     "note": ["备注", "说明", "note", "remark"],
 }
@@ -128,6 +142,9 @@ def parse_workbook(filename: str, raw: bytes) -> dict:
                 "brand": get("brand"),
                 "substitute": get("substitute"),
                 "note": get("note"),
+                # 立创编号必须是 C+数字；不符合就留空（不让 "无" / "-" / "N/A" 混进来）
+                "lcsc": lcsc.normalize_code(get("lcsc")),
+                "supplier": get("supplier"),
                 "raw": {_cell_text(h): _cell_text(r[i]) for i, h in enumerate(headers) if i < len(r) and _cell_text(h)},
             }
         )
@@ -630,6 +647,45 @@ def fmt_inductance(h):
     return f"{h * 1e9:g}nH"
 
 
+# 立创参数里哪些键值得并进选型参数。没列出的（芯片功耗、开关额定电压…）
+# 只留在 `lcsc.attrs` 里给人看，不进 params —— 否则摘要行会被电参数顶掉。
+_LCSC_PARAM_KEYS = {
+    ("passive", "resistor"): {"resistance_ohm", "power_w", "tolerance_pct", "voltage_v"},
+    ("passive", "capacitor"): {"capacitance_f", "voltage_v", "tolerance_pct"},
+    ("passive", "inductor"): {"inductance_h", "tolerance_pct"},
+    ("passive", "fuse"): {"current_a", "voltage_v"},
+    ("passive", "diode"): set(),
+    ("passive", "led"): set(),
+    ("passive", "bead"): set(),
+    ("connector", ""): {"pins", "pitch_mm"},
+}
+
+
+def _lcsc_param_keys(category: str, subtype: str) -> set:
+    return _LCSC_PARAM_KEYS.get((category, subtype or "")) or set()
+
+
+def _category_from_catalog(text: str) -> str:
+    """立创的品类路径（Passives / Resistors…）→ 我们的品类。
+
+    只在正则+位号都认不出来时兜底用；认不出返回空串，不硬塞。
+    """
+    t = str(text or "").lower()
+    if not t:
+        return ""
+    if re.search(r"resistor|capacitor|inductor|ferrite|diode|led|fuse|passive", t):
+        return "passive"
+    if re.search(r"connector|terminal|header|socket", t):
+        return "connector"
+    if re.search(r"mosfet|transistor|igbt", t):
+        return "power"
+    if re.search(r"integrated circuit|\bic\b|microcontroller|logic|op amp|amplifier", t):
+        return "ic"
+    if re.search(r"module|bluetooth|wifi", t):
+        return "module"
+    return ""
+
+
 def classify(text: str) -> str:
     t = (text or "").lower()
     # 封装写的是「测试点」：名称多半只是网络名（MCU STATUS / VBAT ADC），
@@ -1003,8 +1059,47 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
         if _pn_like(first):
             mpn = first.strip()
 
+    # ------------------------------------------------------------------
+    # 立创编号（嘉立创 BOM 的 `Supplier Part` 列，形如 C46749）
+    # ------------------------------------------------------------------
+    # 官方口径：编号与 Comment/封装 冲突时**以编号为准**，因为编号是唯一标识。
+    # 我们采纳编号能解析出来的事实（型号/封装/参数/库存），但**绝不**用模糊搜索
+    # 去改设计值 —— 名称列写 470，被搜索结果改成 4.7kΩ，那叫换规格不叫换词。
+    lcsc_info = row.get("lcsc_info") if isinstance(row.get("lcsc_info"), dict) else None
+    lcsc_model_note = ""
+    if lcsc_info:
+        _lcode = str(lcsc_info.get("code") or "").strip()
+        _lmodel = str(lcsc_info.get("model") or "").strip()
+        if _lmodel and mpn and lcsc.normalize_model(mpn) != lcsc.normalize_model(_lmodel):
+            lcsc_model_note = (
+                f"型号列写 {mpn}，立创编号 {_lcode or '—'} 对应 {_lmodel}，"
+                f"已按编号采购，请核对原理图"
+            )
+            mpn = _lmodel
+        elif _lmodel and not mpn:
+            mpn = _lmodel
+        if not package:
+            package = parse_package(str(lcsc_info.get("package") or "")) or str(lcsc_info.get("package") or "")
+        if category == "other":
+            _lc_cat = _category_from_catalog(
+                " ".join(
+                    [str(lcsc_info.get("catalog") or "")]
+                    + [str(x) for x in (lcsc_info.get("catalog_path") or [])]
+                )
+            )
+            if _lc_cat:
+                category = _lc_cat
+
     params = parse_params(" ".join([combined, mpn]), category)
     subtype = _passive_subtype(refs, combined + " " + desc, category)
+    # 编号给的参数比正则从字符串里猜的可靠，但只补**跟选型有关**的那几项：
+    # 芯片的「耗散功率 0.7W」、开关的「额定电压 12V」既不参与选型，还会把
+    # 摘要行（params_text）从「CD4511BE」变成「0.7W」——那是倒退。
+    if lcsc_info:
+        _allowed = _lcsc_param_keys(category, subtype)
+        for _k, _v in (lcsc_info.get("params") or {}).items():
+            if _k in _allowed and _k not in params and _v is not None:
+                params[_k] = _v
     # 名称列（Altium 的 Name/Comment）才是原理图上的设计值：470 / 2.2K / 5kΩ / 10nF。
     # Manufacturer Part 常常是从库里复制过来、忘了改的旧型号 —— 实测一份 BOM 里
     # 5kΩ、470Ω、2.2K 三行的型号全是 MF1/4W-1KΩ±1%T52，按型号解析会把三条线
@@ -1024,10 +1119,37 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
             elif not _value_match(float(_old), float(_dv[_key]), 0.005):
                 params[_key] = _dv[_key]
                 if not value_conflict:
+                    # 有立创数据时把「立创说这颗料是多少」一起写进提示：
+                    # 光说「型号对应 1kΩ」用户还得自己查，带上编号才叫证据。
+                    _ev = ""
+                    _lv = ((lcsc_info or {}).get("params") or {}).get(_key)
+                    if _lv is not None:
+                        _src = (lcsc_info or {}).get("code") or (lcsc_info or {}).get("model") or "立创"
+                        _ev = f"（立创 {_src} 也是 {_fmt_param_value(_key, _lv)}）"
                     value_conflict = (
-                        f"名称列写 {desc}，型号对应 {_fmt_param_value(_key, _old)}，"
+                        f"名称列写 {desc}，型号对应 {_fmt_param_value(_key, _old)}{_ev}，"
                         f"两者冲突，已按名称列采购，请核对原理图"
                     )
+    # 名称列 vs 立创：设计值已经落定后，再拿立创的事实核对一遍。
+    # 实测一份 BOM 里 #4 是 10nF（C2832505），#7 名称写 100nF 却复用了同一个型号 ——
+    # 这种「同一型号两个设计值」必须报出来，否则就是照着错型号买对数量。
+    if lcsc_info and category == "passive" and not value_conflict:
+        for _key in ("resistance_ohm", "capacitance_f", "inductance_h"):
+            _lv = (lcsc_info.get("params") or {}).get(_key)
+            _fv = params.get(_key)
+            if _lv is None or _fv is None:
+                continue
+            if _value_match(float(_fv), float(_lv), 0.005):
+                continue
+            _src = lcsc_info.get("code") or lcsc_info.get("model") or "立创"
+            _by = str(lcsc_info.get("matched_by") or ("code" if lcsc_info.get("code") else "model"))
+            _how = "立创编号" if _by == "code" else "立创同型号商品"
+            value_conflict = (
+                f"BOM 名称列写 {desc or '—'}，但{_how} {_src} 是 "
+                f"{_fmt_param_value(_key, _lv)}，两者对不上；"
+                f"已按名称列采购，请核对原理图后改 BOM"
+            )
+            break
     # 保险丝的额定电流就是它的规格。不给它一个数值参数，SKU 选择就只能「保留页面默认」，
     # 结果 8A 的位子买成了 0.25A —— 比买贵更糟，是买错。
     if subtype == "fuse" and "current_a" not in params:
@@ -1066,10 +1188,18 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
     status = "needs_user" if blocking else "ready"
 
     gates = _build_gates(category, package, params, mpn, subtype)
+    # 立创会直接写「连接器类型 = Type-C / 触点数量 = 2P」。这是判断
+    # 「KH-TYPE-C-2P 买成 VH3.96 二针座」那类错货的硬依据，单独列成一条闸门。
+    if lcsc_info and category == "connector":
+        _ct = str((lcsc_info.get("attrs") or {}).get("连接器类型") or "").strip()
+        if _ct and _ct != "-":
+            gates.append(f"连接器类型 = {_ct}（立创核准）")
     queries = _build_queries(category, package, params, mpn, desc, row.get("brand"), subtype)
     risks = _build_risks(category, package, params, mpn, gates)
     if value_conflict:
         risks.append({"code": "V01", "text": value_conflict})
+    if lcsc_model_note:
+        risks.append({"code": "V02", "text": lcsc_model_note})
 
     badge = {
         "line_no": row.get("line_no") or fallback_no,
@@ -1085,6 +1215,24 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
         "params_text": params_text(category, params) or desc or mpn,
         "design_value": design_value or None,
         "value_conflict": value_conflict or None,
+        # 立创核准：编号→型号/品牌/封装/库存/参数原文，页面用来显示「已按立创核准」
+        "lcsc": (
+            {
+                "code": lcsc_info.get("code") or "",
+                "model": lcsc_info.get("model") or "",
+                "brand": lcsc_info.get("brand") or "",
+                "package": lcsc_info.get("package") or "",
+                "desc": lcsc_info.get("desc") or "",
+                "stock": lcsc_info.get("stock"),
+                "packet": lcsc_info.get("packet") or "",
+                "unit": lcsc_info.get("unit") or "",
+                "attrs": lcsc_info.get("attrs") or {},
+                "datasheet": lcsc_info.get("datasheet") or "",
+                "matched_by": lcsc_info.get("matched_by") or ("code" if lcsc_info.get("code") else "model"),
+            }
+            if isinstance(lcsc_info, dict)
+            else None
+        ),
         "qty": qty,
         "refs": str(row.get("refs") or "").strip(),
         "criticality": "critical" if critical else "normal",
@@ -1180,6 +1328,10 @@ _CONN_SERIES = (
     (re.compile(r"jst[_\- ]?sh|\bsh\s*1\.0", re.I), "SH"),
     (re.compile(r"jst[_\- ]?eh|\beh\s*2\.5|eh2\.5", re.I), "EH"),
     (re.compile(r"jst[_\- ]?gh|\bgh\s*1\.25", re.I), "GH"),
+    (re.compile(r"type\s*-?\s*c(?![a-z0-9])|usb\s*-?\s*c(?![a-z0-9])", re.I), "TYPE-C"),
+    (re.compile(r"micro\s*-?\s*usb", re.I), "MICRO-USB"),
+    (re.compile(r"mini\s*-?\s*usb", re.I), "MINI-USB"),
+    (re.compile(r"usb\s*-?\s*a(?![a-z0-9])", re.I), "USB-A"),
     (re.compile(r"pinsocket|pin_socket|排母|母座|母头", re.I), "排母"),
     (re.compile(r"pinheader|pin_header|header_\d|排针|针座", re.I), "排针"),
     (re.compile(r"terminalblock|terminal_block|mkds|kf128|端子台|接线端子|螺钉端子", re.I), "端子台"),
@@ -1298,6 +1450,10 @@ def _build_queries(category, package, p, mpn, desc, brand, subtype=""):
                 q.append(f"{mpn} 贴片")
         if pkg and val:
             q.append(f"{pkg} {val}{tol} {kind}".strip())
+            # 电容的耐压是硬门槛：22µF 搜出来一堆 16V，装上去会爆。
+            # 立创核准过的耐压直接写进搜索词，能砍掉大半错货。
+            if "capacitance_f" in p and p.get("voltage_v"):
+                q.append(f"{pkg} {val} {p['voltage_v']:g}V {kind}".strip())
             if pkg == "插件":
                 q.append(f"{val} 直插{kind}".strip())
             else:
@@ -1352,6 +1508,13 @@ def _build_queries(category, package, p, mpn, desc, brand, subtype=""):
             ptxt = f"{pitch:g}mm" if pitch else "2.54mm"
             q.append(f"{ptxt} {series} {pin_txt}".strip())
             q.append(f"单排{series} {ptxt} {pin_txt}".strip())
+        elif series in ("TYPE-C", "MICRO-USB", "MINI-USB"):
+            # USB 座有公头/母座之分，只搜「TYPE-C」会出来一堆公头和线材。
+            # 板子上焊的都是母座，这条限定词必须带。
+            if part:
+                q.append(part)
+            q.append(f"{series} 母座 {pin_txt}".strip())
+            q.append(f"{series} {pin_txt} 连接器".strip())
         elif series == "端子台":
             ptxt = f"{pitch:g}mm" if pitch else ""
             q.append(" ".join(b for b in (ptxt, "端子台", pin_txt) if b))

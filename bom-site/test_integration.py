@@ -29,6 +29,9 @@ sys.path.insert(0, str(BASE))
 # 批量进度。不隔离就会把用户真实的 batch-progress.json / batch-lines.json
 # 覆盖成 1 行假数据（2026-11-11 实测踩到），下次真跑会被当成「已完成」空跑。
 os.environ["TAOBAO_RUNS_DIR"] = tempfile.mkdtemp(prefix="bom-test-runs-")
+# 分析接口会顺手查立创商城补权威规格。测试不打外网：置离线后只读本地缓存，
+# 缓存也是空的，等于完全不联网，结果只取决于规则引擎。
+os.environ["LCSC_OFFLINE"] = "1"
 
 import engine  # noqa: E402
 import taobao_runner as tr  # noqa: E402

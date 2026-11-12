@@ -47,7 +47,7 @@ pip install -r requirements.txt
 启动BOM选型台.bat      ← 第 2 步：自检 → 后台起服务 → 打开界面
 ```
 
-三个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.9.1）。
+三个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.9.3）。
 
 打开 <http://127.0.0.1:8765/>。
 
@@ -105,9 +105,10 @@ bom-site/                     本地网站与调度
   server.py                   HTTP 服务（127.0.0.1:8765）
   engine.py                   BOM 解析 + 选型规则 + 候选打分
   taobao_runner.py            批量调度、SKU 决策、加购确认、对账
+  lcsc.py                     立创商城器件查询（编号/型号 → 权威规格）
   window_pos.py               调试浏览器窗口显隐（跑批时不抢前台）
   static/                     前端（无框架）
-  test_*.py                   638 项断言（10 套纯 Python 测试）
+  test_*.py                   717 项断言（11 套纯 Python 测试）
   samples/                    示例 BOM / 候选
 Taobao-Search-Skill/scripts/  淘宝执行层（Playwright over CDP）
 taobao-bom-procurement/       决策层 SKILL 文档
@@ -120,21 +121,22 @@ VERSION                       当前版本号
 ```bash
 cd bom-site
 python test_engine.py                 # 176 项：解析与规则
+python test_lcsc.py                    #  77 项：立创编号解析与型号核准
 python test_sku_selection.py            #  73 项：SKU 选择与门禁
 python test_runner.py                   # 148 项：调度、对账、进度、续跑
 python test_verification_recovery.py    #  27 项：验证/风控恢复
 python test_window_focus.py            #  58 项：窗口显隐与不抢前台
 python test_click_guard.py              #  14 项：点击三守卫
 python test_cart_cleanup.py             #  24 项：精准清车不误删
-python test_batch_progress_guard.py     #  40 项：换 BOM 不误用上一批进度
+python test_batch_progress_guard.py     #  59 项：换 BOM 不误用上一批进度、重跑语义、引擎升级不误判换表
 python test_procurement_guard.py        #  37 项：采购正确性（设计值/单价/候选降级）
 python test_integration.py             #  24 项：假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
 ```
 
-以上 10 套共 638 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+以上 11 套共 717 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
 另有 `python test_http.py`：需要服务**已经在 8765 跑着**，只做 HTTP 冒烟打印，不断言，故不进 CI。
 所有测试都把批量进度隔离到临时目录，不会碰到 `runs/` 里的真实进度。
-GitHub Actions 在 Windows runner 上跑 10 套测试 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。
+GitHub Actions 在 Windows runner 上跑 11 套测试 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。
 
 ## 常见问题
 
@@ -154,6 +156,7 @@ GitHub Actions 在 Windows runner 上跑 10 套测试 + 启动器语法/体检�
 | 换了一份新 BOM 再点加购 | 会按 BOM 指纹识别出「不是上一批」，旧进度自动作废、从头跑；上一批的加购记录仍保留，「删上次加购的」照常可用 |
 | 买到的阻值/型号不对，或单价离谱 | 名称列（`Name`/`Comment`）是设计值时优先按它买，型号复用错会记 `V01` 风险提示；每只单价超过品类常见价（电阻 ¥2、电容 ¥6、开关 ¥15）直接不买；评分 20 分以下、或单规格商品标题核实不到规格的候选也不会自动加购。这类行会停在「失败」并写明原因，交人工挑 |
 | 想重跑上一批，结果提示「已跑过」并跳过 | 按钮按情况自动切换：全部跑完时显示「重新跑全部」（走 `redo`，清空进度从头跑）；有失败/待核对行时旁边出现「重跑问题行 N」（只重跑这几行，已成功的仍跳过）。重跑会重复加购，所以先点「删除上一批」清购物车 —— 进度清掉后仍可用，因为清之前会留一份底档 |
+| 嘉立创EDA 导出的 BOM，怎么保证买对 | 每行都带立创编号（`Supplier Part` 列，形如 `C46749`），分析时会拿编号去立创商城换回**权威规格**（型号/品牌/封装/阻值/耐压/精度/库存），页面每行显示「立创编号核准」和参数原文。没有编号的行用完整型号精确匹配（型号完全一致才认，模糊命中一律放弃）。名称列与立创数据打架时记 `V01`（例：名称写 100nF，型号却是 10nF 的料），型号列与编号打架时记 `V02` 并以编号为准 —— 官方规则就是「编号为准」 |
 
 ## 可调参数（环境变量）
 

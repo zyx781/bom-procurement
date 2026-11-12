@@ -29,6 +29,7 @@ jobs:
         working-directory: bom-site
         run: |
           python test_engine.py
+          python test_lcsc.py
           python test_sku_selection.py
           python test_runner.py
           python test_verification_recovery.py

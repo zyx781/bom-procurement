@@ -171,12 +171,16 @@ def batch_fingerprint(lines: list) -> str:
     收尾对账又拿旧候选商品去购物车里找，19 行全降级成「待核对」。
     指纹只取 BOM 身份字段，不含候选/价格/搜索词（那些会随引擎版本变化，
     同表重跑却变了指纹会导致重复加购）。
+
+    2026-11-12：`decision.headline` 也一并剔掉了。那是引擎算出来的展示文案，
+    一改选型规则（比如接入立创核准、改了摘要格式）它就变，用户没换表却被告知
+    「BOM 已更换，旧进度作废」—— 和本函数「只认 BOM 身份」的初衷正相反。
+    BOM 换没换，看型号/名称/封装/参数/数量这几列就够了。
     """
     parts = []
     for ln in lines or []:
         if not isinstance(ln, dict):
             continue
-        dec = ln.get("decision") or {}
         parts.append(
             "\x1f".join(
                 [
@@ -186,7 +190,6 @@ def batch_fingerprint(lines: list) -> str:
                     str(ln.get("package") or "").strip(),
                     str(ln.get("params") or "").strip(),
                     str(ln.get("qty") or ""),
-                    str(dec.get("headline") or "").strip(),
                 ]
             )
         )

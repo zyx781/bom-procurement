@@ -681,11 +681,90 @@ runner.send = lambda *a, **k: {"data": {"rows_degraded": False,
 check("标题命中 → True", runner._cart_contains("0603贴片电阻 10KΩ ±1% (100只)")[0] is True)
 check("前缀命中也算", runner._cart_contains("0603贴片电阻10KΩ±1%")[0] is True)
 check("车里没有 → False", runner._cart_contains("完全不存在的型号XYZ")[0] is False)
+check("同封装不同阻值不算命中", runner._cart_contains("0603贴片电阻 1KΩ ±1%")[0] is False)
 runner.send = lambda *a, **k: {"data": {"rows_degraded": True, "rows": []}}
 check("明细降级 → None（不下结论）", runner._cart_contains("任意商品")[0] is None)
+runner.send = lambda *a, **k: {"data": {"rows_degraded": False, "rows": [], "cart_item_count": 0}}
+check("购物车读成空 → None（不能当没加上）", runner._cart_contains("任意商品")[0] is None)
 runner.send = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
 check("会话出错 → None", runner._cart_contains("任意商品")[0] is None)
 runner.send = _bak_send2
+
+print("== 标题比对：规格原子而不是字符串相似度（2026-11-12） ==")
+# 「0603 10kΩ」和「0603 1kΩ」相似度 0.96，纯相似度必然误判，所以按料号/封装/值比。
+_SAME_TITLES = [
+    ("0603贴片电阻 10KΩ ±1% (100只)", "0603贴片电阻10KΩ±1%100只"),
+    ("贴片电阻 0603 10KΩ ±1%", "0603贴片电阻 10KΩ ±1% 100只"),
+    ("1N5819W SOD-123 二极管", "1N5819W S4 B5819WS SOD-123 肖特基二极管"),
+    ("AMS1117-3.3 SOT-223", "AMS1117-3.3V 1117稳压电源芯片 sot-223"),
+]
+_DIFF_TITLES = [
+    ("0603贴片电阻 10KΩ ±1%", "0603贴片电阻 1KΩ ±1%"),
+    ("0805贴片电容 47uF 25V X5R", "0805贴片电容 47nF 25V X5R"),
+    ("XH2.54-6P 连接器", "PH2.0-6P 连接器"),
+    ("SS34 SMA 二极管", "SS14 SMA 二极管"),
+    ("0603 10kΩ 电阻", "0805 10kΩ 电阻"),
+    ("0603 10kΩ ±1% 1/4W", "0603 10kΩ ±1% 1/8W"),
+    ("0603 100nF 50V X7R", "0603 100nF 100V X7R"),
+]
+for _a, _b in _SAME_TITLES:
+    check(f"同款认得出：{_a[:12]}…", tr._titles_match(_a, _b), (_a, _b))
+for _a, _b in _DIFF_TITLES:
+    check(f"不同款分得开：{_a[:12]}…", not tr._titles_match(_a, _b), (_a, _b))
+check("4K7 夹点写法认成 4.7k", tr._spec_atoms("4K7 0603")["resistance"] == {4700.0},
+      tr._spec_atoms("4K7 0603"))
+check("1/4W 不被记成 4W", 4.0 not in tr._spec_atoms("1/4W 470R 0603")["power"],
+      tr._spec_atoms("1/4W 470R 0603"))
+
+print("== 收尾对账：读车异常时不再整车降级（2026-11-12） ==")
+# 现场：19 行 18 行被「购物车里没找到」降级。真相更可能是车被清空/没渲染完，
+# 不是 18 行同时加购失败 —— 所以要判「读车异常」，保留 ok 但标「未核实」。
+
+
+def _mk_ok(n):
+    return [{"line_no": i + 1, "status": "ok", "message": "已加入购物车",
+             "candidate": {"title": f"物料{i + 1} 0603 {i + 1}kΩ"}, "cost": 1.0}
+            for i in range(n)]
+
+
+_bak_batch_rc = runner._batch
+runner._batch = {"results": _mk_ok(18)}
+runner._reconcile_cart({"rows": [], "rows_degraded": False, "cart_item_count": 0, "cart_empty": True})
+_rc0 = runner._batch.get("reconcile") or {}
+check("空车判为读车异常", _rc0.get("anomaly") is True, _rc0)
+check("空车不降级任何一行", _rc0.get("downgraded") == [], _rc0)
+check("空车后 18 行仍为 ok", all(x["status"] == "ok" for x in runner._batch["results"]))
+check("空车给每行打 cart_unverified", all(x.get("cart_unverified") for x in runner._batch["results"]))
+check("message 写明未核实", "未核实" in runner._batch["results"][0]["message"],
+      runner._batch["results"][0].get("message"))
+
+runner._batch = {"results": _mk_ok(6)}
+runner._reconcile_cart({"rows": [{"title": "完全无关的商品 A"}, {"title": "完全无关的商品 B"}],
+                        "rows_degraded": False, "cart_item_count": 2})
+_rc1 = runner._batch.get("reconcile") or {}
+check("整批都不匹配 → 判异常", _rc1.get("anomaly") is True, _rc1)
+check("整批都不匹配 → 不降级", _rc1.get("downgraded") == [], _rc1)
+
+runner._batch = {"results": _mk_ok(10)}
+runner._reconcile_cart({"rows": [{"title": "物料1 0603 1kΩ"}],
+                        "rows_degraded": False, "cart_item_count": 1})
+_rc2 = runner._batch.get("reconcile") or {}
+check("匹配率 10% → 判异常", _rc2.get("anomaly") is True, _rc2)
+check("匹配率 10% → 不降级", _rc2.get("downgraded") == [], _rc2)
+
+# 个别行对不上时维持原语义：只降级那几行
+runner._batch = {"results": _mk_ok(6)}
+runner._reconcile_cart({"rows": [{"title": "物料1 0603 1kΩ"}, {"title": "物料2 0603 2kΩ"},
+                                 {"title": "物料3 0603 3kΩ"}, {"title": "物料4 0603 4kΩ"},
+                                 {"title": "物料6 0603 6kΩ"}],
+                        "rows_degraded": False, "cart_item_count": 5})
+_rc3 = runner._batch.get("reconcile") or {}
+check("匹配率 5/6 → 不算异常", _rc3.get("anomaly") is False, _rc3)
+check("只降级对不上的第 5 行",
+      [x["line_no"] for x in runner._batch["results"] if x["status"] == "uncertain"] == [5],
+      [x["status"] for x in runner._batch["results"]])
+check("记录了 matched 数", _rc3.get("matched") == 5, _rc3)
+runner._batch = _bak_batch_rc
 
 print("== 开跑前购物车预检（2026-11-11） ==")
 _bak_send3 = runner.send
@@ -732,6 +811,11 @@ check("表头 10 列", len(_rows[0]) == 10, _rows[0])
 check("ok 行字段齐全", _rows[1][0] == "3" and _rows[1][6] == "1.28" and _rows[1][7] == "xhr", _rows[1])
 check("备注里的换行被压平", "\n" not in _rows[1][9], _rows[1][9])
 check("pending 行不导出", all(r[0] != "5" for r in _rows[1:]), _rows)
+# 对账没做成的行：确认方式列不能留空（空值会被当成「没有确认方式」而不是「没核实」）
+_unv_rows = tr.batch_export_rows(
+    [{"line_no": 7, "status": "ok", "cart_unverified": True, "headline": "X", "message": "未核实"}]
+)
+check("未核实行导出写进确认方式列", "未核实" in _unv_rows[1][7], _unv_rows[1])
 
 print("== 续跑行带 SKU / 不覆盖进度（2026-11-11） ==")
 # 以前 resume 时只把金额搬回来，SKU 和 cart_verified_via 丢了 —— 界面上那条记录

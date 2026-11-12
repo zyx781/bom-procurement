@@ -3,7 +3,7 @@ name: taobao-bom-procurement
 description: 把硬件 BOM（CSV/Excel：型号、数量、封装、参数、位号）蒸馏为逐行采购意图，驱动本地已登录的淘宝会话（Taobao-Search-Skill v4 session 模式）完成搜索、候选评估、SKU 匹配与加购；结算与付款永远由人工完成。当用户上传 BOM 并要求「按 BOM 采购 / 配单 / 询价 / 比价 / 加购物车 / 找替代料」，或提到阻容感、MCU、功率器件、连接器等电子元器件采购时使用。禁止自动支付、模拟登录、Cookie 劫持、验证码绕过与平台风控规避。
 ---
 
-# 淘宝 BOM 采购（决策层 Skill）v0.9.3
+# 淘宝 BOM 采购（决策层 Skill）v0.9.4
 
 > **绑定实现**：执行层 Taobao-Search-Skill v4.0.0（`scripts/taobao.py` session 模式）
 > ＋ 决策引擎 `bom-site/engine.py`（`ENGINE_VERSION = "0.1.0"`）
@@ -837,10 +837,16 @@ select-sku → final_price（选完 SKU 的每份价）
   `querybagcount` 等**查询**接口不算证据；三处都没有 → `CART_UNCONFIRMED`
   （批量侧记 `uncertain`，不再换候选重试，因为已经点过会重复加购）。
   「点了就算成功」的 `via="click"` 兜底已删除。
-- 批量收尾**对账**：读一次 `cart-view`，把每个 `ok` 行的候选标题和购物车实际行
-  比对，找不到 → 降级 `uncertain` 并写「收尾对账：购物车里没找到该商品」；
-  结果记进 `batch.reconcile`（`checked/downgraded/cart_rows/cart_degraded`）。
+- 批量收尾**对账**：读一次 `cart-view`，把每个 `ok` 行的商品和购物车实际行比对。
+  比对**不靠标题相似度**，靠规格原子（§19.3.2）；找不到 → 降级 `uncertain` 并写
+  「收尾对账：购物车里没找到该商品」；结果记进 `batch.reconcile`
+  （`checked/matched/downgraded/cart_rows/cart_degraded/anomaly`）。
   明细 `degraded` 时不降级（宁可不冤枉），只记 skipped。
+- **读车异常保护**：整批都没匹配上（≥5 行检查且 0 命中）、匹配率过低（≥8 行且 <35%）、
+  购物车读成空行、或抓到的行全没有标题时，判定为「读车异常」而不是「N 行同时失败」：
+  `ok` 行**保持 ok** 并打 `cart_unverified=true`，message 写明「未核实，请人工核对」，
+  `reconcile.anomaly=true` + `anomaly_reason`。理由：18 行同时加购失败的概率远低于
+  「车被清空 / 页面没渲染完 / 选择器抓空」，逐行降级会把「买成了」和「没买成」显示成一个样。
 - `uncertain` 行也会对账：找到就记 `cart_found=true`、message 补「购物车里找到该商品」
   （**状态仍是 uncertain**，不伪装成 ok）；统计在 `batch.reconcile.uncertain_found`。
 - 加购确认的观察窗是 550 ms，没信号时再补看 1.2 s（角标 +1 也作数）——
@@ -848,8 +854,26 @@ select-sku → final_price（选完 SKU 的每份价）
 - 演练（`dry_run=true`）**不跑**收尾对账：本来就不点加购，车上当然找不到。
 - 加购**无回执**时不再直接落 uncertain：先查购物车三态判定 —— 有（记 ok，
   `cart_verified_via="cart_check"`）/ 没有（明细可信才重试一次）/ 读不到（保持 uncertain）。
+  **购物车读成 0 行也算「读不到」**（返回 `None` 而不是 `False`）：读车失败时重试等于重复下单。
 - 点击守卫：`CART_CLICK_BLOCKED` = 按钮禁用或被弹层遮挡（Esc 后重点一次仍失败），
   此时**什么都没加进去**，允许换候选；`CART_FULL` 不重试。
+
+### 19.3.2 「车里的是不是这件」怎么判（标题比对口径）
+
+搜索结果标题和购物车标题经常被打乱、截断、加包装后缀；而 `0603 10kΩ` 与 `0603 1kΩ`
+的字符串相似度高达 **0.96** —— 纯相似度必然误判。所以先抽**规格原子**再比：
+
+| 原子 | 抽取方式 | 冲突时 |
+|---|---|---|
+| 料号 | 保留分隔符后 `[a-z0-9]{4,}` 且同时含字母+数字；剔掉封装代号与纯参数值（`100nf`/`100v`/`10k`） | 交集非空 → 直接判同一件 |
+| 封装 | `0603/0805/SOT-23/SOD-123/SMA/QFN…` | 两边都有且无交集 → 判不同 |
+| 阻值 | `10kΩ / 4K7 / 2R2 / R24 / 100R / 裸 10k` | 两边都有且无交集 → 判不同 |
+| 容值/感值/耐压/功率/电流/频率/针数/间距 | 数字+单位归一（`100nF` / `15uH` / `50V` / `1/4W` / `6P` / `2.54mm`） | 同上 |
+| 介质代码 | `C0G/NP0/X7R/X5R…` 先剔除（否则 `X7R` 会被当成 7Ω） | 不参与 |
+
+判定顺序：料号交集 → 任一单位冲突则否 → 封装冲突则否 → 主规格（阻/容/感）相等则是 →
+最后才退回「短标题完整出现在长标题里」（≥6 字）。`_titles_match()` 是唯一入口，
+`_cart_contains()`（加购回执补查）与 `_reconcile_cart()`（收尾对账）共用。
 
 ### 19.4 `cart-remove` 错误码（I5）
 

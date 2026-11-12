@@ -1163,13 +1163,17 @@
           : "";
         const tries = (r.attempts || []).length > 1 ? `试了 ${r.attempts.length} 个候选` : "";
         const sub = [r.message, sku, tries].filter(Boolean).join(" ｜ ");
+        // 收尾对账没做成（读车异常）时保留「已加购」，但要一眼能看出「未经核实」
+        const unv = r.cart_unverified
+          ? '<span class="bunv" title="收尾对账没做成（购物车没读对），请到购物车核对这一行">未核实</span>'
+          : "";
         // 有实付金额就显示合计（买的份数 × 每份价），否则退回候选标价
         const money =
           r.cost != null
             ? `<b>${fmtMoney(r.cost)}</b>${unit ? `<span class="bsub">${esc(unit)}</span>` : ""}`
             : `${esc(price)}${unit ? `<span class="bsub">${esc(unit)}</span>` : ""}`;
         return `<div class="brow ${cls}">
-          <span class="bst">${BATCH_LABEL[r.status] || esc(r.status || "")}</span>
+          <span class="bst">${BATCH_LABEL[r.status] || esc(r.status || "")}${unv}</span>
           <span class="bbody">
             <span class="bt">#${esc(r.line_no)} ${esc(r.headline || "")} ${esc(qty)}</span>
             <span class="bs">${esc(sub || "等待中…")}</span>
@@ -1215,8 +1219,14 @@
       const skipped = (st.results || []).filter((r) => r.status === "skipped").length;
       const failed = (st.results || []).filter((r) => r.status === "failed").length;
       const aside = [skipped ? `跳过 ${skipped} 行` : "", failed ? `失败 ${failed} 行` : ""].filter(Boolean).join("、");
+      // 收尾对账没做成：先说清楚「这次没核实」，再报结果，别让人以为都核对过了
+      const rec = st.reconcile || {};
+      const unverified = (st.results || []).filter((r) => r.cart_unverified).length;
+      const warn = rec.anomaly
+        ? `⚠ 收尾对账没做成（${rec.anomaly_reason || "购物车没读对"}），${unverified} 行标了「未核实」，请到购物车核对；`
+        : "";
       $("#batch-note").textContent =
-        `上次批量：已加购 ${okn} 行${money}${aside ? `，${aside}` : ""}` +
+        `${warn}上次批量：已加购 ${okn} 行${money}${aside ? `，${aside}` : ""}` +
         `${st.stopped_reason ? "（" + st.stopped_reason + "）" : ""}${tail}`;
     } else if (st.progress && st.progress.ok_count > 0) {
       const money = st.cost_total ? `，合计 ${fmtMoney(st.cost_total)}` : "";

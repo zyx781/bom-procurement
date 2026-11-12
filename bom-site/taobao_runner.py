@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 import urllib.request
 from collections import deque
 from datetime import datetime
@@ -529,6 +530,11 @@ TOLERANCE_DEMOTE_RATIO = float(os.environ.get("TAOBAO_TOL_DEMOTE_RATIO", "3"))
 TOLERANCE_PRECISION_PCT = float(os.environ.get("TAOBAO_TOL_PRECISION", "0.5"))
 TOLERANCE_PRECISION_VETO = os.environ.get("TAOBAO_TOL_PRECISION_VETO", "1") not in ("0", "false", "False")
 
+# 收尾对账的「读车异常」判据：全批都没匹配上，更可能是购物车没读对，
+# 不是 N 行同时加购失败。达到下面任一条就只标「未核实」，不逐行降级。
+RECONCILE_MIN_CHECK = max(2, int(os.environ.get("TAOBAO_RECONCILE_MIN", "5")))
+RECONCILE_MIN_RATIO = float(os.environ.get("TAOBAO_RECONCILE_RATIO", "0.35"))
+
 DEFAULT_TIMEOUTS = {
     "ping": 20,
     "search": 90,
@@ -540,6 +546,159 @@ DEFAULT_TIMEOUTS = {
     "screenshot": 60,
     "dom": 60,
 }
+
+
+# --------------------------------------------------------------------------
+# 「购物车里的是不是这件东西」——标题比对
+# 搜索结果标题和购物车标题经常被打乱/截断/加后缀，纯字符串相似度分不开
+# 「0603 10kΩ」和「0603 1kΩ」（相似度 0.96，却是两种料）。所以先抽规格原子：
+# 料号 / 封装 / 阻值 / 容值 / 感值 / 耐压 / 功率 / 电流 / 频率 / 针数 / 间距，
+# 单位相同的原子**必须相等**（冲突直接判不同），再退回「封装+值+包含关系」。
+# --------------------------------------------------------------------------
+
+_KEY_PUNCT = re.compile(
+    r"[\s\-_/\\、,，。;；:：!！?？'\"“”‘’()（）\[\]【】{}<>《》*×~·|+&^%$#@=]+"
+)
+_PKG_RE = re.compile(
+    r"(?<![0-9a-z])(0201|0402|0603|0805|1206|1210|1812|2010|2512|sot-23|sot23|sod-123|sod123|"
+    r"sma|smb|smc|smd|dpak|to-252|to-220|sop-8|soic-8|tssop|qfn|dfn|lqfp|vqfn|tdson|"
+    r"bga|dip|插件|直插)(?![0-9a-z])"
+)
+_MPN_RE = re.compile(r"[a-z0-9]{4,}")
+# 介质代码（C0G/X7R/NP0…）是材质不是阻值：不剔掉的话 "X7R" 会被当成 7Ω
+_DIELECTRIC_RE = re.compile(r"(?:c0g|np0|npo|x5r|x6s|x7r|x8r|y5v|z5u)")
+# 这些「像料号」的片段其实是封装或参数值，不能当料号用（否则同封装不同料会误判）
+_PKG_TOKENS = {
+    "0201", "0402", "0603", "0805", "1206", "1210", "1812", "2010", "2512",
+    "sot23", "sod123", "sma", "smb", "smc", "smd", "dpak", "to252", "to220",
+    "sop8", "soic8", "tssop", "qfn", "dfn", "lqfp", "vqfn", "tdson", "bga", "dip",
+}
+_VALUE_TOKEN_RE = re.compile(r"^\d+(?:\.\d+)?(?:p|[pnuµmk]?[fvhar]|[km])$")
+
+# 值 + 单位：先按「数字前缀 + 单位后缀」抓，再换算成基准值（Ω/F/H/V/W/A/Hz/mm/针）
+_RES_UNIT = {"": 1.0, "k": 1e3}
+_VALUE_PATTERNS = {
+    "capacitance": re.compile(r"(?<![0-9.])(\d+(?:\.\d+)?)\s*([pnuµm]?)\s*f(?![a-z])", re.I),
+    "inductance": re.compile(r"(?<![0-9.])(\d+(?:\.\d+)?)\s*([pnuµm]?)\s*h(?![a-z])", re.I),
+    "voltage": re.compile(r"(?<![0-9.])(\d+(?:\.\d+)?)\s*v(?![a-z])", re.I),
+    "current": re.compile(r"(?<![0-9.])(\d+(?:\.\d+)?)\s*a(?![a-z])", re.I),
+    "frequency": re.compile(r"(?<![0-9.])(\d+(?:\.\d+)?)\s*(g|m|k)?hz", re.I),
+    "pins": re.compile(r"(?<![0-9.])(\d+)\s*p(?![a-z])", re.I),
+    "pitch": re.compile(r"(?<![0-9.])(\d+(?:\.\d+)?)\s*mm", re.I),
+}
+_VALUE_SCALE = {"": 1.0, "p": 1e-12, "n": 1e-9, "u": 1e-6, "µ": 1e-6, "m": 1e-3,
+                "k": 1e3, "K": 1e3, "M": 1e6, "g": 1e9}
+_FREQ_SCALE = {"": 1.0, "k": 1e3, "m": 1e6, "g": 1e9}
+
+
+def _norm_key(text: str) -> str:
+    """标题归一：全半角统一、去空白与标点、小写。"""
+    s = unicodedata.normalize("NFKC", str(text or "")).lower()
+    return _KEY_PUNCT.sub("", s)
+
+
+def _res_values(base: str) -> set:
+    """从（已小写、已去介质的）标题里抓所有阻值：4K7 / 2R2 / R24 / 100R / 10kΩ / 10k。"""
+    vals = set()
+    # 4K7 / 1R2 / 2M2 这类夹点写法（4.7k、1.2Ω、2.2M）
+    for a, unit, b in re.findall(r"(?<![0-9.])(\d+)([rkm])(\d+)(?![0-9])", base):
+        vals.add(round(float(f"{a}.{b}") * {"r": 1.0, "k": 1e3, "m": 1e6}[unit], 12))
+    # R24 = 0.24Ω
+    for v in re.findall(r"(?<![0-9a-z])r(\d{1,2})(?![0-9])", base):
+        vals.add(float("0." + v))
+    # 100R / 2.2R（R 当 Ω 用，淘宝最常见写法）
+    for v in re.findall(r"(?<![0-9.])(\d+(?:\.\d+)?)\s*r(?![0-9a-z])", base):
+        vals.add(float(v))
+    # 10kΩ / 100Ω / 100 ohm / 10K欧
+    for v, unit in re.findall(r"(?<![0-9.])(\d+(?:\.\d+)?)\s*([km]?)\s*(?:ω|Ω|欧|ohm)", base):
+        vals.add(round(float(v) * _RES_UNIT.get(unit, 1.0), 12))
+    # 裸 10k（标题常写「0603 10K 1%」）
+    for v, unit in re.findall(r"(?<![0-9.a-z])(\d+(?:\.\d+)?)\s*([km])(?![a-z0-9])", base):
+        vals.add(round(float(v) * _RES_UNIT.get(unit, 1.0), 12))
+    return vals
+
+
+def _spec_atoms(text: str) -> dict:
+    """从标题里抽「这件东西是什么」的原子：封装、料号、各项参数值。"""
+    raw = str(text or "")
+    # 原子必须在**保留分隔符**的文本上抽：去掉标点后 "1N5819W SOD-123" 会粘成
+    # 一个假料号 "1n5819wsod123"，跟另一条标题里的 "1n5819w" 就对不上了。
+    base = unicodedata.normalize("NFKC", raw).lower()
+    base = _DIELECTRIC_RE.sub(" ", base)
+    atoms = {
+        "packages": set(_PKG_RE.findall(base)),
+        "mpns": set(),
+        "power": set(),
+    }
+    for tok in _MPN_RE.findall(base):
+        # 料号：≥4 位、同时含字母和数字（纯数字是数量/封装，不能当料号）；
+        # 封装代号和「100nf / 100v / 47uf」这类纯参数值也要剔掉，
+        # 否则「0603 100nF 50V」和「0603 100nF 100V」会因为 100nf 相同而误判同一件。
+        if not (re.search(r"[a-z]", tok) and re.search(r"\d", tok)):
+            continue
+        if tok in _PKG_TOKENS or _VALUE_TOKEN_RE.match(tok):
+            continue
+        atoms["mpns"].add(tok)
+    # 1/4W、1/8W、100mW 统一成 W
+    for den in re.findall(r"(?<![0-9.])1\s*/\s*(\d+)\s*w", base):
+        atoms["power"].add(1.0 / float(den))
+    # 100mW / 0.5W（1/4W 已单独处理，这里排除「/4W」的尾巴，避免记成 4W）
+    for val, unit in re.findall(r"(?<![0-9./])(\d+(?:\.\d+)?)\s*(m?)w(?![a-z])", base):
+        atoms["power"].add(float(val) * (1e-3 if unit else 1.0))
+    res = _res_values(base)
+    if res:
+        atoms["resistance"] = res
+    for name, pat in _VALUE_PATTERNS.items():
+        vals = set()
+        for m in pat.finditer(base):
+            num = float(m.group(1))
+            # 只有「值+单位」这类模式才有第 2 组；针数/间距没有单位组
+            unit = (m.group(2) if m.re.groups > 1 else "") or ""
+            unit = str(unit).strip()
+            if name == "frequency":
+                vals.add(num * _FREQ_SCALE.get(unit.lower(), 1.0))
+            elif name in ("pins", "pitch"):
+                vals.add(num)
+            else:
+                vals.add(round(num * _VALUE_SCALE.get(unit, 1.0), 12))
+        if vals:
+            atoms[name] = vals
+    return atoms
+
+
+# 参与「冲突判定」的单位：两边都写了就必须相等，否则不是同一件东西
+_CONFLICT_UNITS = ("resistance", "capacitance", "inductance", "voltage", "power",
+                   "current", "frequency", "pins", "pitch")
+
+
+def _titles_match(a: str, b: str) -> bool:
+    """两条标题是不是同一件商品（同料号 / 同封装同规格 / 一个是另一个的片段）。"""
+    ka, kb = _norm_key(a), _norm_key(b)
+    if not ka or not kb:
+        return False
+    A, B = _spec_atoms(a), _spec_atoms(b)
+    # ① 料号级证据：最硬的判据（0603WAF1002T5E、1N5819W、AMS1117-3.3 …）
+    if A["mpns"] & B["mpns"]:
+        return True
+    # ② 单位相同但值不同 → 直接判不同（10kΩ vs 1kΩ 只差一个字符，相似度骗人）
+    for unit in _CONFLICT_UNITS:
+        va, vb = A.get(unit) or set(), B.get(unit) or set()
+        if va and vb and not (va & vb):
+            return False
+    # ③ 封装冲突（0603 vs 0805；XH 与 PH 这类不含数字的靠包含关系兜底）
+    pa, pb = A["packages"], B["packages"]
+    if pa and pb and not (pa & pb):
+        return False
+    # ④ 两边都写明了主规格（阻/容/感）且相等 → 认为是同一件
+    for unit in ("resistance", "capacitance", "inductance"):
+        va, vb = A.get(unit) or set(), B.get(unit) or set()
+        if va and vb and (va & vb):
+            return True
+    # ⑤ 最后一档：短的那条完整出现在长的里面（淘宝常把后缀/包装词截掉）
+    short, long = (ka, kb) if len(ka) <= len(kb) else (kb, ka)
+    if len(short) >= 6 and short in long:
+        return True
+    return False
 
 
 class SessionError(RuntimeError):
@@ -2280,11 +2439,11 @@ class SessionRunner:
     def _cart_contains(self, title: str) -> tuple[bool | None, str]:
         """购物车里有没有这个商品。
 
-        返回 (True/False/None, 原因)：None 表示明细读不到（降级/会话错），
-        这时候**不能**下「没加上」的结论，只能保持 uncertain。
+        返回 (True/False/None, 原因)。None = **判断不了**（明细降级、购物车读成空、
+        会话出错）。这一档很重要：上层拿到 False 会「再点一次加购」，而读车失败时
+        重试等于重复下单 —— 所以读不到就必须给 None，不能给 False。
         """
-        t = self._norm_title(title)
-        if not t:
+        if not str(title or "").strip():
             return None, "标题为空"
         try:
             cv = self.send({"cmd": "cart-view"}, timeout=120)
@@ -2293,62 +2452,102 @@ class SessionRunner:
         data = cv.get("data") or {}
         if data.get("rows_degraded"):
             return None, "购物车明细降级，无法确认"
-        for r in data.get("rows") or []:
-            rt = self._norm_title(r.get("title"))
-            if rt and (rt in t or t in rt):
+        rows = data.get("rows") or []
+        if not rows:
+            return None, "购物车里一行都没读到（可能没加上，也可能页面没渲染完）"
+        for r in rows:
+            if _titles_match(title, r.get("title")):
                 return True, ""
         return False, ""
 
     def _reconcile_cart(self, cart_data: dict) -> None:
-        """批量收尾对账：ok 行的候选标题必须在购物车行里找得到，否则降级 uncertain。
+        """批量收尾对账：ok 行的商品要能在购物车里找到，找不到才降级 uncertain。
 
-        淘宝同款同 SKU 会合并数量，所以「在不在车」看行不看件数；行抽不出来
-        （degraded）就不动结果，只记 warning —— 宁可虚高也不冤枉真加进去的行。
+        两条经验（2026-11-12 现场）：
+        1. 匹配不能只看「标题去空白取前 16 字」——标题词序一变就全不匹配，
+           于是整车 18 行一起被降级成「待核对」，等于什么都没确认。改用规格原子比对。
+        2. 整批都不匹配时，更可能是**读车失败**（车被清空、页面没渲染、抓到空标题），
+           不是 18 行同时加购失败。这时不能逐行降级，只能保留结论 + 打「未核实」标记，
+           让人去看一眼；否则「买成了」和「没买成」显示成一个样。
         """
         rows = cart_data.get("rows") or []
         degraded = bool(cart_data.get("rows_degraded"))
-        cart_titles = [self._norm_title(r.get("title")) for r in rows]
+        cart_titles = [r.get("title") for r in rows if str(r.get("title") or "").strip()]
 
-        def _in_cart(title: str) -> bool:
-            return any(t and (t in title or title in t) for t in cart_titles)
+        # 读车结果本身可不可信（不可信时一律不下结论）
+        anomaly_reason = ""
+        if not rows:
+            anomaly_reason = (
+                "购物车读成空（0 行）"
+                if not cart_data.get("cart_item_count")
+                else f"购物车显示 {cart_data.get('cart_item_count')} 件但一行都没读到"
+            )
+        elif not cart_titles:
+            anomaly_reason = f"购物车 {len(rows)} 行全都没有标题"
 
-        checked, downgraded, uncertain_found = 0, [], []
+        matched, missed = [], []
+        uncertain_found = []
         with self._state_lock:
-            for r in self._batch.get("results") or []:
-                # uncertain 行也查一遍：这类行是「点了加购但没抓到回执」，
-                # 实际很可能已经进车（2026-11-09 实测 1/1 命中）。把证据补上，
-                # 但**不改状态**——状态仍是 uncertain，只是不再让人白核对。
-                if r.get("status") == "uncertain" and not degraded:
-                    title = self._norm_title((r.get("candidate") or {}).get("title"))
-                    if title and _in_cart(title):
+            results = self._batch.get("results") or []
+            for r in results:
+                status = r.get("status")
+                if status not in ("ok", "uncertain"):
+                    continue
+                title = (r.get("candidate") or {}).get("title")
+                if not str(title or "").strip():
+                    continue
+                hit = bool(cart_titles) and any(_titles_match(title, t) for t in cart_titles)
+                if status == "uncertain":
+                    # 这类行是「点了加购但没抓到回执」，查车只为补证据，不改状态
+                    if hit:
                         r["cart_found"] = True
                         note = "收尾对账：购物车里找到该商品（加购实际已生效）"
                         if note not in (r.get("message") or ""):
                             r["message"] = f"{r.get('message') or ''}；{note}".strip("；")
                         uncertain_found.append(r.get("line_no"))
                     continue
-                if r.get("status") != "ok":
-                    continue
-                title = self._norm_title((r.get("candidate") or {}).get("title"))
-                if not title:
-                    continue
-                checked += 1
-                if degraded:
-                    continue  # 明细抽不出来，没法核对，不动结论
-                if not _in_cart(title):
+                (matched if hit else missed).append(r)
+
+            checked = len(matched) + len(missed)
+            # 整批都不匹配 / 匹配率过低 → 判定读车异常，不逐行降级
+            if not anomaly_reason and checked >= RECONCILE_MIN_CHECK:
+                ratio = len(matched) / checked if checked else 0.0
+                if not matched:
+                    anomaly_reason = f"{checked} 行全部没匹配到（疑似读车失败，不是 18 行同时失败）"
+                elif checked >= RECONCILE_MIN_CHECK + 3 and ratio < RECONCILE_MIN_RATIO:
+                    anomaly_reason = f"只有 {len(matched)}/{checked} 行匹配上（匹配率 {ratio:.0%}，疑似标题口径不符）"
+
+            downgraded = []
+            if anomaly_reason:
+                # 保留 ok，但明确标「未核实」：不假装确认，也不冤枉人
+                for r in missed:
+                    r["cart_unverified"] = True
+                    note = f"收尾对账未完成（{anomaly_reason}），本行保留「已加购」但未核实，请人工核对"
+                    if note not in (r.get("message") or ""):
+                        r["message"] = f"{r.get('message') or ''}；{note}".strip("；")
+            elif not degraded:
+                for r in missed:
                     r["status"] = "uncertain"
                     r["message"] = "收尾对账：购物车里没找到该商品（可能加购未生效），请人工核对"
                     downgraded.append(r.get("line_no"))
             self._batch["reconcile"] = {
                 "checked": checked,
+                "matched": len(matched),
                 "downgraded": downgraded,
                 "uncertain_found": uncertain_found,
                 "cart_rows": len(rows),
                 "cart_degraded": degraded,
                 "cart_count": cart_data.get("cart_item_count"),
+                "anomaly": bool(anomaly_reason),
+                "anomaly_reason": anomaly_reason,
                 "at": datetime.now().isoformat(timespec="seconds"),
             }
-        if degraded:
+        if anomaly_reason:
+            _log(
+                f"[batch] reconcile: 读车疑似异常（{anomaly_reason}）→ 不降级，"
+                f"{len(missed)} 行标为「未核实」，请人工核对购物车"
+            )
+        elif degraded:
             _log(f"[batch] reconcile skipped: cart rows degraded（{len(rows)} 行）")
         elif downgraded:
             _log(f"[batch] reconcile: {checked} ok 行里 {len(downgraded)} 行在购物车找不到，降级 uncertain: {downgraded}")
@@ -2987,6 +3186,10 @@ def batch_export_rows(results: list[dict]) -> list[list[str]]:
             f"{s.get('label')}={s.get('value')}" for s in (r.get("sku") or []) if s.get("value")
         )
         cost = r.get("cost")
+        # 确认方式：加购回执来源；对账没做成时写「未核实」，别让空值看起来像「已确认」
+        verified = str(r.get("cart_verified_via") or "")
+        if not verified and r.get("cart_unverified"):
+            verified = "未核实（对账未做成）"
         rows.append(
             [
                 str(r.get("line_no") or ""),
@@ -2996,7 +3199,7 @@ def batch_export_rows(results: list[dict]) -> list[list[str]]:
                 sku,
                 str(r.get("qty") or ""),
                 "" if cost is None else f"{float(cost):.2f}",
-                str(r.get("cart_verified_via") or ""),
+                verified,
                 f"{(r.get('total_ms') or 0) / 1000:.1f}",
                 " ".join(str(r.get("message") or "").split()),
             ]

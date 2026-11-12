@@ -642,6 +642,12 @@ textarea::placeholder{color:var(--ink-4)}
 .brow.ok{background:var(--surface)}
 .brow.bad{background:var(--bad-wash)}
 .brow.skip{opacity:.55}
+/* 收尾对账没做成时，「已加购」旁边挂个未核实标记：状态没错，但要人看一眼 */
+.brow .bunv{
+  display:inline-block;margin-left:4px;padding:0 3px;border-radius:3px;
+  font-size:var(--fs-11);font-weight:600;
+  color:var(--warn);background:var(--warn-wash);
+}
 .brow .bst{
   font-family:var(--font-mono);font-size:var(--fs-11);font-weight:600;
   color:var(--ink-3);padding-top:4px;

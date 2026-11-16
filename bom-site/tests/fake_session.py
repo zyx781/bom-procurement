@@ -5,6 +5,7 @@
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 TASK = "fake"
@@ -65,6 +66,10 @@ def main():
             continue
         req = json.loads(line)
         cmd = req.get("cmd")
+        # 测试用：把每条命令拖慢 N 秒，好观察前端在跑批过程中是不是真的在刷新
+        _delay = float(os.environ.get("FAKE_DELAY_S") or 0)
+        if _delay > 0 and cmd != "quit":
+            time.sleep(_delay)
         if cmd == "search":
             kw = req.get("keyword", "")
             if "验证" in kw:

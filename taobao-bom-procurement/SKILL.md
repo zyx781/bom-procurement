@@ -3,7 +3,7 @@ name: taobao-bom-procurement
 description: 把硬件 BOM（CSV/Excel：型号、数量、封装、参数、位号）蒸馏为逐行采购意图，驱动本地已登录的淘宝会话（Taobao-Search-Skill v4 session 模式）完成搜索、候选评估、SKU 匹配与加购；结算与付款永远由人工完成。当用户上传 BOM 并要求「按 BOM 采购 / 配单 / 询价 / 比价 / 加购物车 / 找替代料」，或提到阻容感、MCU、功率器件、连接器等电子元器件采购时使用。禁止自动支付、模拟登录、Cookie 劫持、验证码绕过与平台风控规避。
 ---
 
-# 淘宝 BOM 采购（决策层 Skill）v0.9.5
+# 淘宝 BOM 采购（决策层 Skill）v0.9.6
 
 > **绑定实现**：执行层 Taobao-Search-Skill v4.0.0（`scripts/taobao.py` session 模式）
 > ＋ 决策引擎 `bom-site/engine.py`（`ENGINE_VERSION = "0.1.0"`）
@@ -215,6 +215,11 @@ search(require_scored) → 候选池(score>0) → 排序 → 逐个 open → sug
 - **行间间隔 1.2 s**：连续翻商品页最容易触发滑块，这是实测不触发风控的下限。
 - **每行结束立即落盘**（§11），随时暂停/关机都不丢进度。
 - 行状态：`pending` → `running` → `ok` / `failed` / `uncertain` / `skipped`（暂停时没轮到）。
+- **进度是服务端推的**（`GET /api/taobao/batch/stream`，SSE）：跑批中每 1 s 一帧、空闲 3 s 一帧，
+  连接 10 分钟后由服务端收尾（`EventSource` 自动重连）。前端只在推送断了的时候退回
+  3 秒轮询，所以标签页切到后台、窗口被别的软件盖住，进度也照常走 —— 以前纯
+  `setInterval` 轮询会被浏览器在后台标签页限流到 1 分钟一次，看着像「没在跑」。
+  页面按钮右边有连接状态：`实时` / `轮询中` / `已断开 Ns`。
 
 ### 5.3 暂停 / 续跑 / 验证解锁
 
@@ -855,6 +860,11 @@ select-sku → final_price（选完 SKU 的每份价）
 - 加购确认的观察窗是 550 ms，没信号时再补看 1.2 s（角标 +1 也作数）——
   慢页面上的加购请求常常 1~2 s 才回来。
 - 演练（`dry_run=true`）**不跑**收尾对账：本来就不点加购，车上当然找不到。
+- 演练结论**绝不落盘**：`_save_progress()` 见到 `dry_run` 直接 return（`stop_batch` / 会话停止
+  都会调它）。演练的 `ok` 意思是「选型+闸门都过了」，不是「购物车里有了」；写进
+  `batch-progress.json` 之后，页面会显示「已加购 N 行」、下次「继续加购」把它们当已买跳过、
+  「删除上一批」还会拿这份名单去删车 —— 等于把演练当成真单（2026-11-16 实测踩到）。
+  旧版本残留的带 `dry_run` 标记的进度在装载时也会被忽略。
 - 加购**无回执**时不再直接落 uncertain：先查购物车三态判定 —— 有（记 ok，
   `cart_verified_via="cart_check"`）/ 没有（明细可信才重试一次）/ 读不到（保持 uncertain）。
   **购物车读成 0 行也算「读不到」**（返回 `None` 而不是 `False`）：读车失败时重试等于重复下单。

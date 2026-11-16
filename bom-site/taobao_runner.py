@@ -759,6 +759,10 @@ class SessionRunner:
             prog = load_batch_progress()
         except Exception:  # noqa: BLE001
             return
+        # 演练批次的进度不该存在（见 _save_progress），旧版本可能残留过：见到就别装
+        if (prog or {}).get("dry_run"):
+            _log("[batch] 进度文件来自演练批次，忽略（不能当成已加购）")
+            return
         lines = (prog or {}).get("lines") or {}
         if not lines:
             return
@@ -2022,6 +2026,14 @@ class SessionRunner:
 
     def _save_progress(self):
         """把已定局（ok/failed/uncertain）的行按 line_no 存盘，供下次续跑跳过。"""
+        # 演练批次的结论**一律不落盘**。
+        # dry-run 的 ok 意思是「选型/闸门都过了」，不是「购物车里有了」。
+        # 落盘之后：页面会显示「已加购 16 行」，下次「继续加购」把它们当已买跳过，
+        # 「删除上一批」还会拿这份名单去删车 —— 等于把演练当成了真单。
+        # 2026-11-16 实测踩到：stop_batch / stop() 都会调这里，演练结果被写进
+        # batch-progress.json，重启后页面挂着 16 行假的「已加购」。
+        if self._batch.get("dry_run"):
+            return
         prior_data = load_batch_progress() or {}
         # 整批重跑时不能继承旧行：否则本轮没跑到的行会把上一轮的 ok 带回来，
         # 下次「继续加购」又把它们当已完成跳过 —— 重跑等于没重跑。

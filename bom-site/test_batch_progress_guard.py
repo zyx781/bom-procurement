@@ -337,6 +337,45 @@ check("没有 downgraded 不清", tr.should_clear_stale_progress(
 check("全新批次（无 resumed）不清", tr.should_clear_stale_progress(
     {"results": [{"line_no": 1, "status": "failed"}], "reconcile": {"downgraded": []}}, 0) is False)
 
+print("== 8. 演练批次的结论不许落盘 ==")
+# 事故（2026-11-16）：演练跑完 16 行 ok，关机时 stop() → _save_progress() 把
+# 「演练：未点加购」写进了 batch-progress.json。重启后页面挂着「已加购 16 行」，
+# 一键继续加购直接被 BATCH_ALL_DONE 拦下，等于把演练当成了真单。
+_dry_saved = (tr.PROGRESS_FILE, tr.RUNS)
+_dry_tmp = pathlib.Path(tempfile.mkdtemp(prefix="bom-dryrun-guard-"))
+try:
+    tr.RUNS = _dry_tmp
+    tr.PROGRESS_FILE = _dry_tmp / "batch-progress.json"
+    r8 = SavingRunner()
+    r8._batch = {
+        "dry_run": True,
+        "fingerprint": FP_A,
+        "total": 2,
+        "results": [
+            {"line_no": 1, "status": "ok", "headline": "NE555P", "qty": 1,
+             "message": "演练：未点加购（仅校验选型）"},
+            {"line_no": 2, "status": "failed", "headline": "SS34", "qty": 1},
+        ],
+    }
+    r8._save_progress()
+    check("演练批次写不进进度文件", not tr.PROGRESS_FILE.exists())
+
+    # 反向：真跑同结构必须照常落盘（别把闸门做成「什么都不写」）
+    r8._batch["dry_run"] = False
+    r8._save_progress()
+    wrote = json.loads(tr.PROGRESS_FILE.read_text(encoding="utf-8")) if tr.PROGRESS_FILE.exists() else {}
+    check("真跑照常落盘", len(wrote.get("lines") or {}) == 2, wrote.get("lines"))
+
+    # 旧版本残留过带 dry_run 标记的进度：重启装载时必须忽略，不能当已加购
+    tr.save_batch_progress({"total": 1, "lines": {"1": {"line_no": 1, "status": "ok",
+                                                       "headline": "NE555P"}},
+                            "dry_run": True})
+    r8._batch = {}
+    tr.SessionRunner._restore_batch_from_progress(r8)
+    check("带 dry_run 标记的进度不装载", not r8._batch.get("results"))
+finally:
+    tr.PROGRESS_FILE, tr.RUNS = _dry_saved
+
 print()
 print(f"RESULT: {PASS} passed, {FAIL} failed")
 sys.exit(0 if FAIL == 0 else 1)

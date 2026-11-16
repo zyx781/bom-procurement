@@ -9,6 +9,15 @@ $ErrorActionPreference = "Stop"
 # Invoke-WebRequest / Invoke-RestMethod 默认会刷一条进度条，CLI 里很难看
 $ProgressPreference = "SilentlyContinue"
 
+# PowerShell 5.1 的 Start-Process 拼环境块时用的是**不区分大小写**的字典：
+# 系统里同时有 HTTPS_PROXY 和 https_proxy（Clash 之类的代理客户端很常见）时，
+# 它会抛「已添加项。字典中的关键字:“HTTPS_PROXY”所添加的关键字:“https_proxy”」，
+# 表现成「启动器报错 / 浏览器没打开 / 服务起不来」。
+# 这里把大小写重复的小写副本清掉，保留大写的那份（Python、curl、Edge 都认大写）。
+foreach ($proxyVar in @("http_proxy", "https_proxy", "all_proxy", "no_proxy")) {
+    if (Test-Path "Env:$proxyVar") { Remove-Item "Env:$proxyVar" -ErrorAction SilentlyContinue }
+}
+
 $AppDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RootDir  = Split-Path -Parent $AppDir
 $Url      = "http://127.0.0.1:8765/"
@@ -96,8 +105,15 @@ function Fail([string]$Message, [string]$Hint = "") {
 # ---------- 探测 ----------
 function Test-Health {
     try {
-        $r = Invoke-WebRequest -Uri "${Url}api/health" -UseBasicParsing -TimeoutSec 2
-        return $r.StatusCode -eq 200
+        # 必须显式绕开系统代理：代理开着时 127.0.0.1 也会被丢给代理，
+        # 轻则 502、重则弹代理认证框（非交互下直接炸），
+        # 结果服务明明活着，启动器却报「健康检查失败」。
+        $req = [System.Net.HttpWebRequest]::Create("${Url}api/health")
+        $req.Proxy = $null
+        $req.Timeout = 2000
+        $req.ReadWriteTimeout = 2000
+        $resp = $req.GetResponse()
+        try { return ([int]$resp.StatusCode -eq 200) } finally { $resp.Close() }
     } catch {
         return $false
     }
@@ -195,9 +211,41 @@ function Get-DebugEdgeProcesses {
     }
 }
 
+function Invoke-Loopback {
+    # 回环地址上的请求一律绕开系统代理：代理开着时 127.0.0.1 也会被丢给代理
+    # （轻则 502，重则弹认证框），服务明明活着却判定「没起来 / 没就绪」。
+    param([string]$Uri, [string]$Method = "GET", [string]$Body = $null, [int]$TimeoutSec = 3)
+    $req = [System.Net.HttpWebRequest]::Create($Uri)
+    $req.Proxy = $null
+    $req.Method = $Method
+    $req.Timeout = $TimeoutSec * 1000
+    $req.ReadWriteTimeout = $TimeoutSec * 1000
+    if ($null -ne $Body) {
+        $bytes = [Text.Encoding]::UTF8.GetBytes($Body)
+        $req.ContentType = "application/json"
+        $req.ContentLength = $bytes.Length
+        $stream = $req.GetRequestStream()
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Close()
+    }
+    if ($Method -eq "POST" -and $null -eq $Body) {
+        $req.ContentLength = 0
+    }
+    $resp = $req.GetResponse()
+    try {
+        $reader = New-Object System.IO.StreamReader($resp.GetResponseStream(), [Text.Encoding]::UTF8)
+        $text = $reader.ReadToEnd()
+        $reader.Close()
+        if ([string]::IsNullOrWhiteSpace($text)) { return $null }
+        return ($text | ConvertFrom-Json)
+    } finally {
+        $resp.Close()
+    }
+}
+
 function Test-Cdp {
     try {
-        $v = Invoke-RestMethod -Uri $CdpUrl -TimeoutSec 2
+        $v = Invoke-Loopback -Uri $CdpUrl -TimeoutSec 2
         if ($v -and $v.Browser) { return $v }
     } catch { }
     return $null
@@ -227,8 +275,7 @@ function Stop-App {
 
     if ($savedPid -and (Get-Process -Id $savedPid -ErrorAction SilentlyContinue)) {
         try {
-            Invoke-RestMethod -Uri "${Url}api/session/stop" -Method Post -Body "{}" `
-                -ContentType "application/json" -TimeoutSec 10 | Out-Null
+            Invoke-Loopback -Uri "${Url}api/session/stop" -Method POST -Body "{}" -TimeoutSec 10 | Out-Null
         } catch { }
         Start-Sleep -Milliseconds 800
         taskkill /PID $savedPid /T /F 2>$null | Out-Null
@@ -277,7 +324,7 @@ function Show-Status {
             Write-Row "进程" "PID $(Get-Content $PidFile | Select-Object -First 1)"
         }
         try {
-            $s = Invoke-RestMethod -Uri "${Url}api/session/status" -TimeoutSec 3
+            $s = Invoke-Loopback -Uri "${Url}api/session/status" -TimeoutSec 3
             $state = if ($s.ready) { "就绪" } elseif ($s.running) { "启动中" } else { "未启动" }
             Write-Row "淘宝会话" $state
         } catch { }

@@ -618,6 +618,22 @@ textarea::placeholder{color:var(--ink-4)}
 .sess-task{font-family:var(--font-mono);font-size:var(--fs-11);color:var(--ink-4)}
 .sess-warn{color:var(--bad);font-weight:600}
 
+/* 进度连接状态：一眼看出「页面是不是还在收实时进度」 */
+.livedot{
+  display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;
+  font-size:var(--fs-11);color:var(--ink-4);font-family:var(--font-mono);
+  white-space:nowrap;
+}
+.livedot::before{
+  content:"";width:6px;height:6px;border-radius:50%;background:var(--ink-4);
+}
+.livedot.ok{color:var(--ink-3)}
+.livedot.ok::before{background:var(--ok)}
+.livedot.warn::before{background:var(--warn)}
+.livedot.bad{color:var(--bad)}
+.livedot.bad::before{background:var(--bad)}
+.livedot.hidden{display:none}
+
 .batch-bar{
   display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;
   margin-top:var(--sp-3);

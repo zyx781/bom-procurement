@@ -9,6 +9,13 @@
   let batchRunning = false;
   let pollTimer = null;
   let serviceDown = false; // 「退出服务」后停止轮询，避免满屏报错
+  // 实时进度：优先用服务端推送（EventSource）。定时轮询只作退路 ——
+  // 后台标签页里浏览器会把 setInterval 限流到 1 分钟一次，进程在跑、
+  // 页面却一动不动，用户就以为没跑。
+  let batchES = null;
+  let liveMode = "connecting"; // connecting | sse | poll
+  let liveAt = 0; // 最近一次收到状态的时刻
+  let liveRetry = null;
 
   async function shutdownService() {
     if (
@@ -26,6 +33,15 @@
     }
     serviceDown = true;
     if (pollTimer) clearInterval(pollTimer);
+    if (batchES) {
+      try {
+        batchES.close();
+      } catch {
+        /* ignore */
+      }
+      batchES = null;
+    }
+    renderLiveDot();
     document.body.insertAdjacentHTML(
       "beforeend",
       `<div class="byebye">
@@ -1185,12 +1201,97 @@
   }
 
   async function pollBatch() {
+    // 推送还活着就别再问了：两套一起跑只会让「到底谁在刷新」更难查
+    if (batchES && batchES.readyState === 1 && liveMode === "sse") return;
     let st;
     try {
-      st = await fetch("/api/taobao/batch").then((r) => r.json());
+      st = await fetch("/api/taobao/batch", { cache: "no-store" }).then((r) => r.json());
     } catch {
+      renderLiveDot(); // 连不上：让状态点自己说「断开多久了」
       return;
     }
+    if (liveMode === "sse") return; // 推送恢复，轮询结果丢掉，免得覆盖
+    setLiveMode("poll");
+    liveAt = Date.now();
+    applyBatchStatus(st);
+    renderLiveDot();
+  }
+
+  /* ---------- 实时进度（服务端推送 + 轮询兜底） ---------- */
+
+  function setLiveMode(mode) {
+    if (liveMode !== mode) liveMode = mode;
+  }
+
+  function startBatchStream() {
+    if (serviceDown || !window.EventSource || batchES) return;
+    try {
+      batchES = new EventSource("/api/taobao/batch/stream");
+    } catch {
+      batchES = null;
+      return;
+    }
+    batchES.onopen = () => {
+      liveAt = Date.now();
+      setLiveMode("sse");
+      renderLiveDot();
+    };
+    batchES.onmessage = (ev) => {
+      let st;
+      try {
+        st = JSON.parse(ev.data);
+      } catch {
+        return;
+      }
+      liveAt = Date.now();
+      if (liveMode !== "sse") setLiveMode("sse");
+      if (!st.error) applyBatchStatus(st);
+      renderLiveDot();
+    };
+    // 服务端 10 分钟会主动收尾、服务重启也会断流 —— 退回轮询，15 秒后再挂回去
+    batchES.onerror = () => {
+      if (batchES) {
+        batchES.close();
+        batchES = null;
+      }
+      setLiveMode("poll");
+      renderLiveDot();
+      if (!liveRetry && !serviceDown) {
+        liveRetry = setTimeout(() => {
+          liveRetry = null;
+          startBatchStream();
+        }, 15000);
+      }
+    };
+  }
+
+  /** 连接状态点：让人一眼看出「页面还在收实时进度 / 已经断了多久」。 */
+  function renderLiveDot() {
+    const el = $("#live-dot");
+    if (!el) return;
+    el.classList.remove("ok", "warn", "bad", "hidden");
+    if (serviceDown) {
+      el.classList.add("hidden");
+      return;
+    }
+    const age = liveAt ? Math.round((Date.now() - liveAt) / 1000) : null;
+    if (age != null && age > 15) {
+      el.classList.add("bad");
+      el.textContent = age > 60 ? "进度已断开（刷新页面）" : `已断开 ${age}s`;
+      return;
+    }
+    if (liveMode === "sse") {
+      el.classList.add("ok");
+      el.textContent = "实时";
+    } else if (liveMode === "poll") {
+      el.classList.add("warn");
+      el.textContent = "轮询中";
+    } else {
+      el.textContent = "连接中…";
+    }
+  }
+
+  function applyBatchStatus(st) {
     batchRunning = !!st.running;
     batchProgress = st.progress || batchProgress;
     renderBatch(st);
@@ -1545,7 +1646,37 @@
     if (serviceDown) return;
     pollSession();
     pollBatch();
+    // 推送连着却很久没消息（服务端线程卡住 / 中间层把流攒住了）：
+    // 主动掐断退回轮询，再挂回去。宁可退化成 3 秒轮询，也不能页面静默不动。
+    if (batchES && liveAt && Date.now() - liveAt > 20000) {
+      try {
+        batchES.close();
+      } catch {
+        /* 已经断了 */
+      }
+      batchES = null;
+      setLiveMode("poll");
+      if (!liveRetry && !serviceDown) {
+        liveRetry = setTimeout(() => {
+          liveRetry = null;
+          startBatchStream();
+        }, 15000);
+      }
+    }
+    renderLiveDot();
   }, 3000);
+  // 切回这个标签页、或窗口重新获得焦点时立刻对齐一次：
+  // 后台标签页里定时器会被浏览器限流，回来时不能等下一拍才刷新。
+  const wake = () => {
+    if (serviceDown) return;
+    pollSession();
+    pollBatch();
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) wake();
+  });
+  window.addEventListener("focus", wake);
+  startBatchStream();
   pollSession();
   pollBatch();
 

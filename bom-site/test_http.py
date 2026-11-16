@@ -160,4 +160,23 @@ with urllib.request.urlopen(BASE + "/api/taobao/batch/export.csv", timeout=10) a
         (r.headers.get("Content-Disposition") or "")[:28],
     )
 
+# 5) 实时推送（SSE）：页面靠这条流刷新进度。断成死流前端会退回轮询，
+#    但「能连上却永远不发第一帧」是查不出来的静默故障，所以这里必须验第一帧。
+try:
+    _s = urllib.request.urlopen(BASE + "/api/taobao/batch/stream", timeout=10)
+    _ctype = _s.headers.get("Content-Type") or ""
+    _first = _s.readline().decode("utf-8", "replace").strip()
+    _data = ""
+    for _ in range(6):
+        _ln = _s.readline().decode("utf-8", "replace").strip()
+        if _ln.startswith("data: "):
+            _data = _ln[6:]
+            break
+    _s.close()
+    _keys = sorted(json.loads(_data).keys())[:5] if _data else []
+    print("BATCH STREAM", _ctype.split(";")[0], "| first:", _first, "| keys:", _keys)
+except Exception as e:  # noqa: BLE001
+    print("BATCH STREAM FAILED", type(e).__name__, e, "(应能连上并发出第一帧)")
+
 print("ALL HTTP TESTS DONE")
+

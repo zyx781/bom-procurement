@@ -160,6 +160,57 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("文件超过 25MB 限制")
         return json.loads(self.rfile.read(n).decode("utf-8"))
 
+    def _batch_payload(self) -> dict:
+        """批量状态 + 上次进度摘要（GET 与 SSE 共用一份，别让两条路走散了）。"""
+        data = tr.RUNNER.batch_status()
+        # 附带「上次进度」：前端据此把按钮改成「继续加购（从第 N 行）」。
+        # 带上当前 BOM 指纹，换表后旧进度对外不可见（但文件保留，精准清车还要用）。
+        data["progress"] = tr.batch_progress_summary(
+            active_fingerprint=tr.active_bom_fingerprint()
+        )
+        return data
+
+    def _batch_stream(self):
+        """SSE：把批量状态推给页面。
+
+        为什么不再只靠前端 setInterval 轮询：定时器在**后台标签页**会被浏览器
+        限流（实测隐藏标签页里 3s 的 setInterval 能掉到 1 分钟一次），用户切去
+        看淘宝、或者页面被别的窗口盖住时，进度条就"卡住不动"——看着像没跑，
+        其实跑得好好的。改成服务端推送后，标签页是否在前台都不影响刷新。
+
+        连接寿命 10 分钟就主动收尾（EventSource 会自动重连），避免长时间
+        占着一个服务端线程。
+        """
+        import time as _time
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "keep-alive")
+        # 万一以后挂在反向代理后面，别让代理把流攒起来
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+        deadline = _time.monotonic() + 600
+        try:
+            self.wfile.write(b"retry: 2000\n\n")
+            self.wfile.flush()
+            while _time.monotonic() < deadline:
+                try:
+                    payload = self._batch_payload()
+                except Exception as exc:  # noqa: BLE001
+                    payload = {"error": f"状态读取失败：{exc}"}
+                payload["streamed_at"] = _time.strftime("%H:%M:%S")
+                body = json.dumps(payload, ensure_ascii=False, default=str)
+                self.wfile.write(f"data: {body}\n\n".encode("utf-8"))
+                self.wfile.flush()
+                # 跑批中 1 秒推一次；闲着 3 秒推一次就够（还能顺带发现会话掉线）
+                _time.sleep(1.0 if (payload.get("running") or payload.get("error")) else 3.0)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass  # 页面关了/刷新了，正常收尾
+        except Exception as exc:  # noqa: BLE001
+            print(f"[site] batch stream aborted: {exc}", flush=True)
+
     # ---------------- GET ----------------
     def do_GET(self):
         path = unquote(urlparse(self.path).path)
@@ -173,13 +224,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/session/status":
             return self._send(200, tr.RUNNER.status())
         if path == "/api/taobao/batch":
-            data = tr.RUNNER.batch_status()
-            # 附带「上次进度」：前端据此把按钮改成「继续加购（从第 N 行）」。
-            # 带上当前 BOM 指纹，换表后旧进度对外不可见（但文件保留，精准清车还要用）。
-            data["progress"] = tr.batch_progress_summary(
-                active_fingerprint=tr.active_bom_fingerprint()
-            )
-            return self._send(200, data)
+            return self._send(200, self._batch_payload())
+        if path == "/api/taobao/batch/stream":
+            return self._batch_stream()
         if path == "/api/taobao/batch/export.csv":
             # 跑完一轮要人工核对上百行，屏幕上滚太痛苦 —— 导出后和 BOM 并排 diff
             import csv

@@ -170,6 +170,7 @@
       <button class="ghost" id="btn-batch-stop" disabled>停止</button>
       <button class="ghost hidden" id="btn-batch-reset" title="只清进度记录，不动购物车">重新开始</button>
       <button class="ghost" id="btn-batch-export" title="导出本次批量逐行结果（CSV，Excel 可直接打开）">导出结果</button>
+      <span class="livedot" id="live-dot" title="进度是服务端推过来的（不是前端定时去问），切到别的标签页也会照常刷新">连接中…</span>
       <span class="fineprint" id="batch-note">逐行搜索 → 取过门槛的候选里最划算的一个 → 匹配规格 → 加购。某行失败自动换下一个候选。</span>
     </div>
     <div id="batch-progress" class="batch-progress hidden" aria-live="polite"></div>

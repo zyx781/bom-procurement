@@ -283,14 +283,25 @@ def _read_xlsx(raw: bytes) -> tuple[list[str], list[list[str]], dict]:
 UNITS = "Ω欧姆欧"
 
 _RE_RES = re.compile(r"(\d+(?:\.\d+)?)\s*([kKmM])?\s*(?:Ω|欧姆|欧|ohms?|ohm)", re.I)
-_RE_RES_4K7 = re.compile(r"(\d+)[kK](\d)\b")
+_RE_RES_4K7 = re.compile(r"(\d+)[kK](\d)(?![A-Za-z0-9])")
 _RE_RES_K = re.compile(r"(\d+(?:\.\d+)?)\s*([kKmM])\s*(?:电阻|resistor)")
-_RE_CAP = re.compile(r"(\d+(?:\.\d+)?)\s*(p|n|u|µ|μ|m)\s*[fF]\b")
-_RE_IND = re.compile(r"(\d+(?:\.\d+)?)\s*(u|µ|μ|n|m)\s*[hH]\b")
+# 单位字母要大写小写都收：淘宝标题/SKU 里「10NF」「100UF」「4U7H」随处可见，
+# 只认小写会让一行本来能买对的料判成「核实不到容值」（实测 #4 的 50V 瓷片就这么被否掉）。
+# 但 M/m 单独处理：大写 M 在元件标注里是「兆」，当毫法读会差 9 个数量级，
+# 宁可不认，也不能认错。
+_RE_CAP = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(p|n|u|µ|μ|P|N|U|m)\s*[fF](?![A-Za-z])"
+)
+_RE_IND = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(u|µ|μ|n|U|N|m)\s*[hH](?![A-Za-z])"
+)
+# 单位后面紧跟中文在淘宝标题里是常态（「95UF单盒精装」「1/4W金属膜」「50V贴片」）。
+# 用 \b 收尾会判成「没有词边界」，整段规格读不出来 —— 中文是 Unicode 词字符，
+# F「F」和「单」之间不存在边界。改成「后面不是英文字母」才符合真实文本。
+_RE_POWER_FRAC = re.compile(r"(\d+)\s*/\s*(\d+)\s*[wW](?![A-Za-z])")
+_RE_POWER = re.compile(r"(\d+(?:\.\d+)?)\s*[wW](?![A-Za-z])")
+_RE_VOLT = re.compile(r"(\d+(?:\.\d+)?)\s*[vV](?:dc|DC)?(?![A-Za-z])")
 _RE_TOL = re.compile(r"(?:±|\+/-|\+-)?\s*(\d+(?:\.\d+)?)\s*%")
-_RE_POWER_FRAC = re.compile(r"(\d+)\s*/\s*(\d+)\s*[wW]\b")
-_RE_POWER = re.compile(r"(\d+(?:\.\d+)?)\s*[wW]\b")
-_RE_VOLT = re.compile(r"(\d+(?:\.\d+)?)\s*[vV](?:dc|DC)?\b")
 # 电流：必须自成一个 token。「AO3400A」里的 3400 不是电流 —— 前面紧挨字母的要排除。
 _RE_CURR = re.compile(r"(?<![A-Za-z0-9._])(\d+(?:\.\d+)?)\s*(m?[aA])(?![A-Za-z0-9])")
 _RE_RDS = re.compile(r"(?:rds\s*\(?\s*on\s*\)?|导通电阻)[^0-9]{0,12}(\d+(?:\.\d+)?)\s*(mΩ|m\s*ohm|毫欧)", re.I)
@@ -521,12 +532,38 @@ def _parse_resistance(t, loose=False):
     return None
 
 
+_RE_CAP_MPN = re.compile(
+    r"(?<!\d)(\d{2,3})\s*V\s*(\d{1,4})\s*M\s*(\d+(?:\.\d+)?)\s*[xX×]\s*(\d+(?:\.\d+)?)"
+)
+
+
+def _cap_spec_from_mpn(mpn) -> dict:
+    """从铝电解常见料号格式里读出规格：`PA100V100M10x12` → 100V / 100µF。
+
+    只在「立创没有这颗料」时当第二证据用。写死这么窄，是因为放宽一点就会
+    把别的命名当电容规格读（例如 IC 料号里恰好有数字）。
+    """
+    m = _RE_CAP_MPN.search(str(mpn or ""))
+    if not m:
+        return {}
+    try:
+        return {
+            "voltage_v": float(m.group(1)),
+            "capacitance_f": float(m.group(2)) * 1e-6,
+        }
+    except (TypeError, ValueError):
+        return {}
+
+
 def _parse_capacitance(t):
     m = _RE_CAP.search(t)
     if not m:
         return None
     val = float(m.group(1))
-    mult = {"p": 1e-12, "n": 1e-9, "u": 1e-6, "µ": 1e-6, "μ": 1e-6, "m": 1e-3}.get(m.group(2), 1.0)
+    # 归一化再查表：正则收了 P/N/U 大写，这里统一按小写取值
+    mult = {"p": 1e-12, "n": 1e-9, "u": 1e-6, "µ": 1e-6, "μ": 1e-6, "m": 1e-3}.get(
+        m.group(2).lower(), 1.0
+    )
     return val * mult
 
 
@@ -535,7 +572,9 @@ def _parse_inductance(t):
     if not m:
         return None
     val = float(m.group(1))
-    mult = {"n": 1e-9, "u": 1e-6, "µ": 1e-6, "μ": 1e-6, "m": 1e-3}.get(m.group(2), 1.0)
+    mult = {"n": 1e-9, "u": 1e-6, "µ": 1e-6, "μ": 1e-6, "m": 1e-3}.get(
+        m.group(2).lower(), 1.0
+    )
     return val * mult
 
 
@@ -1092,6 +1131,14 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
 
     params = parse_params(" ".join([combined, mpn]), category)
     subtype = _passive_subtype(refs, combined + " " + desc, category)
+    # 铝电解的料号里常常直接把规格写全：PA100V100M10x12 = 100V / 100µF / 10×12mm。
+    # 立创查不到这颗料（没编号、离线）时，这是我们唯一能拿来互相印证的第二证据：
+    # 名称列写 95uF、料号却写 100M，就是「改了一半忘了另一半」的典型。
+    # 只做「补空缺」，不动名称列的结论，冲突交给下面的 V01 流程报给人看。
+    if category == "passive" and subtype == "capacitor":
+        for _k, _v in _cap_spec_from_mpn(mpn).items():
+            if _v is not None and _k not in params:
+                params[_k] = _v
     # 编号给的参数比正则从字符串里猜的可靠，但只补**跟选型有关**的那几项：
     # 芯片的「耗散功率 0.7W」、开关的「额定电压 12V」既不参与选型，还会把
     # 摘要行（params_text）从「CD4511BE」变成「0.7W」——那是倒退。
@@ -1194,7 +1241,36 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
         _ct = str((lcsc_info.get("attrs") or {}).get("连接器类型") or "").strip()
         if _ct and _ct != "-":
             gates.append(f"连接器类型 = {_ct}（立创核准）")
-    queries = _build_queries(category, package, params, mpn, desc, row.get("brand"), subtype)
+    # 电阻的「金属膜 / 绕线 / 碳膜」是三种完全不同的器件：
+    # 470Ω 1/4W 金属膜搜「470Ω 直插电阻」，排前面的常是「绕线 1W」——
+    # 阻值对、能过值闸门，但绕线有感、体积大 3 倍，插不进原焊盘。
+    # 立创核准了类型就写进搜索词，从源头少一半错货。
+    _res_type = ""
+    if lcsc_info and category == "passive" and subtype == "resistor":
+        _res_type = str((lcsc_info.get("attrs") or {}).get("电阻类型") or "").strip()
+    # 电容介质：立创说 Ceramic 就是瓷片，写进搜索词能避开高压瓷片/薄膜电容。
+    # 电解同理反着用：95µF 只搜「电容」先灌一堆 CBB 启动电容，写「电解」才搜得到真货。
+    _cap_kind = ""
+    if category == "passive" and subtype == "capacitor":
+        _blob = ""
+        _attrs = {}
+        if lcsc_info:
+            _blob = f"{lcsc_info.get('desc') or ''} {lcsc_info.get('catalog') or ''}".lower()
+            _attrs = lcsc_info.get("attrs") or {}
+        if (
+            "有极性" in str(_attrs.get("极性类型") or "")
+            or "aluminum" in _blob
+            or "电解" in _blob
+            # 圆柱体封装（BD = body diameter）就是电解，方形本体才是瓷片/薄膜
+            or re.search(r"BD\s*\d", str(footprint or ""), re.I)
+        ):
+            _cap_kind = "电解"
+        elif "ceramic" in _blob or "陶瓷" in _blob or "瓷片" in _blob:
+            _cap_kind = "瓷片"
+    queries = _build_queries(
+        category, package, params, mpn, desc, row.get("brand"), subtype,
+        res_type=_res_type, cap_kind=_cap_kind,
+    )
     risks = _build_risks(category, package, params, mpn, gates)
     if value_conflict:
         risks.append({"code": "V01", "text": value_conflict})
@@ -1403,7 +1479,19 @@ def title_amps(text) -> list:
     return out
 
 
-def _build_queries(category, package, p, mpn, desc, brand, subtype=""):
+def _fmt_watt_label(w) -> str:
+    """0.25 → 1/4W。淘宝标题基本不写「250mW」，只认分数写法。"""
+    try:
+        v = float(w)
+    except (TypeError, ValueError):
+        return ""
+    for k, s in ((0.125, "1/8W"), (0.25, "1/4W"), (0.5, "1/2W"), (1.0, "1W"), (2.0, "2W"), (3.0, "3W")):
+        if abs(v - k) < 1e-6:
+            return s
+    return f"{v:g}W"
+
+
+def _build_queries(category, package, p, mpn, desc, brand, subtype="", res_type="", cap_kind=""):
     brand = str(brand or "").strip()
     q = []
     pkg = package.split(" ")[0] if package else ""
@@ -1449,6 +1537,21 @@ def _build_queries(category, package, p, mpn, desc, brand, subtype=""):
             else:
                 q.append(f"{mpn} 贴片")
         if pkg and val:
+            # 精确词放最前：宽词「插件 470Ω 电阻」召回的多值大功率链接会先把
+            # 候选位占满，SKU 里根本没有 BOM 要的那一档；「470Ω 1/4W 金属膜 电阻」
+            # 才能直接命中单值商品。精确词没结果时还有后面的宽词兜底。
+            if "resistance_ohm" in p and res_type:
+                _short = res_type.replace("电阻", "").strip()
+                if _short and _short not in ("不限", "其他"):
+                    _w = _fmt_watt_label(p.get("power_w"))
+                    q.append(f"{pkg} {val} {_w} {_short} {kind}".strip())
+            # 电容介质同理：10nF 搜「电容」先出来一堆高压瓷片（3KV/6KV），
+            # 普通 50V 瓷片反而靠后。立创说是陶瓷就直接写「瓷片」。
+            # 耐压一并写进去：「10nF 瓷片」头几条仍是 3KV 焊机电容，
+            # 「10nF 50V 瓷片」才直接命中普通商品。
+            if "capacitance_f" in p and cap_kind:
+                _vtxt = f"{p['voltage_v']:g}V" if p.get("voltage_v") else ""
+                q.append(f"{pkg} {val} {_vtxt} {cap_kind} 电容".strip())
             q.append(f"{pkg} {val}{tol} {kind}".strip())
             # 电容的耐压是硬门槛：22µF 搜出来一堆 16V，装上去会爆。
             # 立创核准过的耐压直接写进搜索词，能砍掉大半错货。

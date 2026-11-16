@@ -45,6 +45,32 @@ check("4k7", abs(engine._parse_resistance("4k7 电阻") - 4700) < 1e-6)
 check("10K 电阻", abs(engine._parse_resistance("10K 电阻") - 10000) < 1e-6)
 check("100nF", abs(engine._parse_capacitance("100nF 50V") - 100e-9) < 1e-15)
 check("0.1uF", abs(engine._parse_capacitance("0.1uF") - 100e-9) < 1e-15)
+# 淘宝标题/SKU 里单位字母基本都大写：「10NF」「100UF」「22PF」。
+# 只认小写会把「50V 插件瓷片 10NF」判成核实不到容值（实测 #4 就这么被否掉的）。
+check("10NF 大写", abs(engine._parse_capacitance("10NF/103") - 10e-9) < 1e-15)
+check("100UF 大写", abs(engine._parse_capacitance("100UF/16V") - 100e-6) < 1e-12)
+check("22PF 大写", abs(engine._parse_capacitance("22PF 50V") - 22e-12) < 1e-15)
+# 大写 M 在元件标注里是「兆」，当毫法读会差 9 个数量级：宁可不认，也不能认错
+check("10MF 不猜", engine._parse_capacitance("10MF") is None)
+check("1N4148 不是 1nF", engine._parse_capacitance("1N4148") is None)
+check("2N2222 不是 2nF", engine._parse_capacitance("2N2222") is None)
+check("4.7UH 大写", abs(engine._parse_inductance("4.7UH") - 4.7e-6) < 1e-12)
+# 淘宝标题里单位后面直接跟中文（「95UF单盒精装」「1/4W金属膜」「50V贴片」）。
+# 中文算 Unicode 词字符，用 \b 收尾会判成没有边界 → 整段规格读不出来，
+# 库里的 0.25W 电阻会被当成「没写功率」，5W 的也能过闸门。
+check("95UF单盒", abs(engine._parse_capacitance("95UF单盒精装") - 95e-6) < 1e-12)
+check("10NF贴片", abs(engine._parse_capacitance("10NF贴片") - 10e-9) < 1e-15)
+check("1/4W金属膜", engine._parse_power("1/4W金属膜电阻") == 0.25)
+check("5W金属膜", engine._parse_power("5W金属膜") == 5.0)
+check("50V贴片", engine._parse_voltage("50V贴片电容") == 50.0)
+# 铝电解料号自带规格：PA100V100M10x12 = 100V/100µF/10×12mm。
+# 立创查不到这颗料时，这是唯一的第二证据 —— 名称写 95uF、料号写 100M 就是改了一半。
+_eq = engine._cap_spec_from_mpn("PA100V100M10x12")
+check("料号读出 100V", _eq.get("voltage_v") == 100.0)
+check("料号读出 100µF", abs(_eq.get("capacitance_f", 0) - 100e-6) < 1e-12)
+check("料号读出 22µF", abs(engine._cap_spec_from_mpn("ERG50V22M5X11").get("capacitance_f", 0) - 22e-6) < 1e-12)
+check("IC 料号不误读", engine._cap_spec_from_mpn("CD4518BE") == {})
+check("二极管料号不误读", engine._cap_spec_from_mpn("SS34") == {})
 check("1/10W", abs(engine._parse_power("1/10W") - 0.1) < 1e-9)
 check("±1%", engine._parse_tolerance("±1%") == 1.0)
 check("Rds 44mΩ", engine._parse_rds("Rds(on) 44mΩ") == 44.0)

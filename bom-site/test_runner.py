@@ -674,6 +674,38 @@ finally:
         runner.__dict__.pop(_attr, None)
     runner._batch = _bak_batch3
 
+print("== 浏览器中途被关：整批中止，不记成「搜不到」（2026-11-16） ==")
+# 实测：浏览器在跑批中途被关掉，剩下 17 行全是「搜索词都没有可用结果」，
+# 报出来像选型失败，实际是环境没了。这种必须整批停下来并说明原因。
+_bak_batch4 = runner._batch
+runner._batch = {
+    "running": True, "total": 3, "done": 0, "index": -1, "phase": "",
+    "results": [{"line_no": i, "status": "pending", "message": ""} for i in (1, 2, 3)],
+    "stopped_reason": "",
+}
+_bg_calls = []
+runner._add_line_to_cart = lambda *a, **k: _bg_calls.append(a) or {
+    "line_no": 1, "status": "ok", "message": "", "attempts": [{"ok": True}],
+}
+runner._save_run_metrics = lambda: None
+runner.cleanup_screenshots = lambda: None
+runner._browser_gone = True
+try:
+    runner._run_batch(
+        [{"line_no": i, "query_plan": ["0603 10kΩ"]} for i in (1, 2, 3)], True, 3, dry_run=True
+    )
+    check("浏览器没了 → 一行都不跑", len(_bg_calls) == 0, _bg_calls)
+    check("给出中止原因", "浏览器" in (runner._batch.get("stopped_reason") or ""),
+          runner._batch.get("stopped_reason"))
+    check("不把剩余行记成失败",
+          all(r["status"] != "failed" for r in runner._batch["results"]),
+          [r["status"] for r in runner._batch["results"]])
+finally:
+    runner._browser_gone = False
+    for _attr in ("_add_line_to_cart", "_save_run_metrics", "cleanup_screenshots"):
+        runner.__dict__.pop(_attr, None)
+    runner._batch = _bak_batch4
+
 print("== 购物车确认：加购无回执时查车（2026-11-09） ==")
 _bak_send2 = runner.send
 runner.send = lambda *a, **k: {"data": {"rows_degraded": False,

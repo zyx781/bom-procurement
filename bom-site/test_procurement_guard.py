@@ -211,5 +211,91 @@ check("多值标题不误认 5K",
 check("维修套件认不出 95µF",
       tr._title_value_kinds({"params": {"capacitance_f": 95e-6}}, "维修八件套 0.85/0.9/0.95/1.0UF") != {"容值"})
 
+print("== 11. 材料/结构闸门：值对不等于装得上 ==")
+# 2026-11-16 演练现场：470Ω 买成「绕线 1W」、10nF 买成「3KV 高压瓷片」、
+# 100nF 买成「P=5.08 独石」——值闸门全放行，因为阻值/容值确实对得上。
+_res14 = dict(line_no=901, category="passive", subtype="resistor", mpn="MF1/4W-1KΩ±1%T52",
+              desc="470", package="插件", qty=42, params={"resistance_ohm": 470.0, "power_w": 0.25},
+              row={"lcsc_info": {"attrs": {"电阻类型": "金属膜电阻", "阻值": "1kΩ"}}})
+check("绕线 1W 顶金属膜 1/4W 被拒",
+      "绕线" in tr._material_conflict(_res14, "100R-470R 1W/2W/3W插件绕线电阻器"))
+check("水泥电阻同样被拒",
+      "绕线" in tr._material_conflict(_res14, "470Ω 5W 水泥电阻"))
+check("金属膜 2W 放行（功率可放大，体积还能焊）",
+      tr._material_conflict(_res14, "2W金属膜电阻1% 470R") == "")
+check("1/4W 金属膜正常放行",
+      tr._material_conflict(_res14, "1/4W 470Ω 金属膜电阻 1%") == "")
+check("功率离谱（5W）被拒",
+      "体积" in tr._material_conflict(_res14, "470Ω 5W 金属膜电阻"))
+
+_cap4 = dict(line_no=902, category="passive", subtype="capacitor", mpn="CC1H103", desc="10nF",
+             package="插件", qty=1, params={"capacitance_f": 1e-8, "voltage_v": 50.0},
+             row={"lcsc_info": {"attrs": {"额定电压": "50V", "脚间距": "2.54mm"}}})
+check("3KV 高压瓷片顶 50V 被拒",
+      "耐压" in tr._material_conflict(_cap4, "LY E3KV 103M 3KV103 10nF 3000V 高压瓷片电容"))
+check("50V 瓷片放行",
+      tr._material_conflict(_cap4, "10nF 50V 瓷片电容 P=2.54mm") == "")
+check("100V 放行（2 倍以内）",
+      tr._material_conflict(_cap4, "10nF 100V 瓷片电容") == "")
+_cap7 = dict(line_no=903, category="passive", subtype="capacitor", mpn="CC1H103", desc="100nF",
+             package="插件", qty=14, params={"capacitance_f": 1e-7, "voltage_v": 50.0},
+             row={"lcsc_info": {"attrs": {"额定电压": "50V", "脚间距": "2.54mm"}}})
+check("脚距 5.08 顶 2.54 被拒",
+      "脚间距" in tr._material_conflict(_cap7, "独石电容 插件,P=5.08mm 100nF 50V"))
+check("不写脚距不误杀",
+      tr._material_conflict(_cap7, "100nF 50V 瓷片电容") == "")
+
+print("== 12. BOM 自身矛盾：非标准值不自动买 ==")
+check("5kΩ 不在 E24", tr._is_standard_value(5000.0) is False)
+check("470Ω 是标准档", tr._is_standard_value(470.0) is True)
+check("2.2kΩ 是标准档", tr._is_standard_value(2200.0) is True)
+check("100nF 是标准档", tr._is_standard_value(1e-7) is True)
+check("判不了（空值）不误伤", tr._is_standard_value(None) is True)
+_conflict_line = dict(line_no=904, category="passive", subtype="resistor", mpn="MF1/4W-1KΩ±1%T52",
+                      desc="5K", qty=3, params={"resistance_ohm": 5000.0, "power_w": 0.25},
+                      value_conflict="名称列写 5K，型号对应 1kΩ")
+check("5kΩ 冲突行要人工核对", "E24" in tr._review_reason(_conflict_line))
+_ok_conflict = dict(_conflict_line, desc="470", params={"resistance_ohm": 470.0})
+check("470Ω 冲突行可按名称列采购", tr._review_reason(_ok_conflict) == "")
+check("无冲突行不干涉", tr._review_reason(dict(_conflict_line, value_conflict="")) == "")
+
+print("== 13. 电阻类型进搜索词 ==")
+_q = engine._build_queries("passive", "插件", {"resistance_ohm": 470.0, "power_w": 0.25},
+                           "MF1/4W-1KΩ±1%T52", "470", "", "resistor", res_type="金属膜电阻")
+check("搜索词带金属膜", any("金属膜" in x for x in _q), _q[:4])
+_q2 = engine._build_queries("passive", "插件", {"resistance_ohm": 470.0},
+                            "R", "470", "", "resistor")
+check("没核准类型就不乱加词", not any("金属膜" in x for x in _q2), _q2[:3])
+
+print("== 14. 电容族系：电解 ≠ 瓷片 ≠ 启动电容 ==")
+# 95µF 搜出 CBB65 空调压缩机启动电容：容值一样，但不是同一个元件
+_elec = dict(line_no=905, category="passive", subtype="capacitor", mpn="PA100V100M10x12",
+             desc="95uF", qty=1, params={"capacitance_f": 95e-6},
+             row={"package": "CAP-TH_BD10.0-P5.00-D0.6-FD_2"})
+_ceramic = dict(line_no=906, category="passive", subtype="capacitor", mpn="CC1H103ZA1ED3F4D1100",
+                desc="10nF", qty=1,
+                params={"capacitance_f": 10e-9, "voltage_v": 50.0},
+                row={"package": "CAP-TH_L5.0-W2.5-P2.50-D0.5",
+                     "lcsc_info": {"attrs": {"温度系数": "Y5V", "额定电压": "50V"}}})
+_polar = dict(line_no=907, category="passive", subtype="capacitor", mpn="ERG50V22M5X11",
+              desc="22uF", qty=1, params={"capacitance_f": 22e-6},
+              row={"package": "CAP-TH_BD5.0-P2.00", "lcsc_info": {"attrs": {"极性类型": "有极性"}}})
+check("圆柱封装判电解", tr._bom_cap_family(_elec) == "电解")
+check("方形封装判瓷片", tr._bom_cap_family(_ceramic) == "瓷片")
+check("立创极性判电解", tr._bom_cap_family(_polar) == "电解")
+check("电解行拒绝 CBB65 启动电容",
+      "CBB" in tr._material_conflict(_elec, "苏一CBB65A防爆空调压缩机启动电容器25/30/40/50/60/80UF450V"))
+check("电解行拒绝薄膜电容", tr._material_conflict(_elec, "薄膜电容 95UF 450V") != "")
+check("电解行放过电解电容", tr._material_conflict(_elec, "95UF 100V 铝电解电容 10x12") == "")
+check("瓷片行拒绝电解电容", tr._material_conflict(_ceramic, "10nF 50V 铝电解电容") != "")
+check("瓷片行放过瓷片电容",
+      tr._material_conflict(_ceramic, "50V插件瓷片瓷介电容 101 102 103 104 10NF") == "")
+
+print("== 15. 电容搜索词带耐压 ==")
+_qc = engine._build_queries("passive", "插件", {"capacitance_f": 10e-9, "voltage_v": 50.0},
+                            "CC1H103", "10nF", "", "capacitor", cap_kind="瓷片")
+check("搜索词带瓷片", any("瓷片" in x and "10nF" in x for x in _qc), _qc[:3])
+check("瓷片词同时带 50V", any("瓷片" in x and "50V" in x for x in _qc), _qc[:3])
+
 print(f"\nRESULT: {PASS} passed, {FAIL} failed")
 sys.exit(0 if FAIL == 0 else 1)

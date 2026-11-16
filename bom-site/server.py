@@ -32,6 +32,16 @@ STATIC = ROOT / "static"
 SAMPLES = ROOT / "samples"
 RUNS = Path(os.environ.get("TAOBAO_RUNS_DIR") or (ROOT / "runs")).resolve()
 MAX_BODY = 25 * 1024 * 1024
+VERSION_FILE = ROOT.parent / "VERSION"
+
+
+def _app_version() -> str:
+    """页脚显示的应用版本（唯一来源：仓库根目录的 VERSION 文件）。"""
+    try:
+        v = VERSION_FILE.read_text(encoding="utf-8").strip()
+        return v or "?"
+    except OSError:
+        return "?"
 
 if os.environ.get("TAOBAO_FAKE_SESSION") == "1":
     tr.RUNNER = tr.SessionRunner(command=[sys.executable, str(ROOT / "tests" / "fake_session.py")], repo=ROOT)
@@ -217,7 +227,21 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             return self._file(STATIC / "index.html")
         if path == "/api/health":
-            return self._send(200, {"ok": True, "engine": engine.ENGINE_VERSION, "offline": False})
+            return self._send(
+                200,
+                {
+                    "ok": True,
+                    "engine": engine.ENGINE_VERSION,
+                    "offline": False,
+                    # 前端页脚显示的版本号，不再在 HTML 里写死（写死过一次，
+                    # 服务升到 0.9.6 页面还挂着 0.9.1，排查时白白误导半天）
+                    "version": _app_version(),
+                },
+            )
+        if path == "/api/last-analysis":
+            # 刷新/新开标签页时恢复上次分析结果：否则执行区整块隐藏，
+            # 页面回到空白首屏，看不到任何跑批状态。
+            return self._send(200, tr.load_last_analysis())
         # 注意：/api/shutdown **不能**挂在 GET 上 —— 任意网页放一个
         # <img src="http://127.0.0.1:8765/api/shutdown"> 就能把服务关掉。
         # 只保留 POST + 同源校验（见 do_POST）。
@@ -302,6 +326,8 @@ class Handler(BaseHTTPRequestHandler):
                 # 「上次已完成 N 行，接着跑」，实际一行都不会执行。
                 fp = tr.set_active_bom(result.get("lines") or [])
                 result["progress"] = tr.batch_progress_summary(active_fingerprint=fp)
+                # 落一份，供刷新/新标签页恢复（前端 sessionStorage 只在本标签页有效）
+                tr.save_last_analysis(dict(result, bom_fingerprint=fp), rows=rows)
                 return self._send(200, result)
 
             if path == "/api/score":

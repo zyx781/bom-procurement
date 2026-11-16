@@ -285,6 +285,52 @@ def batch_progress_summary(active_fingerprint: str = "") -> dict:
 # 持久化到 runs/，服务重启后进度摘要也不会误报「上次已完成 N 行」。
 ACTIVE_BOM_FILE = RUNS / "active-bom.json"
 ACTIVE_BOM_FINGERPRINT = ""
+# 上一次分析的完整结果。
+# 前端原来只把结果放在 sessionStorage：刷新能恢复，但**新开标签页/浏览器重启**
+# 就丢了 —— 执行区整块 `.hidden`，页面回到空白首屏，用户以为「跑批没动静」。
+# 落一份到磁盘，任何标签页打开都能接上。
+LAST_ANALYSIS_FILE = RUNS / "last-analysis.json"
+
+
+def save_last_analysis(result: dict, rows: list | None = None) -> None:
+    """存一份上次分析结果（前端刷新/新标签页恢复用）。失败不影响主流程。"""
+    try:
+        if not isinstance(result, dict) or not result.get("lines"):
+            return
+        RUNS.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "saved_at": datetime.now().isoformat(timespec="seconds"),
+            "result": result,
+            # 原始行也带上：换套数（1 套 → 10 套）要在前端重新分析，
+            # 只恢复结果没恢复 rows，那个功能就成了死按钮。
+            "rows": rows if isinstance(rows, list) else [],
+        }
+        tmp = LAST_ANALYSIS_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(LAST_ANALYSIS_FILE)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def load_last_analysis() -> dict:
+    """读回上次分析结果；没有/损坏/和当前 BOM 对不上时返回空。"""
+    try:
+        data = json.loads(LAST_ANALYSIS_FILE.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+    result = (data or {}).get("result") if isinstance(data, dict) else None
+    if not isinstance(result, dict) or not isinstance(result.get("lines"), list):
+        return {}
+    # 和当前生效的 BOM 指纹不一致，说明是上一张表的结果，宁可让用户重传
+    fp_saved = str(result.get("bom_fingerprint") or "")
+    fp_now = active_bom_fingerprint()
+    if fp_saved and fp_now and fp_saved != fp_now:
+        return {}
+    return {
+        "saved_at": data.get("saved_at"),
+        "result": result,
+        "rows": data.get("rows") if isinstance(data.get("rows"), list) else [],
+    }
 
 
 def set_active_bom(lines: list) -> str:
@@ -1453,6 +1499,16 @@ class SessionRunner:
             ]
             scored_try = engine.score_candidates(line, candidates=cands_try, execution=True)
             usable = any((c.get("score") or 0) > 0 for c in scored_try["candidates"])
+            if usable and require_scored:
+                # 分数够 ≠ 买得过：3KV 高压瓷片、绕线 1W 电阻的分数一样很高。
+                # 如果这条词召回的候选**全部**被材料/结构闸门拒掉，就当这条词没搜到，
+                # 换下一条更精确的（「10nF 瓷片 电容」「470Ω 1/4W 金属膜 电阻」）。
+                # 不这么做的话，第一条宽词永远占着位置，精确词一次都没机会执行。
+                usable = any(
+                    (c.get("score") or 0) > 0
+                    and not _material_conflict(line, c.get("title") or "")
+                    for c in scored_try["candidates"]
+                )
             items, used, scored = got, q, scored_try
             if usable or not require_scored or qi == len(tried) - 1:
                 break
@@ -2167,6 +2223,21 @@ class SessionRunner:
                 return
             for i, line in enumerate(lines):
                 _skip_why = ""
+                # 浏览器被关掉时，每一行都会在搜索环节拿到「没有可用结果」——
+                # 19 行能一路跑完，最后报「17 行搜不到」，看着像选型失败，
+                # 实际是环境没了。这种情况必须整批中止并说清楚，别让人去改规则。
+                # 只有「会话本来在跑」才探端口：没起会话的场合（单测、离线复算）
+                # 端口本来就不通，按「浏览器没了」处理会误伤。
+                _sess_running = self._proc is not None and self._proc.poll() is None
+                if self._browser_gone or (_sess_running and self._browser_unreachable()):
+                    with self._state_lock:
+                        self._batch["stopped_reason"] = (
+                            "调试浏览器已关闭，本批中止（重新「启动淘宝会话」后点「继续加购」接着跑）"
+                        )
+                    self._append_log(
+                        "[batch] 调试浏览器已关闭，中止本批 —— 继续跑只会把每行记成「搜不到」"
+                    )
+                    break
                 with self._state_lock:
                     if self._batch.get("stopped_reason"):
                         break
@@ -2219,6 +2290,16 @@ class SessionRunner:
                         _t0 = time.monotonic()
                         res = self._add_line_to_cart(line, prefer_cheap, max_candidates, dry_run=dry_run)
                         res["total_ms"] = int((time.monotonic() - _t0) * 1000)
+                        # BOM 自身矛盾（名称列 vs 料号）且名称值不是标准档：不自动算成功。
+                        # 这类行「选型能跑通」，但买下去等于把 BOM 的错抄进购物车。
+                        # 没买到时同样要改口径：真实原因是「5kΩ 不是标准档、商家根本没有」，
+                        # 而不是「候选功率太大」——后者会把人引去手动加一个错的值。
+                        if res.get("status") in ("ok", "failed") and res.get("attempts"):
+                            _rev = _review_reason(line)
+                            if _rev:
+                                res["status"] = "uncertain"
+                                res["needs_review"] = True
+                                res["message"] = _rev
                         self._append_log(
                             f"[batch] line #{line.get('line_no')} {res.get('status')} "
                             f"total={res['total_ms'] / 1000:.1f}s "
@@ -2639,6 +2720,13 @@ class SessionRunner:
                 "message": "",
             }
             base["attempts"].append(attempt)
+            # 材料/结构先过一遍：标题里就能看出「绕线」「3KV」的，连开页都省了。
+            _mat_now = _material_conflict(line, cand.get("title") or "")
+            if _mat_now:
+                attempt["message"] = _mat_now + "，不自动加购"
+                attempt["guard"] = "MATERIAL_CONFLICT"
+                last_message = attempt["message"]
+                continue
             # 淘汰级候选（评分 <60）不自动加购：买错的代价远高于买不到。
             # 例外是多规格商品 —— 它的规格由 SKU 选中值核实（见下面的 no_sku 分支），
             # 只要 SKU 能对上具体值就仍然可用；只有「单规格、标题也核实不到」才拒绝。
@@ -2749,6 +2837,11 @@ class SessionRunner:
                     _cur_cost = (opened.get("suggested_qty") or 1) * (opened.get("detail_price") or 0)
                     _nxt_cost = _nxt.get("cost")
                     _worth = bool(_nxt_pack and _nxt_pack < _pack_now)
+                    # 下一家一看就是错货（2KV 高压瓷片、绕线电阻）就别为了小包装换过去：
+                    # 换过去也是被材料闸门拒，白跑一趟还把唯一对的货丢了
+                    # （实测 #4 10nF：第 4 家 50V 瓷片 1000 只/包，被换成第 5 家 2KV，最后整行失败）。
+                    if _material_conflict(line, _nxt.get("title") or ""):
+                        _worth = False
                     if _worth and _nxt_cost is not None and _cur_cost:
                         # 小包装贵一点点可以接受（少浪费 80 只），贵太多就不值当
                         _worth = _nxt_cost <= max(_cur_cost * 1.3, _cur_cost + 1.0)
@@ -2772,6 +2865,13 @@ class SessionRunner:
             # 只能在这里用「选中的值能不能读出规格」兜住。
             if not no_sku and sels:
                 _sel_txt = " ".join(str(s.get("value") or "") for s in sels).strip()
+                # 标题没写、SKU 才写的也要拦（「颜色分类=绕线1W」这类）。
+                _mat_sku = _material_conflict(line, _sel_txt)
+                if _mat_sku:
+                    attempt["message"] = _mat_sku + "，不自动加购"
+                    attempt["guard"] = "MATERIAL_CONFLICT"
+                    last_message = attempt["message"]
+                    continue
                 # 型号必须精确对上：同系列不同号就是降规格（SS26 顶 SS34）。
                 # 这条与「有没有数值规格」无关，二极管/连接器也走这里。
                 _bad_pn = _sku_model_conflict(line, _sel_txt)
@@ -2804,8 +2904,11 @@ class SessionRunner:
                 _pcs = opened.get("actual_pcs") or (opened.get("suggested_qty") or 1) * _ps
                 # 钱闸门在演练里也要过：否则演练说「这行能买」，真跑被单价/金额闸门拦下，
                 # 演练就只是跑了个热闹（实测 19 行演练全绿、真跑 5 行被拦）。
+                # 详情页没回报价时用标题价兜底 —— 真跑那边（见 _guard）本来就是这么做的，
+                # 不兜底就会出现「演练 ok、真跑被 ¥90 拦下」的两副面孔。
+                _guard_price = _p if _p is not None else cand.get("price")
                 _mg = _money_guards(
-                    line, _p, _ps, opened.get("suggested_qty") or 1, _pcs
+                    line, _guard_price, _ps, opened.get("suggested_qty") or 1, _pcs
                 )
                 if _mg:
                     attempt["message"] = _mg["message"]
@@ -3142,6 +3245,236 @@ def _spec_kinds(cand: dict) -> set:
                 out.add(pref)
                 break
     return out
+
+
+# ---------------- 材料 / 结构闸门 ----------------
+# 阻值、容值对上，不代表能焊上。实测同一份 BOM：
+#   #14 470Ω ±1% 1/4W 金属膜 → 买了「绕线 1W」（绕线有感、体积大 3 倍，插不进）
+#   #4  10nF 50V 脚距 2.54   → 买了「3KV 高压瓷片」（脚距 5.08，焊盘对不上）
+#   #7  100nF 50V 脚距 2.54  → 买了「独石 P=5.08」
+# 值都是对的，参数栏也都能「核实」，所以原来的值闸门全放行。这里补三类硬件事实：
+# 电阻类型（金属膜/绕线/碳膜）、功率上限、耐压上限、脚距。
+_RES_WIRE_WORDS = (
+    "绕线", "线绕", "wirewound", "水泥电阻", "水泥", "铝壳", "制动电阻", "刹车电阻", "大功率电阻",
+)
+_RES_CARBON_WORDS = ("碳膜", "carbon film")
+
+
+def _lcsc_attrs(line: dict) -> dict:
+    info = (line.get("row") or {}).get("lcsc_info") or {}
+    attrs = info.get("attrs") if isinstance(info, dict) else None
+    return attrs if isinstance(attrs, dict) else {}
+
+
+_CAP_FILM_WORDS = (
+    "CBB", "启动电容", "启动电容器", "薄膜", "涤纶", "安规电容", "校正电容",
+    "X2电容", "MKP", "MKT", "CBB60", "CBB61", "CBB65",
+)
+_CAP_ELEC_WORDS = ("电解", "铝电解", "钽电容", "固态电容")
+_CAP_CERAMIC_WORDS = ("瓷片", "陶瓷", "独石", "MLCC", "C0G", "X7R", "Y5V")
+
+
+def _bom_cap_family(line: dict) -> str:
+    """BOM 这颗电容是哪一族：电解 / 瓷片（含其他无极性薄膜）。
+
+    只看数值会出大事：95µF 搜出来的是 CBB65 空调压缩机**启动电容**
+    （450V、体积像火柴盒），和 BOM 里那颗 10×12mm 的铝电解不是一个东西，
+    容值一样也装不进去 —— 极性、纹波、体积全不一样。
+    """
+    attrs = _lcsc_attrs(line)
+    if "有极性" in str(attrs.get("极性类型") or ""):
+        return "电解"
+    if str(attrs.get("温度系数") or "") or str(attrs.get("介质材料") or ""):
+        return "瓷片"
+    # 封装名最可靠：立创/Altium 的圆柱体是 CAP-TH_BD<直径>，方形本体是 CAP-TH_L…W…
+    pkg = str((line.get("row") or {}).get("package") or "")
+    if re.search(r"BD\s*\d", pkg, re.I):
+        return "电解"
+    if re.search(r"CAP-TH_L", pkg, re.I):
+        return "瓷片"
+    blob = " ".join(str(line.get(k) or "") for k in ("mpn", "desc", "params_text"))
+    if any(w in blob for w in _CAP_ELEC_WORDS):
+        return "电解"
+    if any(w in blob for w in _CAP_CERAMIC_WORDS):
+        return "瓷片"
+    return ""
+
+
+def _bom_res_type(line: dict) -> str:
+    """BOM 要求的电阻类型（立创 attrs 优先，其次料号/描述）。空 = 没要求，不拦。"""
+    t = str(_lcsc_attrs(line).get("电阻类型") or "").strip()
+    if t:
+        return t
+    blob = " ".join(
+        str(line.get(k) or "") for k in ("mpn", "desc", "params_text")
+    )
+    if "金属膜" in blob or "metal film" in blob.lower():
+        return "金属膜电阻"
+    if "碳膜" in blob or "carbon film" in blob.lower():
+        return "碳膜电阻"
+    return ""
+
+
+def _parse_watts(text: str) -> float | None:
+    """标题/SKU 里的功率：`1/4W`、`1/2W`、`2W`、`1W/2W/3W` 取最大值。"""
+    best = None
+    for m in re.finditer(r"(?<![A-Za-z])(\d+(?:\.\d+)?)\s*(?:/\s*(\d+))?\s*W(?![A-Za-z])", str(text or "")):
+        try:
+            if m.group(2):
+                val = float(m.group(1)) / float(m.group(2))
+            else:
+                val = float(m.group(1))
+        except (TypeError, ValueError, ZeroDivisionError):
+            continue
+        if best is None or val > best:
+            best = val
+    return best
+
+
+def _parse_volts(text: str) -> float | None:
+    """标题里的耐压：`50V`、`3KV`、`3000V` 取最大值。`Vf/Vr` 这类参数名不算。"""
+    best = None
+    for m in re.finditer(r"(?<![A-Za-z])(\d+(?:\.\d+)?)\s*(KV|kV|V|伏)(?![A-Za-z])", str(text or "")):
+        try:
+            val = float(m.group(1))
+        except (TypeError, ValueError):
+            continue
+        if m.group(2).lower() == "kv":
+            val *= 1000
+        if best is None or val > best:
+            best = val
+    return best
+
+
+def _parse_pitch_mm(text: str) -> float | None:
+    """脚间距：`P=5.08mm`、`脚间距2.54mm`、`间距 5mm`。"""
+    m = re.search(
+        r"(?:P\s*=\s*|脚间距\s*[:：]?\s*|引脚间距\s*[:：]?\s*|间距\s*[:：]?\s*)(\d+(?:\.\d+)?)\s*mm",
+        str(text or ""),
+        re.I,
+    )
+    try:
+        return float(m.group(1)) if m else None
+    except (TypeError, ValueError):
+        return None
+
+
+_E24 = (
+    1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.7, 3.0,
+    3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1,
+)
+
+
+def _is_standard_value(value) -> bool:
+    """归一化到 1–10 后是否落在 E24 档位上（容差 1%）。
+
+    用来识别「BOM 名称列写了个世界上不存在的阻值」：5kΩ 不在 E24（应为 5.1k），
+    470Ω / 2.2kΩ / 100nF 都在。判不了（空/非数/非正）时一律返回 True，不误伤。
+    """
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return True
+    if v <= 0:
+        return True
+    while v >= 10.0:
+        v /= 10.0
+    while v < 1.0:
+        v *= 10.0
+    return any(abs(v - e) / e <= 0.01 for e in _E24)
+
+
+def _review_reason(line: dict) -> str:
+    """BOM 自身矛盾、且名称列的值不是标准档 → 必须人工确认，不自动买。
+
+    实测这份 BOM：470Ω / 2.2kΩ / 5kΩ 三行的 Manufacturer Part 全是
+    MF1/4W-1KΩ±1%T52（复制没改）。按名称列买 470Ω、2.2kΩ 是对的；
+    但 5kΩ 不是 E24 档位（标准是 5.1k），很可能名称本身也敲错了 ——
+    这种行自动买下去，买到的就是个「BOM 里不存在的值」。
+    """
+    note = str(line.get("value_conflict") or "").strip()
+    if not note:
+        return ""
+    p = line.get("params") or {}
+    for key, kind in (("resistance_ohm", "阻值"), ("capacitance_f", "容值"), ("inductance_h", "感值")):
+        v = p.get(key)
+        if v is None:
+            continue
+        if not _is_standard_value(v):
+            shown = engine._fmt_param_value(key, v)
+            return (
+                f"BOM 名称列与料号冲突，且{kind} {shown} 不在 E24 标准档位，"
+                f"请核对原理图后再决定（宁可先不买）"
+            )
+        return ""  # 值本身是标准档，按名称列买可以，冲突已在风险里标注
+    return ""
+
+
+def _material_conflict(line: dict, text: str) -> str:
+    """材料/结构对不上时返回一句原因；空字符串表示可以继续。"""
+    t = str(text or "")
+    if not t:
+        return ""
+    p = line.get("params") or {}
+
+    # —— 电阻：类型必须一致（金属膜 ≠ 绕线 ≠ 碳膜）——
+    bom_type = _bom_res_type(line)
+    if bom_type:
+        if "金属膜" in bom_type or "氧化膜" in bom_type:
+            for w in _RES_WIRE_WORDS:
+                if w in t:
+                    return f"候选是「{w}」电阻，BOM 要的是{bom_type}（绕线有感、体积大，不能顶替）"
+            for w in _RES_CARBON_WORDS:
+                if w in t:
+                    return f"候选是碳膜电阻，BOM 要的是{bom_type}（精度/温漂差一个档）"
+        if "绕线" in bom_type:
+            # 反过来：BOM 明确要绕线，金属膜小功率也不能顶（功率不够）
+            pw = p.get("power_w")
+            got = _parse_watts(t)
+            if pw and got and got + 1e-9 < float(pw) * 0.9:
+                return f"候选 {got:g}W，低于 BOM 要的 {float(pw):g}W 绕线功率"
+
+    # —— 电容族系：电解 ≠ 瓷片 ≠ 薄膜/启动电容 ——
+    # 数值对得上也可能完全不是一个元件：95µF 的 CBB65 空调启动电容（450V）
+    # 和 10×12mm 铝电解容值相同，但极性、体积、纹波电流全都不一样。
+    fam = _bom_cap_family(line)
+    if fam == "电解":
+        for w in _CAP_FILM_WORDS + _CAP_CERAMIC_WORDS:
+            if w in t:
+                return f"候选是「{w}」类（无极性/薄膜），BOM 要的是铝电解（有极性、体积相近才装得下）"
+    elif fam == "瓷片":
+        for w in _CAP_ELEC_WORDS + _CAP_FILM_WORDS:
+            if w in t:
+                return f"候选是「{w}」类，BOM 要的是瓷片/陶瓷电容（脚距与体积不同）"
+
+    # —— 功率：可以放大，但不能离谱（1/4W 换成 2W 还能焊，换 5W 就装不下）——
+    pw = p.get("power_w")
+    if pw:
+        got = _parse_watts(t)
+        if got and got > max(0.5, float(pw) * 8):
+            return f"候选 {got:g}W，BOM 只要 {float(pw):g}W，体积大一个量级，装不进原焊盘"
+
+    # —— 电容耐压：50V 的瓷片买成 3KV，脚距和体积都不是一回事 ——
+    v = p.get("voltage_v")
+    if v:
+        got_v = _parse_volts(t)
+        if got_v and got_v > max(100.0, float(v) * 10):
+            return f"候选耐压 {got_v:g}V，BOM 只要 {float(v):g}V，高压规格体积/脚距完全不同"
+
+    # —— 脚距：立创核准了 2.54，就不能买 5.08 ——
+    # 只在 BOM 值没有名称/料号冲突时生效：冲突行的立创参数来自那颗错料号，不能当依据。
+    if not str(line.get("value_conflict") or "").strip():
+        _pitch_txt = str(_lcsc_attrs(line).get("脚间距") or "")
+        # 立创属性值就是「2.54mm」这种裸值，不带「P=」前缀，不能拿标题的正则硬套
+        _pm = re.search(r"(\d+(?:\.\d+)?)\s*mm", _pitch_txt)
+        try:
+            bom_pitch = float(_pm.group(1)) if _pm else None
+        except (TypeError, ValueError):
+            bom_pitch = None
+        got_pitch = _parse_pitch_mm(t)
+        if bom_pitch and got_pitch and abs(got_pitch - bom_pitch) > 0.3:
+            return f"候选脚间距 {got_pitch:g}mm，BOM 是 {bom_pitch:g}mm，焊盘对不上"
+    return ""
 
 
 def _required_spec_kinds(line: dict) -> set:

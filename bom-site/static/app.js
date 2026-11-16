@@ -7,6 +7,7 @@
   const exec = { lineIndex: -1, search: null, chosen: null, open: null, result: null };
   let sessionReady = false;
   let batchRunning = false;
+  let batchHasRows = false; // 服务端有批次数据（前端就算没分析结果，也要把执行区露出来）
   let pollTimer = null;
   let serviceDown = false; // 「退出服务」后停止轮询，避免满屏报错
   // 实时进度：优先用服务端推送（EventSource）。定时轮询只作退路 ——
@@ -192,8 +193,29 @@
     }
   }
 
-  /* ---------- 渲染主结果 ---------- */
+  // sessionStorage 只活在一个标签页里：新开标签页 / 浏览器重启后它一定是空的。
+  // 那时候如果只靠它，整个执行区（含批次进度）都隐藏，页面回到空白首屏 ——
+  // 跑批明明在跑，用户看到的是「什么都没发生」。服务端落过盘就直接接上。
+  async function restoreFromServer() {
+    try {
+      const d = await fetch("/api/last-analysis", { cache: "no-store" }).then((r) => r.json());
+      const res = d && d.result;
+      if (!res || !Array.isArray(res.lines) || !res.lines.length) return false;
+      state.rows = Array.isArray(d.rows) && d.rows.length ? d.rows : null;
+      state.result = res;
+      state.sets = Number(res.sets) || 1;
+      state.activeIndex = 0;
+      state.lastScore = null;
+      render();
+      const total = (res.summary && res.summary.total) || res.lines.length;
+      setStatus(`已恢复上次分析结果：${total} 行（刷新或新开标签页都能接上）。`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
+  /* ---------- 渲染主结果 ---------- */
   function render() {
     $("#result-panel").classList.remove("hidden");
     $("#score-panel").classList.remove("hidden");
@@ -1017,12 +1039,20 @@
   /* ---------- 一键全部加购 ---------- */
 
   const BATCH_LABEL = { pending: "待处理", running: "进行中", ok: "已加购", failed: "失败", uncertain: "待核对", skipped: "跳过" };
+  // 演练的 ok 是「选型过了」，不是「买到了」。写「已加购」会让人以为车里有货。
+  function batchLabel(status, dry) {
+    if (status === "ok" && dry) return "选型通过";
+    return BATCH_LABEL[status] || status || "";
+  }
 
   let batchProgress = null;
 
   async function startBatch(opts) {
+    // 新标签页里前端可能没有结果（只有服务端有）：先补一次再判断
+    if (!state.result && batchHasRows) await restoreFromServer();
     if (!state.result) return toast("先分析 BOM");
     if (!sessionReady) return toast("先启动淘宝会话");
+    batchScrolled = false; // 新一轮跑批允许再滚一次到进度区
     const mode = (opts && opts.mode) || "auto"; // auto | redo | retry
     const lines = state.result.lines;
     // 型号/名称/参数全空的行没有搜索词，跑起来必然搜不出东西：提前说清楚会被跳过
@@ -1189,7 +1219,7 @@
             ? `<b>${fmtMoney(r.cost)}</b>${unit ? `<span class="bsub">${esc(unit)}</span>` : ""}`
             : `${esc(price)}${unit ? `<span class="bsub">${esc(unit)}</span>` : ""}`;
         return `<div class="brow ${cls}">
-          <span class="bst">${BATCH_LABEL[r.status] || esc(r.status || "")}${unv}</span>
+          <span class="bst">${esc(batchLabel(r.status, st.dry_run))}${unv}</span>
           <span class="bbody">
             <span class="bt">#${esc(r.line_no)} ${esc(r.headline || "")} ${esc(qty)}</span>
             <span class="bs">${esc(sub || "等待中…")}</span>
@@ -1291,31 +1321,51 @@
     }
   }
 
+  function ensureExecVisible() {
+    const panel = $("#exec-panel");
+    if (panel && panel.classList.contains("hidden")) panel.classList.remove("hidden");
+  }
+
+  // 批次区在页面下半部分。开跑时如果它不在视野里就滚过去一次 ——
+  // 否则人盯着首屏，看不到任何跳动，只会以为没跑（2026-11-16 用户反馈）。
+  let batchScrolled = false;
+  function revealBatch() {
+    if (batchScrolled) return;
+    const box = $("#batch-progress");
+    if (!box || box.classList.contains("hidden")) return;
+    const r = box.getBoundingClientRect();
+    if (r.top < 0 || r.top > window.innerHeight - 80) {
+      box.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    batchScrolled = true;
+  }
+
   function applyBatchStatus(st) {
     batchRunning = !!st.running;
     batchProgress = st.progress || batchProgress;
+    // 服务端有批次数据就要把执行区露出来：刷新/新开标签页后前端记忆可能没了，
+    // 但跑批的实时状态一直在服务端。把整块藏起来等于「页面不显示真实状态」。
+    const nRows = (st.results || []).length;
+    batchHasRows = nRows > 0 || (st.total || 0) > 0 || !!((st.progress || {}).total);
+    if (batchHasRows) ensureExecVisible();
     renderBatch(st);
     renderVerifyBanner(st);
     syncBatchButtons();
     $("#btn-batch-stop").disabled = !batchRunning;
+    const isDry = !!st.dry_run;
     if (st.warning) {
       // 整批空跑 / 进度错配这类严重情况，直接把原因摆在进度条上
       $("#batch-note").textContent = st.warning;
     } else if (batchRunning) {
-      const money = st.cost_total ? `，已花 ${fmtMoney(st.cost_total)}` : "";
-      $("#batch-note").textContent = `${st.phase || "进行中"}，已完成 ${st.done}/${st.total}${money}；每行约 20 到 60 秒，浏览器窗口请别关`;
+      const money = !isDry && st.cost_total ? `，已花 ${fmtMoney(st.cost_total)}` : "";
+      $("#batch-note").textContent = isDry
+        ? `演练中（不点加购）：${st.phase || ""}，已完成 ${st.done}/${st.total}`
+        : `${st.phase || "进行中"}，已完成 ${st.done}/${st.total}${money}；每行约 20 到 60 秒，浏览器窗口请别关`;
+      revealBatch();
     } else if (st.total) {
       const okn = st.ok_count != null ? st.ok_count : (st.results || []).filter((r) => r.status === "ok").length;
       const pg = st.progress || {};
       const { allProcessed } = batchMode();
-      const tail = allProcessed
-        ? "；这批已跑完，要重跑点「重跑问题行」或「重新跑全部」（会重复加购，先删上一批）"
-        : pg.ok_count > 0
-        ? "；进度已保存，下次点「继续加购」从断点接着跑"
-        : "";
-      const money = st.cost_total
-        ? `，合计 ${fmtMoney(st.cost_total)}${st.cost_lines ? `（${st.cost_lines} 行有实付价）` : ""}`
-        : "";
       // 跳过/失败的行要在收尾一句话里点名，否则「已加购 108 行」看不出还有 11 行没处理
       const skipped = (st.results || []).filter((r) => r.status === "skipped").length;
       const failed = (st.results || []).filter((r) => r.status === "failed").length;
@@ -1325,6 +1375,22 @@
       const unverified = (st.results || []).filter((r) => r.cart_unverified).length;
       const warn = rec.anomaly
         ? `⚠ 收尾对账没做成（${rec.anomaly_reason || "购物车没读对"}），${unverified} 行标了「未核实」，请到购物车核对；`
+        : "";
+      if (isDry) {
+        // 演练一件都没买：不报金额，也别劝人「重跑」（本来就没花钱）。
+        $("#batch-note").textContent =
+          `${warn}演练（未加购）：选型通过 ${okn} 行${aside ? `，${aside}` : ""}` +
+          `${st.stopped_reason ? "（" + st.stopped_reason + "）" : ""}；` +
+          `这次一件都没买，确认没问题再点「一键全部加购」`;
+        return;
+      }
+      const tail = allProcessed
+        ? "；这批已跑完，要重跑点「重跑问题行」或「重新跑全部」（会重复加购，先删上一批）"
+        : pg.ok_count > 0
+        ? "；进度已保存，下次点「继续加购」从断点接着跑"
+        : "";
+      const money = st.cost_total
+        ? `，合计 ${fmtMoney(st.cost_total)}${st.cost_lines ? `（${st.cost_lines} 行有实付价）` : ""}`
         : "";
       $("#batch-note").textContent =
         `${warn}上次批量：已加购 ${okn} 行${money}${aside ? `，${aside}` : ""}` +
@@ -1354,7 +1420,9 @@
   function syncBatchButtons() {
     const btn = $("#btn-batch-start");
     const { n, p, runnableN, allProcessed } = batchMode();
-    btn.disabled = !sessionReady || !state.result || batchRunning;
+    // 前端没有分析结果、但服务端还有落盘的行时也要能点：
+    // 刷新/新标签页后 state.result 是空的，可上一批的行明明还在 runs/batch-lines.json 里。
+    btn.disabled = !sessionReady || batchRunning || !(state.result || batchHasRows);
     if (!batchRunning) {
       // 都处理过之后按钮不能还是「继续加购」—— 那会跳过全部、一行不跑。
       // 有问题行就主推「重跑问题行」，全成功才是「重新跑全部」。
@@ -1642,6 +1710,8 @@
     true
   );
   const restored = restoreState();
+  // 本标签页没记忆就从服务端补（新标签页/浏览器重启的主路径）
+  if (!restored) restoreFromServer();
   pollTimer = setInterval(() => {
     if (serviceDown) return;
     pollSession();
@@ -1685,6 +1755,9 @@
     .then((h) => {
       const el = $("#engine-ver");
       if (el) el.textContent = h.engine;
+      // 页脚版本号以服务端为准（HTML 里写死过 v0.9.1，服务升到 0.9.6 都没跟着变）
+      const ver = $("#app-ver");
+      if (ver) ver.textContent = h.version ? "v" + h.version : "—";
     })
     .catch(() => {});
 

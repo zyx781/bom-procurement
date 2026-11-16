@@ -1595,85 +1595,23 @@ class SessionRunner:
             except (TypeError, ValueError):
                 price_shift = None
 
-        # 每只单价闸门：整袋/整盘报价会被当成单只价（实测 ¥94 买 2000 只拨动开关，
-        # BOM 只要 1 只）。打包数已知时用「选完 SKU 的每份价 ÷ 每份只数」，
-        # 未知时退回标题价；宁可多拦一次，也不默认把一大袋买回来。
-        _unit_guard = None
-        try:
-            if final_price is not None:
-                _unit_guard = float(final_price) / float(eff_pack or 1)
-            elif price_hint is not None:
-                _unit_guard = float(price_hint) / float(eff_pack or 1)
-        except (TypeError, ValueError, ZeroDivisionError):
-            _unit_guard = None
-        _unit_ceil = _unit_price_ceiling(line)
-        if _unit_guard and _unit_ceil and _unit_guard > float(_unit_ceil):
-            return {
-                "ok": False,
-                "code": "UNIT_PRICE_ANOMALY",
-                "message": (
-                    f"折合每只 ¥{_unit_guard:g}，超过该品类常见价 ¥{_unit_ceil:g}，"
-                    "疑似整袋/整盘报价，已放弃自动加购"
-                ),
-                "unit_price": round(_unit_guard, 6),
-                "unit_cap": _unit_ceil,
-                "pack_size": eff_pack if eff_pack and eff_pack > 1 else None,
-                "actual_pcs": actual_pcs,
-                "screenshot": self.persist_screenshot(resp.get("screenshot")),
-            }
-
-        # 金额闸门：贵得离谱就不点加购（真正的钱是在 cart-add 那一下花出去的）
-        est_cost = round(float(final_price) * int(qty), 2) if final_price is not None else None
-        cap = _line_cost_cap(line.get("category"))
-        if est_cost is not None and cap and est_cost > cap:
-            return {
-                "ok": False,
-                "code": "COST_TOO_HIGH",
-                "message": (
-                    f"这一行要花 ¥{est_cost:g}（{qty} 份 × ¥{final_price:g}／份），"
-                    f"超过单行上限 ¥{cap:g}，已放弃自动加购"
-                ),
-                "est_cost": est_cost,
-                "cap": cap,
-                "qty": qty,
-                "final_price": final_price,
-                "price_shift": price_shift,
-                "pack_size": eff_pack if eff_pack and eff_pack > 1 else None,
-                "actual_pcs": actual_pcs,
-                "unit_price": (
-                    round(final_price / eff_pack, 6)
-                    if (final_price and eff_pack and eff_pack > 1)
-                    else final_price
-                ),
-                "screenshot": self.persist_screenshot(resp.get("screenshot")),
-            }
-
-        # 超量太狠 + 不是小钱：整盘/整卷报价，BOM 只要十来个却买到一大盘，
-        # 这种不自动下单 —— 交给下一家卖小包装的，或留给人工判断。
-        if (
-            auto_qty
-            and est_cost is not None
-            and actual_pcs
-            and line.get("qty")
-            and est_cost >= 50
-            and float(actual_pcs) / max(1, int(line.get("qty"))) >= 50
-        ):
-            _over = float(actual_pcs) / max(1, int(line.get("qty")))
-            return {
-                "ok": False,
-                "code": "OVERBUY_TOO_MUCH",
-                "message": (
-                    f"要 {int(line.get('qty'))} 只却到手 {int(actual_pcs)} 只（超量 {_over:.0f} 倍），"
-                    f"合计 ¥{est_cost:g}，已放弃自动加购"
-                ),
-                "over_ratio": round(_over, 1),
-                "est_cost": est_cost,
-                "qty": qty,
-                "final_price": final_price,
-                "pack_size": eff_pack if eff_pack and eff_pack > 1 else None,
-                "actual_pcs": actual_pcs,
-                "screenshot": self.persist_screenshot(resp.get("screenshot")),
-            }
+        # 三道钱闸门（每只单价 / 单行金额 / 超量）走公共实现，与演练共用同一套判断。
+        # 单价可以用标题价兜底（选完 SKU 没回报价时）；金额只认选完 SKU 的实价 ——
+        # 标题那个 ¥1 常常是引流价，按它算金额等于给整袋报价开后门。
+        _guard = _money_guards(
+            line,
+            final_price if final_price is not None else price_hint,
+            eff_pack,
+            qty,
+            actual_pcs,
+            auto_qty=auto_qty,
+            amount=final_price,
+        )
+        if _guard:
+            if _guard.get("code") == "COST_TOO_HIGH":
+                _guard["price_shift"] = price_shift
+            _guard["screenshot"] = self.persist_screenshot(resp.get("screenshot"))
+            return {"ok": False, **_guard}
 
         _t_add = time.monotonic()
         # light：证据图用 jpeg + 不拉整页文本，单行省 2–3s
@@ -2696,14 +2634,16 @@ class SessionRunner:
                 attempt["message"] = f"评分 {cand.get('score')} 分（淘汰级），不自动加购"
                 last_message = attempt["message"]
                 continue
-            # 换店可以，换规格不行：型号/针数这类非数值规格必须在标题里核实，
-            # 兜底候选还得命中最优候选命中的那些项。
+            # 「封装」「功率」都不算必须项：
+            # · 直插电阻/电容的标题普遍写「1/4W 金属膜电阻」，没人写「插件」；
+            # · 功率是「≥ 就够」的数值项，由 SKU 组或打分处理，标题不写很正常。
+            #   硬要求命中等于把整类商品拒掉（实测 470Ω ×42 的五家候选全判
+            #   「封装核实不到」，5kΩ 判「功率核实不到」）。
             _have_kinds = _spec_kinds(cand)
             _miss_spec = _need_kinds - _have_kinds
             if _ti > 0:
-                _miss_spec = _miss_spec | (
-                    (_ref_kinds - _value_kinds) - _have_kinds
-                )
+                _strict = (_ref_kinds - _value_kinds - {"封装", "功率"}) - _have_kinds
+                _miss_spec = _miss_spec | _strict
             if _miss_spec:
                 attempt["message"] = (
                     "候选标题核实不到关键规格（" + "、".join(sorted(_miss_spec)) + "），不自动加购"
@@ -2813,6 +2753,35 @@ class SessionRunner:
                 last_message = attempt["message"]
                 continue
 
+            # 多规格商品：选中的 SKU 值必须能证明 BOM 要的那个值。
+            # 实测「95µF」搜到微波炉高压电容（0.85/0.9/0.95/1.0UF 同一链接多规格），
+            # 系统给选了「维修八件套」—— 那是配件包，不是电容规格，容值差 100 倍。
+            # SKU 冲突判定看不出来：选项里根本没有「95µF」，所以不构成「全部冲突」，
+            # 只能在这里用「选中的值能不能读出规格」兜住。
+            if not no_sku and sels:
+                _sel_txt = " ".join(str(s.get("value") or "") for s in sels).strip()
+                # 型号必须精确对上：同系列不同号就是降规格（SS26 顶 SS34）。
+                # 这条与「有没有数值规格」无关，二极管/连接器也走这里。
+                _bad_pn = _sku_model_conflict(line, _sel_txt)
+                if _bad_pn:
+                    attempt["message"] = (
+                        f"选中的 SKU 是 {_bad_pn}，与 BOM 型号 {line.get('mpn')} 同系列但不同号"
+                        f"（等同降规格），不自动加购"
+                    )
+                    last_message = attempt["message"]
+                    continue
+                if _value_kinds:
+                    _prove = _sel_txt + " " + str(cand.get("title") or "")
+                    _miss_now = _value_kinds - _title_value_kinds(line, _prove)
+                    if _miss_now:
+                        attempt["message"] = (
+                            "选中的 SKU（" + (_sel_txt[:20] or "空") + "）核实不到"
+                            + "、".join(sorted(_miss_now))
+                            + "，不自动加购"
+                        )
+                        last_message = attempt["message"]
+                        continue
+
             qty = opened.get("suggested_qty") or line.get("qty") or 1
             selections = [{"label": s["label"], "value": s["value"]} for s in sels]
             if dry_run:
@@ -2821,6 +2790,16 @@ class SessionRunner:
                 _p = opened.get("detail_price")
                 _ps = opened.get("pack_size") or 1
                 _pcs = opened.get("actual_pcs") or (opened.get("suggested_qty") or 1) * _ps
+                # 钱闸门在演练里也要过：否则演练说「这行能买」，真跑被单价/金额闸门拦下，
+                # 演练就只是跑了个热闹（实测 19 行演练全绿、真跑 5 行被拦）。
+                _mg = _money_guards(
+                    line, _p, _ps, opened.get("suggested_qty") or 1, _pcs
+                )
+                if _mg:
+                    attempt["message"] = _mg["message"]
+                    attempt["guard"] = _mg.get("code")
+                    last_message = attempt["message"]
+                    continue
                 attempt["ok"] = True
                 attempt["dry"] = True
                 base.update(
@@ -3039,6 +3018,95 @@ def _unit_price_ceiling(line: dict) -> float | None:
     return None
 
 
+def _money_guards(
+    line: dict,
+    price,
+    pack,
+    qty,
+    actual_pcs,
+    auto_qty: bool = True,
+    amount=None,
+) -> dict | None:
+    """三道钱闸门：每只单价、单行金额、超量。
+
+    真实加购和演练必须走**同一套**判断。之前演练在 add_to_cart 之前就 return 了，
+    钱闸门全被绕过 —— 演练报告「19 行全通」，真跑却有 5 行被拦，等于白演练。
+
+    price 用于「每只单价」（标题价兜底也够用）；amount 用于「这一行要花多少钱」，
+    默认同 price。两者分开是因为标题价可能只是引流价，金额只认选完 SKU 的实价。
+
+    返回 None 表示通过；否则返回 {code, message, ...}，调用方补截图后原样返回。
+    """
+    eff_pack = int(pack or 1) or 1
+    unit = None
+    try:
+        if price is not None:
+            unit = float(price) / float(eff_pack)
+    except (TypeError, ValueError, ZeroDivisionError):
+        unit = None
+    ceil_ = _unit_price_ceiling(line)
+    if unit and ceil_ and unit > float(ceil_):
+        return {
+            "code": "UNIT_PRICE_ANOMALY",
+            "message": (
+                f"折合每只 ¥{unit:g}，超过该品类常见价 ¥{ceil_:g}，"
+                "疑似整袋/整盘报价，已放弃自动加购"
+            ),
+            "unit_price": round(unit, 6),
+            "unit_cap": ceil_,
+            "pack_size": eff_pack if eff_pack > 1 else None,
+            "actual_pcs": actual_pcs,
+        }
+
+    est_cost = None
+    _amt = price if amount is None else amount
+    try:
+        if _amt is not None:
+            est_cost = round(float(_amt) * max(1, int(qty)), 2)
+    except (TypeError, ValueError):
+        est_cost = None
+    cap = _line_cost_cap(line.get("category"))
+    if est_cost is not None and cap and est_cost > cap:
+        return {
+            "code": "COST_TOO_HIGH",
+            "message": (
+                f"这一行要花 ¥{est_cost:g}（{max(1, int(qty))} 份 × ¥{float(_amt):g}／份），"
+                f"超过单行上限 ¥{cap:g}，已放弃自动加购"
+            ),
+            "est_cost": est_cost,
+            "cap": cap,
+            "qty": max(1, int(qty)),
+            "final_price": float(_amt),
+            "pack_size": eff_pack if eff_pack > 1 else None,
+            "actual_pcs": actual_pcs,
+            "unit_price": round(unit, 6) if unit is not None else None,
+        }
+
+    if (
+        auto_qty
+        and est_cost is not None
+        and actual_pcs
+        and line.get("qty")
+        and est_cost >= 50
+        and float(actual_pcs) / max(1, int(line.get("qty"))) >= 50
+    ):
+        over = float(actual_pcs) / max(1, int(line.get("qty")))
+        return {
+            "code": "OVERBUY_TOO_MUCH",
+            "message": (
+                f"要 {int(line.get('qty'))} 只却到手 {int(actual_pcs)} 只（超量 {over:.0f} 倍），"
+                f"合计 ¥{est_cost:g}，已放弃自动加购"
+            ),
+            "over_ratio": round(over, 1),
+            "est_cost": est_cost,
+            "qty": max(1, int(qty)),
+            "final_price": float(price),
+            "pack_size": eff_pack if eff_pack > 1 else None,
+            "actual_pcs": actual_pcs,
+        }
+    return None
+
+
 # 兜底候选必须命中的关键规格项。换一家店可以，换错规格不行 ——
 # 实测最优候选「加购按钮找不到」后，兜底买了 1/8W 的 1K 顶替 1/4W，
 # 评分掉到 65，界面还写「已加入购物车」。
@@ -3080,6 +3148,31 @@ def _required_spec_kinds(line: dict) -> set:
     return need
 
 
+def _sku_model_conflict(line: dict, text: str) -> str:
+    """SKU 选中值里出现了同族不同号的料号 → 返回那个料号。
+
+    实测 SS34 的商品链接，SKU 选项里既有「丝印SS34」也有「SR260贴片SMA丝印SS26」，
+    选中 SS26 就是 60V 2A 顶替 40V 3A —— 同系列降规格，和「买错」一样严重。
+    标题里 SS34 在列（SS12/14/34/54），所以只看标题永远查不出来。
+
+    只判同族（前缀字母相同、序号不同），避免把 50V / 100nF 这类规格值当料号。
+    料号互相包含也算相同（NE555 ⊂ NE555P），否则会把同一个型号判成冲突。
+    """
+    mpn = str(line.get("mpn") or "").strip().upper()
+    m = re.match(r"^([A-Z]{1,4})(\d{2,4})([A-Z]{0,3})$", mpn)
+    if not m:
+        return ""
+    fam = m.group(1)
+    for tok in re.findall(r"[A-Z]{1,4}\d{2,4}[A-Z]{0,3}", str(text or "").upper()):
+        tm = re.match(r"^([A-Z]{1,4})(\d{2,4})([A-Z]{0,3})$", tok)
+        if not tm or tm.group(1) != fam:
+            continue
+        if tok == mpn or tok in mpn or mpn in tok:
+            continue
+        return tok
+    return ""
+
+
 def _title_value_kinds(line: dict, title: str) -> set:
     """标题里能否直接读到 BOM 要的数值（单规格商品只能靠这个核实）。
 
@@ -3090,9 +3183,16 @@ def _title_value_kinds(line: dict, title: str) -> set:
     out = set()
     try:
         if p.get("resistance_ohm") is not None:
-            r = engine._parse_resistance(t)
-            if r is not None and engine._value_match(float(r), float(p["resistance_ohm"]), 0.005):
-                out.add("阻值")
+            # 淘宝 SKU 值常是「2K2」「1/4W 470R(100只)」这种写法。两个解析器都要试：
+            # engine 那个读「2K2」会取到 2Ω，_sku_resistance 才读得出 2.2kΩ ——
+            # 只在前者返回 None 时兜底是不够的（它会返回一个错的值）。
+            _cands = (engine._parse_resistance(t), _sku_resistance(t))
+            for _r in _cands:
+                if _r is not None and engine._value_match(
+                    float(_r), float(p["resistance_ohm"]), 0.005
+                ):
+                    out.add("阻值")
+                    break
         if p.get("capacitance_f") is not None:
             c = engine._parse_capacitance(t)
             if c is not None and engine._value_match(float(c), float(p["capacitance_f"]), 0.02):
@@ -3405,9 +3505,10 @@ def _score_sku_value(line: dict, label: str, text: str) -> float:
             delta, _note = _tol_verdict(float(p["tolerance_pct"]), tol)
             score += delta
         else:
-            # 没写容差 ≠ 容差合格。不否决（详情页常把精度放在标题里），
-            # 但排在同一档里写清楚了精度的那几个后面。
-            score -= 5
+            # 没写容差 ≠ 容差合格。不否决（详情页常把精度放在标题里），也不扣分：
+            # 这个组往往根本不是容差组（功率瓦数 / 包装数量），扣 5 会把
+            # 只差一档的合法选项压成「无法确认」—— 470Ω 的功率组就这么被连坐的。
+            pass
     if "voltage_v" in p:
         m = re.search(r"(\d+(?:\.\d+)?)\s*[vV]\b", str(text))
         if m:

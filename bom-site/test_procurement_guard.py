@@ -175,5 +175,41 @@ try:
 finally:
     runner.search, runner.open_item, runner.add_to_cart = _bak
 
+print("== 8. 三道钱闸门：演练与真跑共用同一套 ==")
+_res = dict(line_no=801, category="passive", subtype="resistor", mpn="R", desc="470Ω",
+            package="插件", qty=42, params={"resistance_ohm": 470.0})
+check("每只 ¥94 被单价闸拦", (tr._money_guards(_res, 94.0, 1, 1, 1) or {}).get("code") == "UNIT_PRICE_ANOMALY")
+check("¥2.48/10 只折合 0.248 放行", tr._money_guards(_res, 2.48, 10, 1, 10) is None)
+check("单行金额超上限被拦",
+      (tr._money_guards(_res, 1.9, 1, 200, 200) or {}).get("code") == "COST_TOO_HIGH")
+check("金额只认实价（标题价不能替它开后门）",
+      (tr._money_guards(_res, 90.0, 1, 1, 1, amount=90.0) or {}).get("code") == "UNIT_PRICE_ANOMALY")
+_sw_line = dict(line_no=802, category="other", refs="SW1", subtype="", mpn="SK12D07VG5",
+                desc="拨动开关", package="SW-TH", qty=1, params={})
+check("开关单价天花板 15", tr._unit_price_ceiling(_sw_line) == 15.0)
+check("¥90 整袋拨动开关被拦",
+      (tr._money_guards(_sw_line, 90.0, 1, 1, 1) or {}).get("code") == "UNIT_PRICE_ANOMALY")
+check("电阻单价天花板 2", tr._unit_price_ceiling(_res) == 2.0)
+
+print("== 9. SKU 选中值：同系列不同号＝降规格 ==")
+_ss = dict(line_no=803, mpn="SS34", desc="SS34", params={})
+check("SS26 顶 SS34 被拒", tr._sku_model_conflict(_ss, "SR260贴片SMA丝印SS26（20只）") == "SS26")
+check("丝印 SS34 的等效件放行", tr._sku_model_conflict(_ss, "1N5822贴片SMA丝印SS34（10只）") == "")
+check("纯 SS34 放行", tr._sku_model_conflict(_ss, "SS34（20只）") == "")
+_ic = dict(line_no=804, mpn="NE555P", desc="NE555P", params={})
+check("NE555 ⊂ NE555P 不算冲突", tr._sku_model_conflict(_ic, "国产NE555 直插DIP-8") == "")
+_conn = dict(line_no=805, mpn="KH-TYPE-C-2P", desc="", params={})
+check("带连字符的型号不误判", tr._sku_model_conflict(_conn, "KH-TYPE-C-2P（2个）") == "")
+
+print("== 10. 值核实：SKU 写法要认得出来 ==")
+check("5KΩ 认得出", tr._title_value_kinds({"params": {"resistance_ohm": 5000.0}}, "5KΩ") == {"阻值"})
+check("2K2 认得出", tr._title_value_kinds({"params": {"resistance_ohm": 2200.0}}, "2K2") == {"阻值"})
+check("1/4W 470R 认得出",
+      tr._title_value_kinds({"params": {"resistance_ohm": 470.0}}, "1/4W 470R(100只)") == {"阻值"})
+check("多值标题不误认 5K",
+      tr._title_value_kinds({"params": {"resistance_ohm": 5000.0}}, "4.7K 5.1K 5.6K") != {"阻值"})
+check("维修套件认不出 95µF",
+      tr._title_value_kinds({"params": {"capacitance_f": 95e-6}}, "维修八件套 0.85/0.9/0.95/1.0UF") != {"容值"})
+
 print(f"\nRESULT: {PASS} passed, {FAIL} failed")
 sys.exit(0 if FAIL == 0 else 1)

@@ -1,0 +1,1263 @@
+[
+ {
+  "source": "real",
+  "line": {
+   "line_no": 1,
+   "category": "ic",
+   "subtype": "",
+   "mpn": "NE555P",
+   "desc": "NE555P",
+   "package": "DIP-8",
+   "params": {},
+   "qty": 1,
+   "lcsc": {
+    "code": "C46749",
+    "model": "NE555P",
+    "catalog": "",
+    "params": {}
+   }
+  },
+  "query": "NE555P",
+  "title": "NE555P定时器NE555DR单路高精度计时器直插DIP-8/贴片SOP-8芯片IC",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 2,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "5kΩ",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 5000.0,
+    "power_w": 0.25
+   },
+   "qty": 3,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 5kΩ 1/4W 金属膜 电阻",
+  "title": "1/4W 1% 1K-820K插件金属膜电阻精度1%1/4W 10K色环直插电阻",
+  "was_ok": false,
+  "was_message": "SKU 无法确认 —— 颜色分类:所有选项都与 BOM 冲突（阻值 1kΩ ≠ 要求 5kΩ）",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 2,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "5kΩ",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 5000.0,
+    "power_w": 0.25
+   },
+   "qty": 3,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 5kΩ 1/4W 金属膜 电阻",
+  "title": "1/4W金属膜电阻 1% 精密 五环 0.25W 1.1 1.8 2K 2.2 2.7 3K 3.3K",
+  "was_ok": false,
+  "was_message": "SKU 无法确认 —— 阻值:所有选项都与 BOM 冲突（阻值 1kΩ ≠ 要求 5kΩ）",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 2,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "5kΩ",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 5000.0,
+    "power_w": 0.25
+   },
+   "qty": 3,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 5kΩ 1/4W 金属膜 电阻",
+  "title": "1/4W1%金属膜电阻1%精密度1K/2K/3.3K/4.7K/5.1K/10K多规格可选",
+  "was_ok": false,
+  "was_message": "SKU 无法确认 —— 颜色分类:所有选项都与 BOM 冲突（阻值 1kΩ ≠ 要求 5kΩ）",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 2,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "5kΩ",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 5000.0,
+    "power_w": 0.25
+   },
+   "qty": 3,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 5kΩ 1/4W 金属膜 电阻",
+  "title": "1/6W 1/4W 1W 2W 3W 5W电阻 五色环金属膜电阻 1K-9.1K (5/20个）",
+  "was_ok": false,
+  "was_message": "候选 5W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘，不自动加购",
+  "pinned": {
+   "stage": "material",
+   "code": "MAT",
+   "text": "候选 5W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘",
+   "risk": true
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 2,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "5kΩ",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 5000.0,
+    "power_w": 0.25
+   },
+   "qty": 3,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 5kΩ 1/4W 金属膜 电阻",
+  "title": "10K-91KR欧姆 插件金属膜电阻器1/8W/1/6W/1/4W/1/2W/1W/2W/3W/5W",
+  "was_ok": false,
+  "was_message": "候选 5W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘，不自动加购",
+  "pinned": {
+   "stage": "material",
+   "code": "MAT",
+   "text": "候选 5W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘",
+   "risk": true
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 4,
+   "category": "passive",
+   "subtype": "capacitor",
+   "mpn": "CC1H103ZA1ED3F4D1100",
+   "desc": "10nF",
+   "package": "插件",
+   "params": {
+    "capacitance_f": 1e-08,
+    "tolerance_pct": 80.0,
+    "voltage_v": 50.0
+   },
+   "qty": 1,
+   "lcsc": {
+    "code": "C2832505",
+    "model": "CC1H103ZA1ED3F4D1100",
+    "catalog": "",
+    "params": {
+     "capacitance_f": 1e-08,
+     "tolerance_pct": 80.0,
+     "voltage_v": 50.0,
+     "pitch_mm": 0.00254
+    }
+   }
+  },
+  "query": "CC1H103ZA1ED3F4D1100 瓷片电容",
+  "title": "CC1H103ZA1ED3F4D1100 50V/10nF 丝印:103 P=2.54mm 直插瓷片电容",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 5,
+   "category": "passive",
+   "subtype": "diode",
+   "mpn": "SS34",
+   "desc": "SS34",
+   "package": "SMA",
+   "params": {},
+   "qty": 1,
+   "lcsc": {
+    "code": "C7420365",
+    "model": "SS34",
+    "catalog": "",
+    "params": {
+     "voltage_v": 40.0
+    }
+   }
+  },
+  "query": "SS34 二极管",
+  "title": "贴片肖特基二极管SS14/16/SS24/26/SS34/36/SS54/510 SMA SMB SMC",
+  "was_ok": false,
+  "was_message": "选中的 SKU 是 SS36，与 BOM 型号 SS34 同系列但不同号（等同降规格），不自动加购",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 5,
+   "category": "passive",
+   "subtype": "diode",
+   "mpn": "SS34",
+   "desc": "SS34",
+   "package": "SMA",
+   "params": {},
+   "qty": 1,
+   "lcsc": {
+    "code": "C7420365",
+    "model": "SS34",
+    "catalog": "",
+    "params": {
+     "voltage_v": 40.0
+    }
+   }
+  },
+  "query": "SS34 二极管",
+  "title": "SS32 SS34 SS36 SS38 SS310 SS315 SS320 3A贴片肖特基二极管SMA",
+  "was_ok": false,
+  "was_message": "选中的 SKU 是 SS22，与 BOM 型号 SS34 同系列但不同号（等同降规格），不自动加购",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 5,
+   "category": "passive",
+   "subtype": "diode",
+   "mpn": "SS34",
+   "desc": "SS34",
+   "package": "SMA",
+   "params": {},
+   "qty": 1,
+   "lcsc": {
+    "code": "C7420365",
+    "model": "SS34",
+    "catalog": "",
+    "params": {
+     "voltage_v": 40.0
+    }
+   }
+  },
+  "query": "SS34 二极管",
+  "title": "1N5822 SS34 直插 DO-27 贴片 SMA SMB SMC 肖特基二极管 40V 3A",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 6,
+   "category": "connector",
+   "subtype": "",
+   "mpn": "KH-TYPE-C-2P",
+   "desc": "KH-TYPE-C-2P",
+   "package": "SMD",
+   "params": {
+    "pins": 2
+   },
+   "qty": 1,
+   "lcsc": {
+    "code": "C2919656",
+    "model": "KH-TYPE-C-2P",
+    "catalog": "",
+    "params": {
+     "pins": 2,
+     "voltage_v": 20.0
+    }
+   }
+  },
+  "query": "KH-TYPE-C-2P 连接器",
+  "title": "金航标kinghelm KH-TYPE-C-2P USB连接器 Type-C 母座 弯插",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 7,
+   "category": "passive",
+   "subtype": "capacitor",
+   "mpn": "CC1H103ZA1ED3F4D1100",
+   "desc": "100nF",
+   "package": "插件",
+   "params": {
+    "capacitance_f": 1.0000000000000001e-07,
+    "tolerance_pct": 80.0,
+    "voltage_v": 50.0
+   },
+   "qty": 14,
+   "lcsc": {
+    "code": "C2832505",
+    "model": "CC1H103ZA1ED3F4D1100",
+    "catalog": "",
+    "params": {
+     "capacitance_f": 1e-08,
+     "tolerance_pct": 80.0,
+     "voltage_v": 50.0,
+     "pitch_mm": 0.00254
+    }
+   }
+  },
+  "query": "插件 100nF 50V 瓷片 电容",
+  "title": "瓷片电容器104 0.1uF 100NF 50V 30PF 103 0.01UF 22P 102 20PF",
+  "was_ok": false,
+  "was_message": "SKU 无法确认 —— 商品规格:所有选项都与 BOM 冲突（容值 1.0401mF ≠ 要求 100nF）",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 7,
+   "category": "passive",
+   "subtype": "capacitor",
+   "mpn": "CC1H103ZA1ED3F4D1100",
+   "desc": "100nF",
+   "package": "插件",
+   "params": {
+    "capacitance_f": 1.0000000000000001e-07,
+    "tolerance_pct": 80.0,
+    "voltage_v": 50.0
+   },
+   "qty": 14,
+   "lcsc": {
+    "code": "C2832505",
+    "model": "CC1H103ZA1ED3F4D1100",
+    "catalog": "",
+    "params": {
+     "capacitance_f": 1e-08,
+     "tolerance_pct": 80.0,
+     "voltage_v": 50.0,
+     "pitch_mm": 0.00254
+    }
+   }
+  },
+  "query": "插件 100nF 50V 瓷片 电容",
+  "title": "瓷片电容器104 0.1uF 100NF 50V 30PF 103 0.01UF 22P 102 20PF",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 8,
+   "category": "ic",
+   "subtype": "",
+   "mpn": "CD4518BE",
+   "desc": "CD4518BE",
+   "package": "DIP-16",
+   "params": {},
+   "qty": 3,
+   "lcsc": {
+    "code": "C5220",
+    "model": "CD4518BE",
+    "catalog": "",
+    "params": {}
+   }
+  },
+  "query": "CD4518BE",
+  "title": "计数器/分频器 CD4518BE DIP-16 TI/德州 电子元器件配单全新原装",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 9,
+   "category": "passive",
+   "subtype": "led",
+   "mpn": "XL-302SURD",
+   "desc": "XL-302SURD",
+   "package": "插件",
+   "params": {},
+   "qty": 1,
+   "lcsc": {
+    "code": "C2895470",
+    "model": "XL-302SURD",
+    "catalog": "",
+    "params": {}
+   }
+  },
+  "query": "XL-302SURD LED",
+  "title": "发光二极管/LED XL-302SURD 插件 3mm圆形灯头 F3红发红短脚",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 10,
+   "category": "passive",
+   "subtype": "capacitor",
+   "mpn": "ERG50V22M5X11",
+   "desc": "22uF",
+   "package": "插件",
+   "params": {
+    "capacitance_f": 2.2e-05,
+    "voltage_v": 50.0,
+    "tolerance_pct": 20.0
+   },
+   "qty": 2,
+   "lcsc": {
+    "code": "C47344185",
+    "model": "ERG50V22M5X11",
+    "catalog": "",
+    "params": {
+     "tolerance_pct": 20.0,
+     "voltage_v": 50.0,
+     "capacitance_f": 2.2e-05,
+     "pitch_mm": 0.002
+    }
+   }
+  },
+  "query": "ERG50V22M5X11 电解电容",
+  "title": "22uF ±20% 50V ERG50V22M5X11 插件,D5xL11mm 直插铝电解电容",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 11,
+   "category": "other",
+   "subtype": "",
+   "mpn": "SS12F44G5",
+   "desc": "SS12F44G5",
+   "package": "插件",
+   "params": {},
+   "qty": 1,
+   "lcsc": {
+    "code": "C22435641",
+    "model": "SS12F44G5",
+    "catalog": "",
+    "params": {}
+   }
+  },
+  "query": "SS12F44G5 滑动开关",
+  "title": "SS12F44G5 滑动开关 SS12F44G5 插件-5P,12.2x5.5mm",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 12,
+   "category": "passive",
+   "subtype": "led",
+   "mpn": "FJ5161AH",
+   "desc": "FJ5161AH",
+   "package": "插件",
+   "params": {},
+   "qty": 6,
+   "lcsc": {
+    "code": "C8093",
+    "model": "FJ5161AH",
+    "catalog": "",
+    "params": {}
+   }
+  },
+  "query": "FJ5161AH LED",
+  "title": "全新 FJ5161AH 0.56英寸1位红色共阴LED数码管显示屏",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 13,
+   "category": "ic",
+   "subtype": "",
+   "mpn": "CD4511BE",
+   "desc": "CD4511BE",
+   "package": "DIP-16",
+   "params": {},
+   "qty": 6,
+   "lcsc": {
+    "code": "C507153",
+    "model": "CD4511BE",
+    "catalog": "",
+    "params": {
+     "power_w": 0.7
+    }
+   }
+  },
+  "query": "CD4511BE",
+  "title": "原装正品 直插 CD4511BE 芯片 4000系列 CMOS逻辑器件 DIP16",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 14,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "470",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 470.0,
+    "power_w": 0.25
+   },
+   "qty": 42,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 470Ω 1/4W 金属膜 电阻",
+  "title": "金属膜电阻器1/4W 1/2W 1W 2W 3W插件1%五色环470r510r560r620r欧",
+  "was_ok": false,
+  "was_message": "候选 3W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘，不自动加购",
+  "pinned": {
+   "stage": "material",
+   "code": "MAT",
+   "text": "候选 3W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘",
+   "risk": true
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 14,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "470",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 470.0,
+    "power_w": 0.25
+   },
+   "qty": 42,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 470Ω 1/4W 金属膜 电阻",
+  "title": "0.1R-0.91R 插件金属膜电阻器欧1/8W/1/6W/1/4W/1/2W/1W/2W/3W/5W",
+  "was_ok": false,
+  "was_message": "候选 5W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘，不自动加购",
+  "pinned": {
+   "stage": "material",
+   "code": "MAT",
+   "text": "候选 5W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘",
+   "risk": true
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 14,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "470",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 470.0,
+    "power_w": 0.25
+   },
+   "qty": 42,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 470Ω 1/4W 金属膜 电阻",
+  "title": "金属膜电阻1R 10R33R 47R 100K 330K 470K 1M 1/4W 1/2W 1W 2W 1%",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 15,
+   "category": "passive",
+   "subtype": "diode",
+   "mpn": "1N4148TR",
+   "desc": "1N4148TR",
+   "package": "DO-35",
+   "params": {},
+   "qty": 4,
+   "lcsc": {
+    "code": "C84410",
+    "model": "1N4148TR",
+    "catalog": "",
+    "params": {
+     "voltage_v": 100.0,
+     "power_w": 0.5
+    }
+   }
+  },
+  "query": "1N4148TR 二极管",
+  "title": "1N4148TR 开关二极管 封装 DO-35 onsemi(安森美) (50个)",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 16,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "2.2K",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 2200.0,
+    "power_w": 0.25
+   },
+   "qty": 3,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 2.2kΩ 1/4W 金属膜 电阻",
+  "title": "MF1/4W(0.25W) 插件金属膜电阻1% 6x2mm 0R/0.1R-10M全系列阻值",
+  "was_ok": false,
+  "was_message": "候选 4W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘，不自动加购",
+  "pinned": {
+   "stage": "material",
+   "code": "MAT",
+   "text": "候选 4W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘",
+   "risk": true
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 16,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "2.2K",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 2200.0,
+    "power_w": 0.25
+   },
+   "qty": 3,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 2.2kΩ 1/4W 金属膜 电阻",
+  "title": "1M-10M 1%插件金属膜电阻器5色环1/8W/1/6/1/4W/1/2W/1W2W3W5W",
+  "was_ok": false,
+  "was_message": "选中的 SKU（任意阻值可拍 拍1件=1/2W（20只））核实不到阻值，不自动加购",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 16,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "2.2K",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 2200.0,
+    "power_w": 0.25
+   },
+   "qty": 3,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 2.2kΩ 1/4W 金属膜 电阻",
+  "title": "1/4W 1/2W 1W 2W 3W金属膜电阻1%阻值1K~10K 2.2K 3.3K 6.8K 9.1K",
+  "was_ok": false,
+  "was_message": "候选 3W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘，不自动加购",
+  "pinned": {
+   "stage": "material",
+   "code": "MAT",
+   "text": "候选 3W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘",
+   "risk": true
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 16,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "2.2K",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 2200.0,
+    "power_w": 0.25
+   },
+   "qty": 3,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 2.2kΩ 1/4W 金属膜 电阻",
+  "title": "1M-10M 1/4W1/6W1/8W 插件金属膜电阻器1.8M2.7M3.9M5.1M6.2M8.2M",
+  "was_ok": false,
+  "was_message": "候选 8W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘，不自动加购",
+  "pinned": {
+   "stage": "material",
+   "code": "MAT",
+   "text": "候选 8W，BOM 只要 0.25W，体积大一个量级，装不进原焊盘",
+   "risk": true
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 16,
+   "category": "passive",
+   "subtype": "resistor",
+   "mpn": "MF1/4W-1KΩ±1%T52",
+   "desc": "2.2K",
+   "package": "插件",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 2200.0,
+    "power_w": 0.25
+   },
+   "qty": 3,
+   "lcsc": {
+    "code": "C713997",
+    "model": "MF1/4W-1KΩ±1%T52",
+    "catalog": "",
+    "params": {
+     "resistance_ohm": 1000.0,
+     "power_w": 0.25,
+     "tolerance_pct": 1.0
+    }
+   }
+  },
+  "query": "插件 2.2kΩ 1/4W 金属膜 电阻",
+  "title": "1/4W金属膜电阻1K 1.1 1.2 1.3 1.5 1.6 2 2.2 2.4 3 3.3 4.7 5.1",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 17,
+   "category": "other",
+   "subtype": "",
+   "mpn": "TS665CJ",
+   "desc": "TS665CJ",
+   "package": "插件",
+   "params": {},
+   "qty": 2,
+   "lcsc": {
+    "code": "C393938",
+    "model": "TS665CJ",
+    "catalog": "",
+    "params": {
+     "voltage_v": 12.0
+    }
+   }
+  },
+  "query": "TS665CJ 轻触开关",
+  "title": "TS665CJ 6*6*5mm 直插 轻触开关 插件",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 18,
+   "category": "ic",
+   "subtype": "",
+   "mpn": "CD4081BE",
+   "desc": "CD4081BE",
+   "package": "DIP-14",
+   "params": {},
+   "qty": 1,
+   "lcsc": {
+    "code": "C5205",
+    "model": "CD4081BE",
+    "catalog": "",
+    "params": {}
+   }
+  },
+  "query": "CD4081BE",
+  "title": "全新正品 CD4081BE 丝印：CD4081BE 逻辑门芯片 直插 DIP-14",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "real",
+  "line": {
+   "line_no": 19,
+   "category": "other",
+   "subtype": "",
+   "mpn": "SK12D07VG5",
+   "desc": "SK12D07VG5",
+   "package": "插件",
+   "params": {},
+   "qty": 1,
+   "lcsc": {
+    "code": "C431548",
+    "model": "SK12D07VG5",
+    "catalog": "",
+    "params": {
+     "current_a": 0.5,
+     "voltage_v": 50.0
+    }
+   }
+  },
+  "query": "SK12D07VG5 滑动开关",
+  "title": "HX SK12D07VG5 滑动开关 柄长6mm 卧插二档 滑动开关 插件",
+  "was_ok": true,
+  "was_message": "",
+  "pinned": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "curated",
+  "line": {
+   "line_no": 900,
+   "category": "passive",
+   "subtype": "",
+   "mpn": "0Ω",
+   "desc": "0Ω",
+   "package": "0402 (1005)",
+   "params": {
+    "resistance_ohm": 0.0
+   },
+   "qty": 10,
+   "lcsc": {
+    "code": "",
+    "model": "",
+    "catalog": "",
+    "params": {}
+   }
+  },
+  "query": "0Ω",
+  "title": "0402贴片电阻 0R 零欧姆电阻 1% 100只",
+  "want": "pass",
+  "got": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "curated",
+  "line": {
+   "line_no": 900,
+   "category": "passive",
+   "subtype": "",
+   "mpn": "0Ω",
+   "desc": "0Ω",
+   "package": "0402 (1005)",
+   "params": {
+    "resistance_ohm": 0.0
+   },
+   "qty": 10,
+   "lcsc": {
+    "code": "",
+    "model": "",
+    "catalog": "",
+    "params": {}
+   }
+  },
+  "query": "0Ω",
+  "title": "0402 0.005Ω 毫欧检流电阻 采样电阻 1W",
+  "want": "reject",
+  "got": {
+   "stage": "title",
+   "code": "H03",
+   "text": "标题阻值 5mΩ ≠ 要求 0Ω",
+   "risk": false
+  }
+ },
+ {
+  "source": "curated",
+  "line": {
+   "line_no": 900,
+   "category": "passive",
+   "subtype": "",
+   "mpn": "0Ω",
+   "desc": "0Ω",
+   "package": "0402 (1005)",
+   "params": {
+    "resistance_ohm": 0.0
+   },
+   "qty": 10,
+   "lcsc": {
+    "code": "",
+    "model": "",
+    "catalog": "",
+    "params": {}
+   }
+  },
+  "query": "0Ω",
+  "title": "0402WGF0000TCE 0Ω 零欧电阻 贴片电阻",
+  "want": "pass",
+  "got": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "curated",
+  "line": {
+   "line_no": 900,
+   "category": "connector",
+   "subtype": "",
+   "mpn": "PZ254-2-20-Z-8.5",
+   "desc": "PZ254-2-20-Z-8.5",
+   "package": "插件",
+   "params": {
+    "pins": 40,
+    "pitch_mm": 2.54,
+    "rows": 2
+   },
+   "qty": 2,
+   "lcsc": {
+    "code": "C3012260",
+    "model": "PZ254-2-20-Z-8.5",
+    "catalog": "Headers, Male Pins",
+    "params": {
+     "current_a": 3.0,
+     "pins": 40,
+     "pitch_mm": 2.54,
+     "rows": 2
+    }
+   }
+  },
+  "query": "PZ254-2-20-Z-8.5",
+  "title": "2.54mm 双排排针 2*20P 40P 直插 镀金",
+  "want": "pass",
+  "got": {
+   "stage": "",
+   "code": "",
+   "text": "",
+   "risk": false
+  }
+ },
+ {
+  "source": "curated",
+  "line": {
+   "line_no": 900,
+   "category": "connector",
+   "subtype": "",
+   "mpn": "PZ254-2-20-Z-8.5",
+   "desc": "PZ254-2-20-Z-8.5",
+   "package": "插件",
+   "params": {
+    "pins": 40,
+    "pitch_mm": 2.54,
+    "rows": 2
+   },
+   "qty": 2,
+   "lcsc": {
+    "code": "C3012260",
+    "model": "PZ254-2-20-Z-8.5",
+    "catalog": "Headers, Male Pins",
+    "params": {
+     "current_a": 3.0,
+     "pins": 40,
+     "pitch_mm": 2.54,
+     "rows": 2
+    }
+   }
+  },
+  "query": "PZ254-2-20-Z-8.5",
+  "title": "2.54mm 单排排针 1*40P 直插",
+  "want": "reject",
+  "got": {
+   "stage": "title",
+   "code": "H01",
+   "text": "标题是单排，BOM 要 2 排",
+   "risk": false
+  }
+ },
+ {
+  "source": "curated",
+  "line": {
+   "line_no": 900,
+   "category": "connector",
+   "subtype": "",
+   "mpn": "PZ254-2-20-Z-8.5",
+   "desc": "PZ254-2-20-Z-8.5",
+   "package": "插件",
+   "params": {
+    "pins": 40,
+    "pitch_mm": 2.54,
+    "rows": 2
+   },
+   "qty": 2,
+   "lcsc": {
+    "code": "C3012260",
+    "model": "PZ254-2-20-Z-8.5",
+    "catalog": "Headers, Male Pins",
+    "params": {
+     "current_a": 3.0,
+     "pins": 40,
+     "pitch_mm": 2.54,
+     "rows": 2
+    }
+   }
+  },
+  "query": "PZ254-2-20-Z-8.5",
+  "title": "2.54mm 排母 双排 2*20P",
+  "want": "reject",
+  "got": {
+   "stage": "title",
+   "code": "H01",
+   "text": "标题是排母/母座（母头），BOM 要排针（公头）",
+   "risk": false
+  }
+ }
+]

@@ -624,6 +624,15 @@ def _parse_type(t):
 
 
 def _parse_pins(t):
+    # 排针标题写「2*20P」= 双排各 20 针，总共 40。先认这种行列写法再认单个数字：
+    # 直接抓 `(\d+)P` 会先撞上「20P」，把 40 针的排针当成 20 针，
+    # 于是「2.54mm 双排排针 2*20P 40P」被判「少于要求 40P，剪不出这么多针」——
+    # 明明是对的货，因为读错针数买不到。
+    m = re.search(r"(?<![\d.])([1-9])\s*[*x×]\s*(\d{1,3})\s*[Pp]?(?![\d.])", str(t or ""))
+    if m:
+        _r, _per = int(m.group(1)), int(m.group(2))
+        if 1 <= _r <= 4 and 1 <= _per <= 200:
+            return _r * _per
     m = _RE_PINS.search(t)
     if m:
         return int(m.group(1))
@@ -659,6 +668,11 @@ def _parse_pitch_loose(t):
 
 
 def fmt_resistance(ohms):
+    # 0Ω 是跨接/零欧电阻，卖家写「0R / 0欧 / 零欧」。落到下面的 mΩ 分支会输出
+    # 「0mΩ」—— 那是毫欧级检流电阻（合金片、1W 以上、几块钱一颗），
+    # 焊上去既不通路、体积也塞不进 0402 焊盘，是「数值看着对、器件全错」。
+    if ohms is not None and abs(float(ohms)) < 1e-12:
+        return "0Ω"
     if ohms >= 1e6:
         return f"{ohms / 1e6:g}MΩ"
     if ohms >= 1e3:
@@ -696,7 +710,7 @@ _LCSC_PARAM_KEYS = {
     ("passive", "diode"): set(),
     ("passive", "led"): set(),
     ("passive", "bead"): set(),
-    ("connector", ""): {"pins", "pitch_mm"},
+    ("connector", ""): {"pins", "pitch_mm", "rows"},
 }
 
 
@@ -732,7 +746,13 @@ def _category_from_catalog(text: str) -> str:
         return "connector"
     if re.search(r"mosfet|transistor|igbt", t):
         return "power"
-    if re.search(r"integrated circuit|\bic\b|microcontroller|logic|op amp|amplifier", t):
+    if re.search(
+        r"integrated circuit|\bic\b|microcontroller|logic|op amp|amplifier"
+        # LDO/稳压器在立创是「Voltage Regulators - Linear…」。按 passive 处理会拿
+        # 「必须有阻容感值」去卡它，一颗 LDO 被记成「缺少关键参数」判死。
+        r"|voltage\s*regulator|\bldo\b|regulator|voltage\s*reference",
+        t,
+    ):
         return "ic"
     if re.search(r"module|bluetooth|wifi", t):
         return "module"
@@ -1002,7 +1022,9 @@ def _passive_subtype(refs, text, category) -> str:
         return "diode"
     if pref in ("F", "FU") or re.search(r"保险丝|fuse|自恢复", t):
         return "fuse"
-    if pref == "FB" or "磁珠" in t or re.search(r"\bbead\b", t):
+    # 立创品类是「Ferrite Beads and Chips」（复数），`\bbead\b` 匹配不到，
+    # 磁珠就被当成电感（位号常是 L1/L2）→ 报「缺少感值」判死。
+    if pref == "FB" or "磁珠" in t or re.search(r"\bbeads?\b|ferrite", t):
         return "bead"
     if pref == "C" or re.search(r"电容|capacitor|[pnuµm]f\b", t):
         return "capacitor"
@@ -1047,6 +1069,16 @@ def mpn_from_desc(desc) -> str:
         if _pn_like(part):
             return part.strip()
     return ""
+
+
+# 「不贴装」的唯一写法。必须整串匹配：NC7SZ04 这类逻辑芯片就是 NC 开头，
+# 用 startswith 会把真芯片判成不贴，整行买不回来。
+_RE_NOT_FITTED = re.compile(
+    r"^\s*(?:NC|DNP|NF|N/F|NO\s*FIT|NOT\s*FITTED|DO\s*NOT\s*POPULATE|不贴|不焊|不安装|空贴)\s*$",
+    re.I,
+)
+# 只有尺寸、没有任何型号信息：结构件/自制件（「125 X 300」「10x20」）。
+_RE_DIM_ONLY = re.compile(r"^\s*\d+(?:\.\d+)?\s*[x×*]\s*\d+(?:\.\d+)?\s*(?:mm)?\s*$", re.I)
 
 
 def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> dict:
@@ -1120,6 +1152,7 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
     # 去改设计值 —— 名称列写 470，被搜索结果改成 4.7kΩ，那叫换规格不叫换词。
     lcsc_info = row.get("lcsc_info") if isinstance(row.get("lcsc_info"), dict) else None
     lcsc_model_note = ""
+    category_note = ""
     if lcsc_info:
         _lcode = str(lcsc_info.get("code") or "").strip()
         _lmodel = str(lcsc_info.get("model") or "").strip()
@@ -1133,18 +1166,39 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
             mpn = _lmodel
         if not package:
             package = parse_package(str(lcsc_info.get("package") or "")) or str(lcsc_info.get("package") or "")
-        if category == "other":
-            _lc_cat = _category_from_catalog(
-                " ".join(
-                    [str(lcsc_info.get("catalog") or "")]
-                    + [str(x) for x in (lcsc_info.get("catalog_path") or [])]
-                )
+        # 立创品类是官方商品分类，比「位号前缀 + 关键字」可靠得多。
+        # 例：PZ254-2-20-Z-8.5 的位号是 U1/U2（看着像芯片），立创品类却明确写着
+        # 「Headers, Male Pins」= 排针。按芯片处理会走「标题必须出现完整型号」的
+        # 硬闸门，而卖排针的标题从来不写立创料号 → 必然买不到。反过来也成立：
+        # ME6211 是 LDO 却按 passive 处理，会拿阻容那套闸门去卡它。
+        # 所以只要立创认得出品类就以它为准，与我们自己的判断不一致时留痕。
+        _lc_cat = _category_from_catalog(
+            " ".join(
+                [str(lcsc_info.get("catalog") or "")]
+                + [str(x) for x in (lcsc_info.get("catalog_path") or [])]
             )
-            if _lc_cat:
-                category = _lc_cat
+        )
+        if _lc_cat:
+            if _lc_cat != category:
+                category_note = (
+                    f"本地按位号/名称判为「{category}」，立创品类是「{_lc_cat}」，已按立创为准"
+                )
+            category = _lc_cat
 
     params = parse_params(" ".join([combined, mpn]), category)
-    subtype = _passive_subtype(refs, combined + " " + desc, category)
+    # 立创品类也算证据：BLM15PD121SN1D 的 BOM 名称就是料号本身，名字里既没有
+    # 「磁珠」也没有「bead」，光看本行判不出细分，会被当成「缺阻容感值」判死。
+    # 立创写着 Ferrite Beads and Chips，那就按磁珠走「必须有完整型号」这条路。
+    _lc_word = ""
+    if lcsc_info:
+        _lc_word = " ".join(
+            [
+                str(lcsc_info.get("catalog") or ""),
+                " ".join(str(x) for x in (lcsc_info.get("catalog_path") or [])),
+                str(lcsc_info.get("desc") or ""),
+            ]
+        )
+    subtype = _passive_subtype(refs, combined + " " + desc + " " + _lc_word, category)
     # 铝电解的料号里常常直接把规格写全：PA100V100M10x12 = 100V / 100µF / 10×12mm。
     # 立创查不到这颗料（没编号、离线）时，这是我们唯一能拿来互相印证的第二证据：
     # 名称列写 95uF、料号却写 100M，就是「改了一半忘了另一半」的典型。
@@ -1189,7 +1243,7 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
                         _ev = f"（立创 {_src} 也是 {_fmt_param_value(_key, _lv)}）"
                     value_conflict = (
                         f"名称列写 {desc}，型号对应 {_fmt_param_value(_key, _old)}{_ev}，"
-                        f"两者冲突，已按名称列采购，请核对原理图"
+                        f"两者冲突，不自动采购，请核对原理图"
                     )
     # 名称列 vs 立创：设计值已经落定后，再拿立创的事实核对一遍。
     # 实测一份 BOM 里 #4 是 10nF（C2832505），#7 名称写 100nF 却复用了同一个型号 ——
@@ -1208,7 +1262,7 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
             value_conflict = (
                 f"BOM 名称列写 {desc or '—'}，但{_how} {_src} 是 "
                 f"{_fmt_param_value(_key, _lv)}，两者对不上；"
-                f"已按名称列采购，请核对原理图后改 BOM"
+                f"不自动采购，请核对原理图后确认要哪个"
             )
             break
     # 保险丝的额定电流就是它的规格。不给它一个数值参数，SKU 选择就只能「保留页面默认」，
@@ -1223,6 +1277,18 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
     except (TypeError, ValueError):
         qty = None
     critical = _truthy(row.get("critical"))
+
+    # 名称列写 NC / DNP / 不贴：原理图上这颗不装。料号栏常常还留着上一版的料
+    # （实测 #14 就是名称 NC、料号 0402WGF4701TCE = 4.7kΩ），照着买等于买一颗
+    # 电路上根本不存在的电阻 —— 白花钱，还让购物车看着像买齐了。
+    not_fitted = bool(_RE_NOT_FITTED.match(desc or ""))
+    # 只有尺寸、没有型号也没有编号（「125 X 300」这种结构件/自定义件）：
+    # 拿字面量去搜淘宝必然零结果，白跑一次搜索还占一行。直接标人工。
+    dim_only = bool(
+        _RE_DIM_ONLY.match(desc or "")
+        and not mpn
+        and not str((lcsc_info or {}).get("code") or "").strip()
+    )
 
     missing, blocking = [], []
     if package == "":
@@ -1245,6 +1311,10 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
         blocking.append("整行没有可用信息")
     if category == "other" and not mpn and not desc:
         blocking.append("无法判断品类，请补充型号或名称")
+    if not_fitted:
+        blocking.append("名称列写 NC / 不贴装：这颗元件不需要采购（料号栏多半是上一版残留）")
+    if dim_only:
+        blocking.append("只有尺寸、没有型号和编号，淘宝无法定位（结构件或自制件），请人工处理")
 
     status = "needs_user" if blocking else "ready"
 
@@ -1279,22 +1349,39 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
             or re.search(r"BD\s*\d", str(footprint or ""), re.I)
         ):
             _cap_kind = "电解"
+        elif "tantalum" in _blob or "钽" in _blob:
+            # 钽电容是第三种：有极性、但绝不是铝电解，搜「电解」会买到 D5 圆柱
+            # 直插，焊不到 1206/3216 的贴片焊盘上。
+            _cap_kind = "钽"
         elif "ceramic" in _blob or "陶瓷" in _blob or "瓷片" in _blob:
             _cap_kind = "瓷片"
-    queries = _build_queries(
-        category, package, params, mpn, desc, row.get("brand"), subtype,
-        res_type=_res_type, cap_kind=_cap_kind,
-        # 编号锚定：只有「按编号查到」才是这颗料的权威身份。同名反查
-        # （matched_by=model）不算 —— 实测一份 BOM 里 470Ω/2.2K/5kΩ 三行
-        # 共用同一个 1kΩ 料号，按它搜型号会把三行全买成 1kΩ。
-        model=(str(lcsc_info.get("model") or "") if _lcsc_by_code(lcsc_info) else ""),
-        kind_hint=_lcsc_kind_cn(lcsc_info or {}),
-    )
+    if not_fitted or dim_only:
+        queries = []
+    else:
+        queries = _build_queries(
+            category, package, params, mpn, desc, row.get("brand"), subtype,
+            res_type=_res_type, cap_kind=_cap_kind,
+            # 编号锚定：只有「按编号查到」才是这颗料的权威身份。同名反查
+            # （matched_by=model）不算 —— 实测一份 BOM 里 470Ω/2.2K/5kΩ 三行
+            # 共用同一个 1kΩ 料号，按它搜型号会把三行全买成 1kΩ。
+            # 名称列与编号打架时（V01）不锚定：那颗料号已知跟 BOM 的值对不上，
+            # 把它放在第一条搜索词上，只会把「5.6Ω」搜成「5.6kΩ」那一款 ——
+            # 这一行本来就要人工核对，搜索词就不该替人先做选择。
+            model=(
+                str(lcsc_info.get("model") or "")
+                if _lcsc_by_code(lcsc_info) and not value_conflict
+                else ""
+            ),
+            kind_hint=_lcsc_kind_cn(lcsc_info or {}),
+            footprint=footprint,
+        )
     risks = _build_risks(category, package, params, mpn, gates)
     if value_conflict:
         risks.append({"code": "V01", "text": value_conflict})
     if lcsc_model_note:
         risks.append({"code": "V02", "text": lcsc_model_note})
+    if category_note:
+        risks.append({"code": "V03", "text": category_note})
 
     badge = {
         "line_no": row.get("line_no") or fallback_no,
@@ -1322,6 +1409,10 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
                 "packet": lcsc_info.get("packet") or "",
                 "unit": lcsc_info.get("unit") or "",
                 "attrs": lcsc_info.get("attrs") or {},
+                # 品类原文要带到采购层：判断「排针还是排母」「瓷片还是钽」
+                # 靠的就是它，只留在引擎内部的话，标题闸门拿不到这条证据。
+                "catalog": lcsc_info.get("catalog") or "",
+                "catalog_path": lcsc_info.get("catalog_path") or [],
                 # 立创解析出的**结构化规格**（阻值/容值/耐压…）。采购层要靠它
                 # 判断「同一个型号是不是被用在两个差一个数量级的值上」，
                 # 只传 attrs（中文原文）还得再解析一遍，容易漏。
@@ -1432,7 +1523,9 @@ _CONN_SERIES = (
     (re.compile(r"mini\s*-?\s*usb", re.I), "MINI-USB"),
     (re.compile(r"usb\s*-?\s*a(?![a-z0-9])", re.I), "USB-A"),
     (re.compile(r"pinsocket|pin_socket|排母|母座|母头", re.I), "排母"),
-    (re.compile(r"pinheader|pin_header|header_\d|排针|针座", re.I), "排针"),
+    # 嘉立创的封装名写 HDR-TH_40P-P2.54…（HDR = header），淘宝卖排针的标题
+    # 从来不写 HDR，得翻成「2.54mm 排针 40P」才搜得到。
+    (re.compile(r"pinheader|pin_header|header_\d|\bhdr[\-_ ]?\d|\bhdr[_\-]|排针|针座", re.I), "排针"),
     (re.compile(r"terminalblock|terminal_block|mkds|kf128|端子台|接线端子|螺钉端子", re.I), "端子台"),
     (re.compile(r"\bidc\b|牛角|简牛|box\s*header", re.I), "牛角"),
     (re.compile(r"\bfpc\b|\bffc\b|软排线座", re.I), "FPC"),
@@ -1531,6 +1624,7 @@ _LCSC_KIND_CN = (
     (r"ceramic\s+capacitor", "瓷片电容"),
     (r"film\s+capacitor", "薄膜电容"),
     (r"tantalum\s+capacitor", "钽电容"),
+    (r"ferrite|bead", "磁珠"),
     (r"resistor", "电阻"),
     (r"inductor", "电感"),
     (r"\bled\b|light\s+emitting", "LED"),
@@ -1539,6 +1633,9 @@ _LCSC_KIND_CN = (
     (r"crystal|oscillator", "晶振"),
     (r"connector|receptacle|header", "连接器"),
     (r"fuse", "保险丝"),
+    (r"voltage\s*regulator|\bldo\b|稳压", "稳压器"),
+    (r"microcontroller|\bmcu\b|单片机", "单片机"),
+    (r"interface\s*controller|\busb\s*(?:to|bridge)", "接口芯片"),
 )
 
 
@@ -1570,7 +1667,8 @@ def _lcsc_kind_cn(info: dict) -> str:
 
 
 def _build_queries(
-    category, package, p, mpn, desc, brand, subtype="", res_type="", cap_kind="", model="", kind_hint=""
+    category, package, p, mpn, desc, brand, subtype="", res_type="", cap_kind="", model="",
+    kind_hint="", footprint="",
 ):
     brand = str(brand or "").strip()
     q = []
@@ -1581,7 +1679,9 @@ def _build_queries(
 
     # 有些封装名本身就是品类（测试点 / 焊盘），BOM 名称只是网络名（MCU STATUS、VBAT ADC），
     # 拿网名去搜淘宝必然空结果 —— 直接用封装名当搜索词。
-    if re.search(r"测试点|焊盘|test\s*point", f"{package or ''} {desc or ''}", re.I):
+    # 「Test-Point」中间是连字符，`test\s*point` 匹配不到 —— 嘉立创 BOM 里
+    # 测试点就是写成 Test-Point 的，漏了这条会拿它当型号去搜。
+    if re.search(r"测试点|焊盘|test[\s\-_]*point", f"{package or ''} {desc or ''}", re.I):
         # 直径常写在名称里（「D1.5mm 测试点」），封装位却可能是空的；
         # 只搜「测试点」会召回到双排母、接线端子这类完全无关的东西。
         dia = ""
@@ -1646,6 +1746,12 @@ def _build_queries(
             # 电阻卖家另一套写法是「120R」：100Ω 以下补一条，Ω 搜不到时还有得试
             if "resistance_ohm" in p and 0 < p["resistance_ohm"] < 1000:
                 q.append(f"{pkg} {p['resistance_ohm']:g}R".strip())
+            # 零欧电阻的搜索词必须是「0R / 零欧」这一套：写「0Ω」淘宝会按 0 欧姆
+            # 当成没写，写「0mΩ」更是直接导向毫欧检流电阻（合金片、大功率）。
+            # 必须插到队首 —— 本函数最后只留前 4 条，append 会被直接截掉。
+            if "resistance_ohm" in p and abs(float(p["resistance_ohm"])) < 1e-12:
+                q.insert(0, f"{pkg} 零欧电阻 0R".strip())
+                q.insert(0, f"{pkg} 0R {kind}".strip())
         if brand and val:
             q.append(f"{brand} {val} {kind}".strip())
         # 保险丝常常只有额定电流、没有料号（「8A / branch fault backup」+ 封装 SMD 保险丝），
@@ -1676,7 +1782,10 @@ def _build_queries(
         pins = p.get("pins")
         pitch = p.get("pitch_mm")
         pin_txt = f"{int(pins)}P" if pins else ""
-        series = connector_series(desc, package, mpn, subtype)
+        # 封装原文要一起给：parse_package 把 ``HDR-TH_40P-P2.54…`` 归一成了
+        # 「插件」，排针的 HDR 线索就丢了 —— 于是 2x20P 排针按「40P 连接器」搜，
+        # 搜回来的是接线端子，不是排针。
+        series = connector_series(desc, package, mpn, footprint, subtype)
         part = connector_part(package, desc, mpn)
 
         if series == "XH":
@@ -1689,8 +1798,16 @@ def _build_queries(
                 q.append(f"B{int(pins)}B-XH-A")
         elif series in ("排针", "排母"):
             ptxt = f"{pitch:g}mm" if pitch else "2.54mm"
+            rows = int(p.get("rows") or 0)
             q.append(f"{ptxt} {series} {pin_txt}".strip())
-            q.append(f"单排{series} {ptxt} {pin_txt}".strip())
+            if rows >= 2 and pins:
+                # 双排必须写明：2.54 排针搜出来默认是单排，40P 单排是 2×40，
+                # 装到 2×20 的焊盘上根本插不进去（孔距对、长度差一倍）。
+                per_row = int(pins) // rows
+                q.append(f"{ptxt} 双排{series} {pin_txt}".strip())
+                q.append(f"{ptxt} {rows}*{per_row}P {series}")
+            else:
+                q.append(f"单排{series} {ptxt} {pin_txt}".strip())
         elif series in ("TYPE-C", "MICRO-USB", "MINI-USB"):
             # USB 座有公头/母座之分，只搜「TYPE-C」会出来一堆公头和线材。
             # 板子上焊的都是母座，这条限定词必须带。
@@ -2255,13 +2372,25 @@ def _check_title(line, cand, extra_ctx):
                 + [str((line.get("row") or {}).get("params") or "")]
             )
         )
-        wants_header = any(w in want for w in ("排针", "header", "针座"))
-        wants_female = any(w in want for w in ("排母", "母座", "母头"))
-        if wants_header and not wants_female and "母" in nt:
+        series = connector_series(line.get("desc"), line.get("package"), line.get("mpn"))
+        # 立创品类是「排针/排母」的权威证据。BOM 的名称栏常常只有料号
+        # （PZ254-2-20-Z-8.5），看不出公母，`want` 里也没有「排针」二字 ——
+        # 于是「2.54mm 排母 双排 2*20P」会被当成合格品买回来：间距对、针数对、
+        # 就是插不上（公母配错，母座要配公针）。
+        _cat = str((line.get("lcsc") or {}).get("catalog") or "").lower()
+        wants_header = any(w in want for w in ("排针", "header", "针座")) or (
+            "headers" in _cat and "female" not in _cat
+        )
+        wants_female = any(w in want for w in ("排母", "母座", "母头")) or "female" in _cat
+        if wants_header and not wants_female and re.search(r"排母|母座|母头", nt):
             return "H01", "标题是排母/母座（母头），BOM 要排针（公头）", checks, hit_risk
+        rows = int(p.get("rows") or 0)
+        if rows >= 2 and "单排" in nt and "双排" not in nt:
+            return "H01", f"标题是单排，BOM 要 {rows} 排", checks, hit_risk
+        if rows == 1 and "双排" in nt and "单排" not in nt:
+            return "H01", "标题是双排，BOM 要单排", checks, hit_risk
         if "单排" in want and "双排" in nt and "单排" not in nt:
             return "H01", "标题是双排，BOM 要单排", checks, hit_risk
-        series = connector_series(line.get("desc"), line.get("package"), line.get("mpn"))
         # 排针/排母整条卖（40P 一条、自行剪断），针数多于需求可用；XH/端子台必须严格等针
         loose_pins = series in ("排针", "排母")
         if "pins" in p:

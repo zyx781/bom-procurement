@@ -206,6 +206,21 @@ def _pins(text):
     return int(v) if v else None
 
 
+def _rows(text):
+    """「双排 / 1x2P」→ 排数。排针是单排还是双排，买错就插不进焊盘。"""
+    s = str(text or "").strip()
+    m = re.search(r"(\d+)\s*[x×*]\s*(\d+)", s)
+    if m:
+        return int(m.group(1))
+    if "双排" in s or re.search(r"(?<!\d)2\s*排", s):
+        return 2
+    if "三排" in s:
+        return 3
+    if "单排" in s or re.search(r"(?<!\d)1\s*排", s):
+        return 1
+    return None
+
+
 def _mm(text):
     """「2.54mm」→ 2.54。
 
@@ -238,7 +253,16 @@ _PARAM_RULES = (
     ("耗散功率", "power_w", _power),
     ("触点数量", "pins", _pins),
     ("引脚数", "pins", _pins),
+    ("总PIN数", "pins", _pins),
     ("脚间距", "pitch_mm", _mm),
+    # 排针必须区分单排/双排：BOM 写 2x20P，按「单排 40P」买回来是两排各 40 针，
+    # 尺寸差一倍，插不进去。
+    ("排数", "rows", _rows),
+    ("插针结构", "rows", _rows),
+    # 连接器/排针写的是「间距 = 2.54mm」，跟「脚间距」是两套叫法；
+    # 少了这一条，排针的搜索词就拼不出「2.54mm 排针 40P」，只能拿立创料号去搜
+    # ——淘宝卖排针的标题里没有料号，一条结果都不会有。
+    ("间距", "pitch_mm", _mm),
     ("额定电流", "current_a", _amperes),
 )
 

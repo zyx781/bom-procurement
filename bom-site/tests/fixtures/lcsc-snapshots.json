@@ -1,0 +1,1561 @@
+{
+ "C11702": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±1%",
+   "阻值": "1kΩ"
+  },
+  "brand": "UNI-ROYAL",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C11702",
+  "desc": "1kΩ ±1% 62.5mW 0402 Thick Film Resistor",
+  "matched_by": "code",
+  "model": "0402WGF1001TCE",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 1000.0,
+   "tolerance_pct": 1.0,
+   "voltage_v": 50.0
+  },
+  "stock": 17883400,
+  "unit": "Piece"
+ },
+ "C138077": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±0.5%",
+   "阻值": "200kΩ"
+  },
+  "brand": "YAGEO",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C138077",
+  "desc": "200kΩ ±0.5% 62.5mW 0402 Thick Film Resistor",
+  "matched_by": "code",
+  "model": "RC0402DR-07200KL",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 200000.0,
+   "tolerance_pct": 0.5,
+   "voltage_v": 50.0
+  },
+  "stock": 0,
+  "unit": "Piece"
+ },
+ "C138291": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±1%",
+   "阻值": "33kΩ"
+  },
+  "brand": "YAGEO",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C138291",
+  "desc": "62.5mW 33kΩ 50V Thick Film Resistor ±100ppm/℃ ±1% 0402 Chip Resistor - Surface Mount RoHS",
+  "matched_by": "code",
+  "model": "AC0402FR-0733KL",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 33000.0,
+   "tolerance_pct": 1.0,
+   "voltage_v": 50.0
+  },
+  "stock": 46700,
+  "unit": "Piece"
+ },
+ "C139186": {
+  "attrs": {
+   "工作温度": "-55℃~+125℃",
+   "直流电阻(DCR)": "80mΩ",
+   "线路数": "1",
+   "误差": "±25%",
+   "阻抗@频率": "120Ω@100MHz",
+   "额定电流": "2.5A"
+  },
+  "brand": "FH",
+  "catalog": "Ferrite Beads and Chips",
+  "catalog_path": [
+   "Passives",
+   "Filters"
+  ],
+  "code": "C139186",
+  "desc": "120Ω@100MHz 1 Line Ferrite Bead 0805 2A 100mΩ",
+  "matched_by": "code",
+  "model": "CBW201209U121T",
+  "package": "0805",
+  "packet": "Reel",
+  "params": {
+   "current_a": 2.5
+  },
+  "stock": 81450,
+  "unit": "Piece"
+ },
+ "C14445": {
+  "attrs": {
+   "容值": "1uF",
+   "温度系数": "X5R",
+   "精度": "±10%",
+   "额定电压": "10V"
+  },
+  "brand": "Samsung Electro-Mechanics",
+  "catalog": "Ceramic Capacitors",
+  "catalog_path": [
+   "Passives",
+   "Capacitors"
+  ],
+  "code": "C14445",
+  "desc": "1uF ±10% 10V Ceramic Capacitor X5R 0402",
+  "matched_by": "code",
+  "model": "CL05A105KP5NNNC",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "capacitance_f": 1e-06,
+   "tolerance_pct": 10.0,
+   "voltage_v": 10.0
+  },
+  "stock": 9143600,
+  "unit": "Piece"
+ },
+ "C144727": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±5%",
+   "阻值": "15kΩ"
+  },
+  "brand": "YAGEO",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C144727",
+  "desc": "62.5mW 15kΩ 50V Thick Film Resistor ±100ppm/℃ ±5% 0402 Chip Resistor - Surface Mount RoHS",
+  "matched_by": "code",
+  "model": "AC0402JR-0715KL",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 15000.0,
+   "tolerance_pct": 5.0,
+   "voltage_v": 50.0
+  },
+  "stock": 8700,
+  "unit": "Piece"
+ },
+ "C1525": {
+  "attrs": {
+   "容值": "100nF",
+   "温度系数": "X7R",
+   "精度": "±10%",
+   "额定电压": "16V"
+  },
+  "brand": "Samsung Electro-Mechanics",
+  "catalog": "Ceramic Capacitors",
+  "catalog_path": [
+   "Passives",
+   "Capacitors"
+  ],
+  "code": "C1525",
+  "desc": "100nF ±10% 16V Ceramic Capacitor X7R 0402",
+  "matched_by": "code",
+  "model": "CL05B104KO5NNNC",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "capacitance_f": 1e-07,
+   "tolerance_pct": 10.0,
+   "voltage_v": 16.0
+  },
+  "stock": 6458500,
+  "unit": "Piece"
+ },
+ "C1547": {
+  "attrs": {
+   "容值": "12pF",
+   "温度系数": "C0G",
+   "精度": "±5%",
+   "额定电压": "50V"
+  },
+  "brand": "FH",
+  "catalog": "Ceramic Capacitors",
+  "catalog_path": [
+   "Passives",
+   "Capacitors"
+  ],
+  "code": "C1547",
+  "desc": "12pF ±5% 50V Ceramic Capacitor C0G 0402",
+  "matched_by": "code",
+  "model": "0402CG120J500NT",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "capacitance_f": 1.2e-11,
+   "tolerance_pct": 5.0,
+   "voltage_v": 50.0
+  },
+  "stock": 576100,
+  "unit": "Piece"
+ },
+ "C1582": {
+  "attrs": {
+   "容值": "1uF",
+   "温度系数": "Y5V",
+   "精度": "±20%",
+   "额定电压": "16V"
+  },
+  "brand": "FH",
+  "catalog": "Ceramic Capacitors",
+  "catalog_path": [
+   "Passives",
+   "Capacitors"
+  ],
+  "code": "C1582",
+  "desc": "1uF Y5V ±20% 16V 0402 Ceramic Capacitors",
+  "matched_by": "code",
+  "model": "0402F105M160NT",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "capacitance_f": 1e-06,
+   "tolerance_pct": 20.0,
+   "voltage_v": 16.0
+  },
+  "stock": 0,
+  "unit": "Piece"
+ },
+ "C165948": {
+  "attrs": {
+   "体长(L)": "7.35mm",
+   "公母": "母",
+   "安装方式": "卧贴",
+   "工作温度": "-30℃~+80℃",
+   "端口数量": "1",
+   "触点数量": "16P",
+   "连接器类型": "Type-C",
+   "额定电压": "20V"
+  },
+  "brand": "Korean Hroparts Elec",
+  "catalog": "USB, DVI, HDMI Connector Assemblies",
+  "catalog_path": [
+   "Connectors, Interconnects",
+   "USB, DVI, HDMI Connectors"
+  ],
+  "code": "C165948",
+  "desc": "USB-C (USB TYPE-C) Receptacle Connector 16 Position Surface Mount",
+  "matched_by": "code",
+  "model": "TYPE-C-31-M-12",
+  "package": "SMD",
+  "packet": "Reel",
+  "params": {
+   "pins": 16,
+   "voltage_v": 20.0
+  },
+  "stock": 506510,
+  "unit": "Piece"
+ },
+ "C17024": {
+  "attrs": {
+   "容值": "10uF",
+   "温度系数": "X5R",
+   "精度": "±10%",
+   "额定电压": "10V"
+  },
+  "brand": "Samsung Electro-Mechanics",
+  "catalog": "Ceramic Capacitors",
+  "catalog_path": [
+   "Passives",
+   "Capacitors"
+  ],
+  "code": "C17024",
+  "desc": "10uF ±10% 10V Ceramic Capacitor X5R 0805",
+  "matched_by": "code",
+  "model": "CL21A106KPFNNNE",
+  "package": "0805",
+  "packet": "Reel",
+  "params": {
+   "capacitance_f": 1e-05,
+   "tolerance_pct": 10.0,
+   "voltage_v": 10.0
+  },
+  "stock": 595300,
+  "unit": "Piece"
+ },
+ "C17168": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±800ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±1%",
+   "阻值": "0Ω"
+  },
+  "brand": "UNI-ROYAL",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C17168",
+  "desc": "0Ω ±1% 62.5mW 0402 Thick Film Resistor",
+  "matched_by": "code",
+  "model": "0402WGF0000TCE",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 0.0,
+   "tolerance_pct": 1.0,
+   "voltage_v": 50.0
+  },
+  "stock": 6836800,
+  "unit": "Piece"
+ },
+ "C1779": {
+  "attrs": {
+   "容值": "4.7uF",
+   "温度系数": "X5R",
+   "精度": "±10%",
+   "额定电压": "25V"
+  },
+  "brand": "Samsung Electro-Mechanics",
+  "catalog": "Ceramic Capacitors",
+  "catalog_path": [
+   "Passives",
+   "Capacitors"
+  ],
+  "code": "C1779",
+  "desc": "4.7uF ±10% 25V Ceramic Capacitor X5R 0805",
+  "matched_by": "code",
+  "model": "CL21A475KAQNNNE",
+  "package": "0805",
+  "packet": "Reel",
+  "params": {
+   "capacitance_f": 4.7e-06,
+   "tolerance_pct": 10.0,
+   "voltage_v": 25.0
+  },
+  "stock": 579360,
+  "unit": "Piece"
+ },
+ "C225125": {
+  "attrs": {
+   "参考系列": "GH",
+   "塑料材质": "PA9T",
+   "工作温度": "-40℃~+105℃",
+   "总PIN数": "2P",
+   "排数": "1",
+   "插针结构": "1x2P",
+   "每排PIN数": "2",
+   "触头材质": "磷铜",
+   "触头镀层": "锡",
+   "连接器类型": "卧贴",
+   "间距": "1.25mm",
+   "阻燃等级": "UL94V-0",
+   "额定电压": "50V",
+   "额定电流": "1A"
+  },
+  "brand": "CJTCONN(Changjiang Connectors)",
+  "catalog": "Headers, Male Pins",
+  "catalog_path": [
+   "Connectors, Interconnects",
+   "Rectangular Connectors"
+  ],
+  "code": "C225125",
+  "desc": "Connector Header 2 position 1.25mm Pitch",
+  "matched_by": "code",
+  "model": "A1257WR-S-2P",
+  "package": "SMD,P=1.25mm,Surface Mount,Right Angle",
+  "packet": "Reel",
+  "params": {
+   "current_a": 1.0,
+   "pins": 2,
+   "pitch_mm": 1.25,
+   "rows": 1,
+   "voltage_v": 50.0
+  },
+  "stock": 85890,
+  "unit": "Piece"
+ },
+ "C227416": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±5%",
+   "阻值": "75kΩ"
+  },
+  "brand": "YAGEO",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C227416",
+  "desc": "62.5mW 75kΩ 50V Thick Film Resistor ±100ppm/℃ ±5% 0402 Chip Resistor - Surface Mount RoHS",
+  "matched_by": "code",
+  "model": "AC0402JR-0775KL",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 75000.0,
+   "tolerance_pct": 5.0,
+   "voltage_v": 50.0
+  },
+  "stock": 0,
+  "unit": "Piece"
+ },
+ "C25867": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±1%",
+   "阻值": "1.5kΩ"
+  },
+  "brand": "UNI-ROYAL",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C25867",
+  "desc": "1.5kΩ ±1% 62.5mW 0402 Thick Film Resistor",
+  "matched_by": "code",
+  "model": "0402WGF1501TCE",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 1500.0,
+   "tolerance_pct": 1.0,
+   "voltage_v": 50.0
+  },
+  "stock": 381700,
+  "unit": "Piece"
+ },
+ "C25900": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±1%",
+   "阻值": "4.7kΩ"
+  },
+  "brand": "UNI-ROYAL",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C25900",
+  "desc": "4.7kΩ ±1% 62.5mW 0402 Thick Film Resistor",
+  "matched_by": "code",
+  "model": "0402WGF4701TCE",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 4700.0,
+   "tolerance_pct": 1.0,
+   "voltage_v": 50.0
+  },
+  "stock": 5899400,
+  "unit": "Piece"
+ },
+ "C25905": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±1%",
+   "阻值": "5.1kΩ"
+  },
+  "brand": "UNI-ROYAL",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C25905",
+  "desc": "5.1kΩ ±1% 62.5mW 0402 Thick Film Resistor",
+  "matched_by": "code",
+  "model": "0402WGF5101TCE",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 5100.0,
+   "tolerance_pct": 1.0,
+   "voltage_v": 50.0
+  },
+  "stock": 568700,
+  "unit": "Piece"
+ },
+ "C26083": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±1%",
+   "阻值": "1MΩ"
+  },
+  "brand": "UNI-ROYAL",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C26083",
+  "desc": "1MΩ ±1% 62.5mW 0402 Thick Film Resistor",
+  "matched_by": "code",
+  "model": "0402WGF1004TCE",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 1000000.0,
+   "tolerance_pct": 1.0,
+   "voltage_v": 50.0
+  },
+  "stock": 370600,
+  "unit": "Piece"
+ },
+ "C2682775": {
+  "attrs": {
+   "工作温度": "-40℃~+85℃",
+   "常温频差": "±10ppm",
+   "等效串联电阻(ESR)": "180Ω",
+   "负载电容": "12pF",
+   "频率": "8MHz",
+   "频率稳定度": "±20ppm"
+  },
+  "brand": "YXC Crystal Oscillators",
+  "catalog": "Crystals",
+  "catalog_path": [
+   "Passives",
+   "Crystals, Oscillators, Resonators"
+  ],
+  "code": "C2682775",
+  "desc": "Crystal 8MHz ±10ppm 12pF 150Ω SMD3225-4P",
+  "matched_by": "code",
+  "model": "X32258MOB4SI",
+  "package": "SMD3225-4P",
+  "packet": "Reel",
+  "params": {},
+  "stock": 1215,
+  "unit": "Piece"
+ },
+ "C2765186": {
+  "attrs": {
+   "体长(L)": "7.35mm",
+   "公母": "母",
+   "安装方式": "卧贴",
+   "工作温度": "-25℃~+85℃",
+   "端口数量": "1",
+   "触点数量": "16P",
+   "连接器类型": "Type-C",
+   "额定电压": "5V"
+  },
+  "brand": "SHOU HAN",
+  "catalog": "USB, DVI, HDMI Connector Assemblies",
+  "catalog_path": [
+   "Connectors, Interconnects",
+   "USB, DVI, HDMI Connectors"
+  ],
+  "code": "C2765186",
+  "desc": "USB-C (USB TYPE-C) Receptacle Connector 16 Position Surface Mount, Right Angle",
+  "matched_by": "code",
+  "model": "TYPE-C 16PIN 2MD(073)",
+  "package": "SMD",
+  "packet": "Reel",
+  "params": {
+   "pins": 16,
+   "voltage_v": 5.0
+  },
+  "stock": 992940,
+  "unit": "Piece"
+ },
+ "C2935929": {
+  "attrs": {
+   "圆针/方针": "方针",
+   "塑高": "2.54mm",
+   "总PIN数": "4P",
+   "排数": "单排",
+   "插针结构": "1x4P",
+   "触头材质": "黄铜",
+   "触头镀层": "金",
+   "连接器类型": "弯插",
+   "配合针长度": "6mm",
+   "间距": "2.54mm",
+   "颜色": "黑色",
+   "额定电流": "3A"
+  },
+  "brand": "DEALON",
+  "catalog": "Headers, Male Pins",
+  "catalog_path": [
+   "Connectors, Interconnects",
+   "Rectangular Connectors"
+  ],
+  "code": "C2935929",
+  "desc": "Pin Header 4 Position 2.54mm Pitch Single Row Through Hole, Right Angle",
+  "matched_by": "code",
+  "model": "DZ254W-11-04-65",
+  "package": "Through Hole,Right Angle,P=2.54mm",
+  "packet": "Bag",
+  "params": {
+   "current_a": 3.0,
+   "pins": 4,
+   "pitch_mm": 2.54,
+   "rows": 1
+  },
+  "stock": 14260,
+  "unit": "Piece"
+ },
+ "C2937625": {
+  "attrs": {
+   "圆针/方针": "方针",
+   "塑高": "2.5mm",
+   "工作温度": "-40℃~+105℃",
+   "总PIN数": "3P",
+   "排数": "单排",
+   "插针结构": "1x3P",
+   "端接针长度": "3mm",
+   "触头材质": "黄铜",
+   "触头镀层": "金",
+   "连接器类型": "直插",
+   "配合针长度": "6.1mm",
+   "间距": "2.54mm",
+   "颜色": "黑色",
+   "额定电压": "250V",
+   "额定电流": "3A"
+  },
+  "brand": "XFCN",
+  "catalog": "Headers, Male Pins",
+  "catalog_path": [
+   "Connectors, Interconnects",
+   "Rectangular Connectors"
+  ],
+  "code": "C2937625",
+  "desc": "Pin Header 3 Position 2.54mm Pitch Single Row Through Hole -40℃~+105℃",
+  "matched_by": "code",
+  "model": "PZ254V-11-03P",
+  "package": "Through Hole,P=2.54mm",
+  "packet": "Bag",
+  "params": {
+   "current_a": 3.0,
+   "pins": 3,
+   "pitch_mm": 2.54,
+   "rows": 1,
+   "voltage_v": 250.0
+  },
+  "stock": 912360,
+  "unit": "Piece"
+ },
+ "C2973805": {
+  "attrs": {
+   "工作温度": "-40℃~+85℃",
+   "常温频差": "±10ppm",
+   "等效串联电阻(ESR)": "180Ω",
+   "负载电容": "12pF",
+   "频率": "8MHz",
+   "频率稳定度": "±20ppm"
+  },
+  "brand": "YXC Crystal Oscillators",
+  "catalog": "Crystals",
+  "catalog_path": [
+   "Passives",
+   "Crystals, Oscillators, Resonators"
+  ],
+  "code": "C2973805",
+  "desc": "Crystal 8MHz ±10ppm 12pF 150Ω SMD3225-4P",
+  "matched_by": "code",
+  "model": "XL2EL89COI-111YLC-8M",
+  "package": "SMD3225-4P",
+  "packet": "Reel",
+  "params": {},
+  "stock": 179915,
+  "unit": "Piece"
+ },
+ "C3012260": {
+  "attrs": {
+   "圆针/方针": "方针",
+   "塑高": "2.5mm",
+   "工作温度": "-40℃~+105℃",
+   "总PIN数": "40P",
+   "排数": "双排",
+   "插针结构": "2x20P",
+   "端接针长度": "3mm",
+   "触头材质": "黄铜",
+   "连接器类型": "直插",
+   "配合针长度": "6mm",
+   "间距": "2.54mm",
+   "颜色": "黑色",
+   "额定电流": "3A"
+  },
+  "brand": "HCTL",
+  "catalog": "Headers, Male Pins",
+  "catalog_path": [
+   "Connectors, Interconnects",
+   "Rectangular Connectors"
+  ],
+  "code": "C3012260",
+  "desc": "Pin Header 40 Position 2.54mm Pitch Dual Row Through Hole -40℃~+105℃",
+  "matched_by": "code",
+  "model": "PZ254-2-20-Z-8.5",
+  "package": "Through Hole,P=2.54mm",
+  "packet": "Bag",
+  "params": {
+   "current_a": 3.0,
+   "pins": 40,
+   "pitch_mm": 2.54,
+   "rows": 2
+  },
+  "stock": 1162,
+  "unit": "Piece"
+ },
+ "C325521": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±1%",
+   "阻值": "5.1kΩ"
+  },
+  "brand": "TyoHM",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C325521",
+  "desc": "5.1kΩ ±1% 62.5mW 0402 Thick Film Resistor",
+  "matched_by": "code",
+  "model": "RMC04025.1K1%N",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 5100.0,
+   "tolerance_pct": 1.0,
+   "voltage_v": 50.0
+  },
+  "stock": 23900,
+  "unit": "Piece"
+ },
+ "C325562": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±5%",
+   "阻值": "5.6kΩ"
+  },
+  "brand": "TyoHM",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C325562",
+  "desc": "5.6kΩ ±5% 62.5mW 0402 Thick Film Resistor",
+  "matched_by": "code",
+  "model": "RMC04025.6K5%N",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 5600.0,
+   "tolerance_pct": 5.0,
+   "voltage_v": 50.0
+  },
+  "stock": 10000,
+  "unit": "Piece"
+ },
+ "C328316": {
+  "attrs": {
+   "功率": "63mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±1%",
+   "阻值": "33kΩ"
+  },
+  "brand": "RESI",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C328316",
+  "desc": "63mW 33kΩ 50V Thick Film Resistor ±100ppm/℃ ±1% 0402 Chip Resistor - Surface Mount RoHS",
+  "matched_by": "code",
+  "model": "AECR0402F33K0K9",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.063,
+   "resistance_ohm": 33000.0,
+   "tolerance_pct": 1.0,
+   "voltage_v": 50.0
+  },
+  "stock": 0,
+  "unit": "Piece"
+ },
+ "C455282": {
+  "attrs": {
+   "作用力": "2.6N",
+   "安装方式": "立贴",
+   "工作寿命": "10万次",
+   "带支架": "不带支架",
+   "开关宽度": "3.25mm",
+   "开关长度": "4.2mm",
+   "引脚样式": "SMD接片",
+   "按钮形状": "椭圆形按钮",
+   "按键/盖帽颜色": "白色",
+   "电路结构": "单刀单掷",
+   "触点电流": "50mA",
+   "额定电压": "12V",
+   "高度": "2.5mm"
+  },
+  "brand": "XUNPU",
+  "catalog": "Tactile Switches",
+  "catalog_path": [
+   "Switches"
+  ],
+  "code": "C455282",
+  "desc": "Tactile Switch SPST 2.5mm 4.2mm x 3.25mm Surface Mount",
+  "matched_by": "code",
+  "model": "TS-1089S-02526",
+  "package": "SMD-4P,4.2x3.3mm",
+  "packet": "Reel",
+  "params": {
+   "voltage_v": 12.0
+  },
+  "stock": 35670,
+  "unit": "Piece"
+ },
+ "C500065": {
+  "attrs": {
+   "作用力": "1.6N",
+   "安装方式": "立贴",
+   "工作寿命": "5万次",
+   "工作温度": "-30℃~+85℃",
+   "带支架": "不带支架",
+   "带灯": "无",
+   "开关宽度": "3.6mm",
+   "开关长度": "6mm",
+   "按钮形状": "矩形按钮",
+   "按键/盖帽颜色": "白色",
+   "电路结构": "单刀单掷",
+   "触点电流": "50mA",
+   "额定电压": "12V",
+   "高度": "2.5mm"
+  },
+  "brand": "XKB Connection",
+  "catalog": "Tactile Switches",
+  "catalog_path": [
+   "Switches"
+  ],
+  "code": "C500065",
+  "desc": "Tactile Switch SPST 160gf 2.5mm 6mm x 3.6mm Surface Mount",
+  "matched_by": "code",
+  "model": "TS-1101-B-W",
+  "package": "SMD,6x3.6mm",
+  "packet": "Reel",
+  "params": {
+   "voltage_v": 12.0
+  },
+  "stock": 29770,
+  "unit": "Piece"
+ },
+ "C50981": {
+  "attrs": {
+   "圆针/方针": "方针",
+   "工作温度": "-40℃~+105℃",
+   "总PIN数": "20P",
+   "排数": "单排",
+   "插针结构": "1x20P",
+   "触头材质": "黄铜",
+   "连接器类型": "直插",
+   "间距": "2.54mm",
+   "颜色": "黑色",
+   "额定电流": "3A"
+  },
+  "brand": "BOOMELE(Boom Precision Elec)",
+  "catalog": "Headers, Male Pins",
+  "catalog_path": [
+   "Connectors, Interconnects",
+   "Rectangular Connectors"
+  ],
+  "code": "C50981",
+  "desc": "Pin Header 20 Position 2.54mm Pitch Single Row Through Hole -40℃~+105℃",
+  "matched_by": "code",
+  "model": "2.54-1*20P",
+  "package": "Through Hole,P=2.54mm",
+  "packet": "Bag",
+  "params": {
+   "current_a": 3.0,
+   "pins": 20,
+   "pitch_mm": 2.54,
+   "rows": 1
+  },
+  "stock": 15335,
+  "unit": "Piece"
+ },
+ "C5122332": {
+  "attrs": {
+   "USB协议版本": "USB 2.0",
+   "功能特性": "硬件流控支持;可编程波特率;上电复位;FIFO缓冲;内置时钟发生器",
+   "工作温度": "-40℃~+85℃",
+   "工作电压": "3V;3.3V;3.6V",
+   "工作电流": "50mA",
+   "应用功能": "USB转UART;USB转I2C;USB转SPI;USB转JTAG",
+   "数据速率": "9Mbps",
+   "端口数量": "2"
+  },
+  "brand": "WCH",
+  "catalog": "Interface Controllers",
+  "catalog_path": [
+   "Integrated Circuits (ICs)",
+   "Interface"
+  ],
+  "code": "C5122332",
+  "desc": "2 9Mbps USB 2.0 TSSOP-20 Interface Controllers",
+  "matched_by": "code",
+  "model": "CH347T",
+  "package": "TSSOP-20",
+  "packet": "Tube",
+  "params": {},
+  "stock": 1001,
+  "unit": "Piece"
+ },
+ "C54953": {
+  "attrs": {
+   "工作寿命": "3千次",
+   "工作温度": "-40℃~+85℃",
+   "开关位数": "8位",
+   "引脚样式": "鸥翼型",
+   "电路结构": "单刀单掷",
+   "类型": "平拨,凸起式",
+   "脚间距": "2.54mm",
+   "触头材料": "黄铜",
+   "触头镀层": "金",
+   "颜色": "黑色"
+  },
+  "brand": "YE",
+  "catalog": "DIP Switches",
+  "catalog_path": [
+   "Switches"
+  ],
+  "code": "C54953",
+  "desc": "Dip Switch SPST 8 Position Surface Mount-16P,6x20.3mm Slide, Rocked",
+  "matched_by": "code",
+  "model": "DSIC08LSGET",
+  "package": "SMD,P=2.54mm",
+  "packet": "Tube",
+  "params": {
+   "pitch_mm": 2.54
+  },
+  "stock": 1427,
+  "unit": "Piece"
+ },
+ "C60490": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±100ppm/℃",
+   "电阻类型": "厚膜电阻",
+   "精度": "±1%",
+   "阻值": "10kΩ"
+  },
+  "brand": "YAGEO",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C60490",
+  "desc": "62.5mW 10kΩ 50V Thick Film Resistor ±100ppm/℃ ±1% 0402 Chip Resistor - Surface Mount RoHS",
+  "matched_by": "code",
+  "model": "RC0402FR-0710KL",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 10000.0,
+   "tolerance_pct": 1.0,
+   "voltage_v": 50.0
+  },
+  "stock": 0,
+  "unit": "Piece"
+ },
+ "C620155": {
+  "attrs": {
+   "工作温度": "-40℃~+85℃",
+   "常温频差": "±20ppm",
+   "等效串联电阻(ESR)": "70kΩ",
+   "负载电容": "12.5pF",
+   "频率": "32.768kHz",
+   "频率稳定度": "±30ppm"
+  },
+  "brand": "YXC Crystal Oscillators",
+  "catalog": "Crystals",
+  "catalog_path": [
+   "Passives",
+   "Crystals, Oscillators, Resonators"
+  ],
+  "code": "C620155",
+  "desc": "Crystal 32.768kHz ±20ppm 12.5pF SMD3215-2P",
+  "matched_by": "code",
+  "model": "X321532768KGD2SI",
+  "package": "SMD3215-2P",
+  "packet": "Reel",
+  "params": {},
+  "stock": 191455,
+  "unit": "Piece"
+ },
+ "C68214": {
+  "attrs": {
+   "功能特性": "使能控制;内置软启动;输入欠压保护;热关断;短路保护;过流保护;噪声旁路端子",
+   "工作温度": "-40℃~+125℃",
+   "工作电压": "35V",
+   "输出极性": "正极",
+   "输出电压": "1.4V~34V",
+   "输出电流": "1A",
+   "输出类型": "可调",
+   "输出通道数": "1",
+   "静态电流(Iq)": "6.1mA"
+  },
+  "brand": "TI",
+  "catalog": "Voltage Regulators - Linear, Low Drop Out (LDO) Regulators",
+  "catalog_path": [
+   "Integrated Circuits (ICs)",
+   "Power Management (PMIC)"
+  ],
+  "code": "C68214",
+  "desc": "Linear Voltage Regulator IC Positive Adjustable 1 Output 1A VQFN-20-EP(5x5)",
+  "matched_by": "code",
+  "model": "TPS7A4701RGWT",
+  "package": "VQFN-20-EP(5x5)",
+  "packet": "Reel",
+  "params": {},
+  "stock": 1085,
+  "unit": "Piece"
+ },
+ "C68215": {
+  "attrs": {
+   "功能特性": "使能控制;可调软启动;热关断;输入欠压保护;过流保护",
+   "工作温度": "-40℃~+125℃",
+   "工作电压": "35V",
+   "输出极性": "负极",
+   "输出电压": "1.18V~33V",
+   "输出电流": "1A",
+   "输出类型": "可调",
+   "输出通道数": "1",
+   "静态电流(Iq)": "5mA"
+  },
+  "brand": "TI",
+  "catalog": "Voltage Regulators - Linear, Low Drop Out (LDO) Regulators",
+  "catalog_path": [
+   "Integrated Circuits (ICs)",
+   "Power Management (PMIC)"
+  ],
+  "code": "C68215",
+  "desc": "Linear Voltage Regulator IC Negative Adjustable 1 Output 1A VQFN-20-EP(5x5)",
+  "matched_by": "code",
+  "model": "TPS7A3301RGWT",
+  "package": "VQFN-20-EP(5x5)",
+  "packet": "Reel",
+  "params": {},
+  "stock": 0,
+  "unit": "Piece"
+ },
+ "C705069": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±50ppm/℃",
+   "电阻类型": "薄膜电阻",
+   "精度": "±1%",
+   "阻值": "39kΩ"
+  },
+  "brand": "YAGEO",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C705069",
+  "desc": "39kΩ 62.5mW 50V Thin Film Resistor ±50ppm/℃ ±1% 0402 Chip Resistor - Surface Mount RoHS",
+  "matched_by": "code",
+  "model": "RT0402FRE0739KL",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 39000.0,
+   "tolerance_pct": 1.0,
+   "voltage_v": 50.0
+  },
+  "stock": 7450,
+  "unit": "Piece"
+ },
+ "C717684": {
+  "attrs": {
+   "工作温度": "-40℃~+85℃",
+   "工作电压": "1.8V~3.3V",
+   "常温频差": "±10ppm",
+   "输出模式": "CMOS",
+   "频率": "50MHz",
+   "频率稳定度": "±20ppm"
+  },
+  "brand": "YXC Crystal Oscillators",
+  "catalog": "Crystals",
+  "catalog_path": [
+   "Passives",
+   "Crystals, Oscillators, Resonators"
+  ],
+  "code": "C717684",
+  "desc": "Oscillator 50MHz ±10ppm CMOS 1.8V~3.3V SMD3225-4P",
+  "matched_by": "code",
+  "model": "OT322550MJBA4SL",
+  "package": "SMD3225-4P",
+  "packet": "Reel",
+  "params": {},
+  "stock": 35925,
+  "unit": "Piece"
+ },
+ "C7219": {
+  "attrs": {
+   "容值": "47uF",
+   "工作温度": "-55℃~+125℃",
+   "等效串联电阻(ESR)": "500mΩ@100kHz",
+   "精度": "±10%",
+   "额定电压": "16V"
+  },
+  "brand": "Kyocera AVX",
+  "catalog": "Tantalum Capacitors",
+  "catalog_path": [
+   "Passives",
+   "Capacitors"
+  ],
+  "code": "C7219",
+  "desc": "47uF ±10% 16V Tantalum Capacitors 500mΩ@100kHz CASE-C-6032",
+  "matched_by": "code",
+  "model": "TAJC476K016RNJ",
+  "package": "CASE-C-6032-28(mm)",
+  "packet": "Reel",
+  "params": {
+   "capacitance_f": 4.7e-05,
+   "tolerance_pct": 10.0,
+   "voltage_v": 16.0
+  },
+  "stock": 43530,
+  "unit": "Piece"
+ },
+ "C723366": {
+  "attrs": {
+   "功率": "62.5mW",
+   "工作温度": "-55℃~+155℃",
+   "最大工作电压": "50V",
+   "温度系数": "±50ppm/℃",
+   "电阻类型": "薄膜电阻",
+   "精度": "±1%",
+   "阻值": "10kΩ"
+  },
+  "brand": "YAGEO",
+  "catalog": "Chip Resistor - Surface Mount",
+  "catalog_path": [
+   "Passives",
+   "Resistors"
+  ],
+  "code": "C723366",
+  "desc": "62.5mW 10kΩ 50V Thin Film Resistor ±50ppm/℃ ±1% 0402 Chip Resistor - Surface Mount RoHS",
+  "matched_by": "code",
+  "model": "RT0402FRE0710KL",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.0625,
+   "resistance_ohm": 10000.0,
+   "tolerance_pct": 1.0,
+   "voltage_v": 50.0
+  },
+  "stock": 0,
+  "unit": "Piece"
+ },
+ "C727060": {
+  "attrs": {
+   "二极管配置": "独立式",
+   "反向电流(Ir)": "500uA",
+   "工作结温范围": "-55℃~+125℃",
+   "整流电流": "3A",
+   "正向压降(Vf)": "550mV@3A",
+   "直流反向耐压（Vr）": "40V"
+  },
+  "brand": "TWGMC",
+  "catalog": "Single Diodes",
+  "catalog_path": [
+   "Discrete Semiconductors",
+   "Diodes",
+   "Rectifiers"
+  ],
+  "code": "C727060",
+  "desc": "Diode Independent 40V 3A Surface Mount SMA(DO-214AC)",
+  "matched_by": "code",
+  "model": "SS34",
+  "package": "SMA(DO-214AC)",
+  "packet": "Reel",
+  "params": {
+   "voltage_v": 40.0
+  },
+  "stock": 556500,
+  "unit": "Piece"
+ },
+ "C7432787": {
+  "attrs": {
+   "容值": "47uF",
+   "温度系数": "X5R",
+   "精度": "±20%",
+   "额定电压": "10V"
+  },
+  "brand": "Chinocera",
+  "catalog": "Ceramic Capacitors",
+  "catalog_path": [
+   "Passives",
+   "Capacitors"
+  ],
+  "code": "C7432787",
+  "desc": "47uF ±20% 10V Ceramic Capacitor X5R 1206",
+  "matched_by": "code",
+  "model": "HGC1206R5476M100NSPJ",
+  "package": "1206",
+  "packet": "Reel",
+  "params": {
+   "capacitance_f": 4.7e-05,
+   "tolerance_pct": 20.0,
+   "voltage_v": 10.0
+  },
+  "stock": 95365,
+  "unit": "Piece"
+ },
+ "C76891": {
+  "attrs": {
+   "工作温度": "-55℃~+125℃",
+   "直流电阻(DCR)": "90mΩ",
+   "线路数": "1",
+   "误差": "±25%",
+   "阻抗@频率": "120Ω@100MHz",
+   "额定电流": "1.3A"
+  },
+  "brand": "muRata",
+  "catalog": "Ferrite Beads and Chips",
+  "catalog_path": [
+   "Passives",
+   "Filters"
+  ],
+  "code": "C76891",
+  "desc": "120Ω@100MHz 1 Line Ferrite Bead 0402 1.3A 90mΩ",
+  "matched_by": "code",
+  "model": "BLM15PD121SN1D",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "current_a": 1.3
+  },
+  "stock": 1125700,
+  "unit": "Piece"
+ },
+ "C77020": {
+  "attrs": {
+   "容值": "100nF",
+   "温度系数": "X7R",
+   "精度": "±10%",
+   "额定电压": "50V"
+  },
+  "brand": "muRata",
+  "catalog": "Ceramic Capacitors",
+  "catalog_path": [
+   "Passives",
+   "Capacitors"
+  ],
+  "code": "C77020",
+  "desc": "100nF ±10% 50V Ceramic Capacitor X7R 0402",
+  "matched_by": "code",
+  "model": "GRM155R71H104KE14D",
+  "package": "0402",
+  "packet": "Reel",
+  "params": {
+   "capacitance_f": 1e-07,
+   "tolerance_pct": 10.0,
+   "voltage_v": 50.0
+  },
+  "stock": 0,
+  "unit": "Piece"
+ },
+ "C82942": {
+  "attrs": {
+   "功能特性": "使能控制;短路保护;过流保护",
+   "工作温度": "-40℃~+150℃",
+   "工作电压": "6V",
+   "输出极性": "正极",
+   "输出电压": "3.3V",
+   "输出电流": "500mA",
+   "输出类型": "固定",
+   "输出通道数": "1",
+   "静态电流(Iq)": "60uA"
+  },
+  "brand": "MICRONE",
+  "catalog": "Voltage Regulators - Linear, Low Drop Out (LDO) Regulators",
+  "catalog_path": [
+   "Integrated Circuits (ICs)",
+   "Power Management (PMIC)"
+  ],
+  "code": "C82942",
+  "desc": "3.3V Positive Fixed SOT-23-5 Voltage Regulators - Linear, Low Drop Out (LDO) Regulators RoHS",
+  "matched_by": "code",
+  "model": "ME6211C33M5G-N",
+  "package": "SOT-23-5",
+  "packet": "Reel",
+  "params": {},
+  "stock": 282040,
+  "unit": "Piece"
+ },
+ "C84263": {
+  "attrs": {
+   "二极管配置": "独立二极管",
+   "半波宽": "15nm",
+   "发光强度": "220mcd",
+   "发光颜色": "红色",
+   "峰值波长": "630nm",
+   "工作温度": "-30℃~+85℃",
+   "接收角度": "130°",
+   "正向压降(Vf)": "1.6V~2.6V",
+   "正向电流": "25mA",
+   "波长": "615nm~630nm",
+   "灯头类型": "1mmx0.8mm方形灯头",
+   "载带方式": "正贴",
+   "透镜颜色": "无色透明透镜"
+  },
+  "brand": "NATIONSTAR",
+  "catalog": "LED Indication - Discrete",
+  "catalog_path": [
+   "Optoelectronics"
+  ],
+  "code": "C84263",
+  "desc": "Red 630nm LED Indication - Discrete 1.6V~2.6V 0603",
+  "matched_by": "code",
+  "model": "NCD0603R1",
+  "package": "0603",
+  "packet": "Reel",
+  "params": {},
+  "stock": 947600,
+  "unit": "Piece"
+ },
+ "C84266": {
+  "attrs": {
+   "二极管配置": "独立二极管",
+   "半波宽": "20nm",
+   "发光强度": "220mcd",
+   "发光颜色": "蓝色",
+   "峰值波长": "465nm",
+   "工作温度": "-30℃~+85℃",
+   "接收角度": "130°",
+   "正向压降(Vf)": "2.6V~3.6V",
+   "正向电流": "10mA",
+   "波长": "463nm~475nm",
+   "灯头类型": "1mmx0.8mm方形灯头",
+   "载带方式": "正贴",
+   "透镜颜色": "无色透明透镜"
+  },
+  "brand": "NATIONSTAR",
+  "catalog": "LED Indication - Discrete",
+  "catalog_path": [
+   "Optoelectronics"
+  ],
+  "code": "C84266",
+  "desc": "Blue 465nm LED Indication - Discrete 2.6V~3.6V 0603",
+  "matched_by": "code",
+  "model": "NCD0603B1",
+  "package": "0603",
+  "packet": "Reel",
+  "params": {},
+  "stock": 307000,
+  "unit": "Piece"
+ },
+ "C85233": {
+  "attrs": {
+   "功能特性": "短路保护",
+   "工作温度": "-25℃~+85℃",
+   "工作电压": "18V",
+   "输出极性": "正极",
+   "输出电压": "3.3V",
+   "输出电流": "500mA",
+   "输出类型": "固定",
+   "输出通道数": "1",
+   "静态电流(Iq)": "1.6uA"
+  },
+  "brand": "MICRONE",
+  "catalog": "Voltage Regulators - Linear, Low Drop Out (LDO) Regulators",
+  "catalog_path": [
+   "Integrated Circuits (ICs)",
+   "Power Management (PMIC)"
+  ],
+  "code": "C85233",
+  "desc": "3.3V Positive Fixed SOT-89 Voltage Regulators - Linear, Low Drop Out (LDO) Regulators",
+  "matched_by": "code",
+  "model": "ME6210A33PG",
+  "package": "SOT-89",
+  "packet": "Reel",
+  "params": {},
+  "stock": 43305,
+  "unit": "Piece"
+ },
+ "C8734": {
+  "attrs": {
+   "ADC(位数)": "12bit",
+   "CPU位数": "32 Bit",
+   "CPU内核": "ARM Cortex-M3",
+   "CPU最大主频": "72MHz",
+   "I/O数量": "37",
+   "工作温度": "-40℃~+85℃",
+   "工作电压": "2V~3.6V",
+   "振荡器类型": "内置",
+   "程序存储器类型": "FLASH",
+   "程序存储容量": "64KB"
+  },
+  "brand": "ST",
+  "catalog": "Microcontrollers",
+  "catalog_path": [
+   "Integrated Circuits (ICs)",
+   "Embedded"
+  ],
+  "code": "C8734",
+  "desc": "ARM Cortex-M3 32 Bit 72MHz LQFP-48(7x7) Microcontrollers RoHS",
+  "matched_by": "code",
+  "model": "STM32F103C8T6",
+  "package": "LQFP-48(7x7)",
+  "packet": "Tray",
+  "params": {},
+  "stock": 18598,
+  "unit": "Piece"
+ },
+ "C909754": {
+  "attrs": {
+   "射基极击穿电压(Vebo)": "6V",
+   "工作温度": "-55℃~+150℃",
+   "数量": "1个NPN",
+   "晶体管类型": "NPN",
+   "特征频率(fT)": "300MHz",
+   "直流电流增益(hFE)": "300",
+   "耗散功率(Pd)": "200mW",
+   "配置": "独立式",
+   "集射极击穿电压(Vceo)": "40V",
+   "集射极饱和电压(VCE(sat))": "300mV",
+   "集电极截止电流(Icbo)": "100nA",
+   "集电极电流(Ic)": "200mA"
+  },
+  "brand": "GOODWORK",
+  "catalog": "Single Bipolar Transistors",
+  "catalog_path": [
+   "Discrete Semiconductors",
+   "Transistors",
+   "Bipolar (BJT)"
+  ],
+  "code": "C909754",
+  "desc": "Bipolar (BJT) Transistor NPN 40V 200mA 300MHz 200mW Surface Mount SOT-23",
+  "matched_by": "code",
+  "model": "MMBT3904",
+  "package": "SOT-23",
+  "packet": "Reel",
+  "params": {
+   "power_w": 0.2
+  },
+  "stock": 967800,
+  "unit": "Piece"
+ },
+ "C965804": {
+  "attrs": {
+   "二极管配置": "独立二极管",
+   "发光强度": "810mcd",
+   "发光颜色": "翠绿色",
+   "峰值波长": "525nm",
+   "工作温度": "-40℃~+85℃",
+   "接收角度": "120°",
+   "正向压降(Vf)": "3.3V",
+   "正向电流": "20mA",
+   "波长": "515nm~535nm",
+   "灯头类型": "1.6mmx0.8mm方形灯头",
+   "载带方式": "正贴",
+   "透镜颜色": "无色透明透镜"
+  },
+  "brand": "XINGLIGHT",
+  "catalog": "LED Indication - Discrete",
+  "catalog_path": [
+   "Optoelectronics"
+  ],
+  "code": "C965804",
+  "desc": "Emerald Green 525nm LED Indication - Discrete 3.3V 0603",
+  "matched_by": "code",
+  "model": "XL-1608UGC-04",
+  "package": "0603",
+  "packet": "Reel",
+  "params": {},
+  "stock": 3823800,
+  "unit": "Piece"
+ }
+}

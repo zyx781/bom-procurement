@@ -63,3 +63,6 @@ bom-site/launcher.old.ps1
 bom-site/run.bat
 taobao-bom-procurement/蒸馏方案.md
 .mech-cards/
+
+# ---- 用户投喂的原始 BOM（回归用的副本在 tests/fixtures/boms/，别在根目录留两份）----
+/BOM_*.xlsx

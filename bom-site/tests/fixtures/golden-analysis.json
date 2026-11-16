@@ -1,0 +1,1229 @@
+{
+ "devboard-stm32f103": [
+  {
+   "line_no": 1,
+   "desc": "TYPE-C 16PIN 2MD(073)",
+   "category": "connector",
+   "subtype": "",
+   "status": "ready",
+   "code": "C2765186",
+   "q": [
+    "TYPE-C 16PIN 2MD(073) 连接器",
+    "TYPE-C 母座 16P",
+    "TYPE-C 16P 连接器"
+   ],
+   "params": {
+    "pins": 16
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 2,
+   "desc": "ME6211C33M5G-N",
+   "category": "ic",
+   "subtype": "",
+   "status": "ready",
+   "code": "C82942",
+   "q": [
+    "ME6211C33M5G-N",
+    "ME6211C33M5G-N SOT-23-5",
+    "ME6211C33M5G-N 原装 SOT-23-5",
+    "ME6211C33M5G-N 全新"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 3,
+   "desc": "LED_0603-R",
+   "category": "passive",
+   "subtype": "led",
+   "status": "ready",
+   "code": "C84263",
+   "q": [
+    "NCD0603R1 LED",
+    "NCD0603R1 0603",
+    "NCD0603R1 0603 全新"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 4,
+   "desc": "LED_0603-B",
+   "category": "passive",
+   "subtype": "led",
+   "status": "ready",
+   "code": "C84266",
+   "q": [
+    "NCD0603B1 LED",
+    "NCD0603B1 0603",
+    "NCD0603B1 0603 全新"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 5,
+   "desc": "TS-1101-B-W",
+   "category": "other",
+   "subtype": "",
+   "status": "ready",
+   "code": "C500065",
+   "q": [
+    "TS-1101-B-W 轻触开关",
+    "TS-1101-B-W SMD"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 6,
+   "desc": "HDR-M_2.54_1x3P",
+   "category": "connector",
+   "subtype": "",
+   "status": "ready",
+   "code": "C2937625",
+   "q": [
+    "PZ254V-11-03P 连接器",
+    "2.54mm 排针 3P",
+    "单排排针 2.54mm 3P",
+    "HDR-M_2.54_1x3P"
+   ],
+   "params": {
+    "pins": 3,
+    "pitch_mm": 2.54,
+    "rows": 1
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 7,
+   "desc": "HDR-M_2.54_1x20P",
+   "category": "connector",
+   "subtype": "",
+   "status": "ready",
+   "code": "C50981",
+   "q": [
+    "2.54-1*20P 连接器",
+    "2.54mm 排针 20P",
+    "单排排针 2.54mm 20P",
+    "HDR-M_2.54_1x20P"
+   ],
+   "params": {
+    "pins": 20,
+    "pitch_mm": 2.54,
+    "rows": 1
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 8,
+   "desc": "HDR-M_2.54_1x4P",
+   "category": "connector",
+   "subtype": "",
+   "status": "ready",
+   "code": "C2935929",
+   "q": [
+    "DZ254W-11-04-65 连接器",
+    "2.54mm 排针 4P",
+    "单排排针 2.54mm 4P",
+    "HDR-M_2.54_1x4P"
+   ],
+   "params": {
+    "pins": 4,
+    "pitch_mm": 2.54,
+    "rows": 1
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 9,
+   "desc": "STM32F103C8T6",
+   "category": "ic",
+   "subtype": "",
+   "status": "ready",
+   "code": "C8734",
+   "q": [
+    "STM32F103C8T6",
+    "STM32F103C8T6 LQFP-48",
+    "STM32F103C8T6 原装 LQFP-48",
+    "STM32F103C8T6 全新"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 10,
+   "desc": "5.1kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C25905",
+   "q": [
+    "0402WGF5101TCE 电阻",
+    "0402 5.1kΩ 0.0625W 厚膜 电阻",
+    "0402 5.1kΩ 电阻",
+    "0402 5.1kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 5100.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 11,
+   "desc": "1.5kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C25867",
+   "q": [
+    "0402WGF1501TCE 电阻",
+    "0402 1.5kΩ 0.0625W 厚膜 电阻",
+    "0402 1.5kΩ 电阻",
+    "0402 1.5kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 1500.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 12,
+   "desc": "100nF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "C77020",
+   "q": [
+    "GRM155R71H104KE14D 瓷片电容",
+    "0402 100nF 50V 瓷片 电容",
+    "0402 100nF 电容",
+    "0402 100nF 50V 电容"
+   ],
+   "params": {
+    "capacitance_f": 1.0000000000000001e-07,
+    "tolerance_pct": 10.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 13,
+   "desc": "1uF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "C14445",
+   "q": [
+    "CL05A105KP5NNNC 瓷片电容",
+    "0402 1uF 10V 瓷片 电容",
+    "0402 1uF 电容",
+    "0402 1uF 10V 电容"
+   ],
+   "params": {
+    "capacitance_f": 1e-06,
+    "tolerance_pct": 10.0,
+    "voltage_v": 10.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 14,
+   "desc": "1kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C11702",
+   "q": [
+    "0402WGF1001TCE 电阻",
+    "0402 1kΩ 0.0625W 厚膜 电阻",
+    "0402 1kΩ 电阻",
+    "0402 1kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 1000.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 15,
+   "desc": "12pF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "C1547",
+   "q": [
+    "0402CG120J500NT 瓷片电容",
+    "0402 12pF 50V 瓷片 电容",
+    "0402 12pF 电容",
+    "0402 12pF 50V 电容"
+   ],
+   "params": {
+    "capacitance_f": 1.2e-11,
+    "tolerance_pct": 5.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 16,
+   "desc": "8MHz",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "C2973805",
+   "q": [
+    "XL2EL89COI-111YLC-8M 电阻",
+    "SMD 8MΩ 电阻",
+    "SMD 8MΩ 贴片电阻",
+    "YXC(扬兴晶振) 8MΩ 电阻"
+   ],
+   "params": {
+    "resistance_ohm": 8000000.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 17,
+   "desc": "10kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C60490",
+   "q": [
+    "RC0402FR-0710KL 电阻",
+    "0402 10kΩ 0.0625W 厚膜 电阻",
+    "0402 10kΩ 电阻",
+    "0402 10kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 10000.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 18,
+   "desc": "32.768kHz",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "needs_user",
+   "code": "C620155",
+   "q": [
+    "X321532768KGD2SI 晶振",
+    "X321532768KGD2SI SMD"
+   ],
+   "params": {},
+   "conflict": false
+  }
+ ],
+ "devboard-fpga-z1": [
+  {
+   "line_no": 1,
+   "desc": "PZ254-2-20-Z-8.5",
+   "category": "connector",
+   "subtype": "",
+   "status": "ready",
+   "code": "C3012260",
+   "q": [
+    "PZ254-2-20-Z-8.5 连接器",
+    "2.54mm 排针 40P",
+    "2.54mm 双排排针 40P",
+    "2.54mm 2*20P 排针"
+   ],
+   "params": {
+    "pins": 40,
+    "pitch_mm": 2.54,
+    "rows": 2
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 2,
+   "desc": "DSIC08LSGET",
+   "category": "other",
+   "subtype": "",
+   "status": "ready",
+   "code": "C54953",
+   "q": [
+    "DSIC08LSGET 拨码开关",
+    "DSIC08LSGET SMD"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 3,
+   "desc": "BLM15PD121SN1D",
+   "category": "passive",
+   "subtype": "bead",
+   "status": "ready",
+   "code": "C76891",
+   "q": [
+    "BLM15PD121SN1D 磁珠",
+    "BLM15PD121SN1D 0402",
+    "BLM15PD121SN1D 0402 全新",
+    "BLM15PD121SN1D 贴片"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 4,
+   "desc": "1kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C11702",
+   "q": [
+    "0402WGF1001TCE 电阻",
+    "0402 1kΩ 0.0625W 厚膜 电阻",
+    "0402 1kΩ 电阻",
+    "0402 1kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 1000.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 5,
+   "desc": "XL-1608UGC-04",
+   "category": "passive",
+   "subtype": "led",
+   "status": "ready",
+   "code": "C965804",
+   "q": [
+    "XL-1608UGC-04 LED",
+    "XL-1608UGC-04 0603",
+    "XL-1608UGC-04 0603 全新"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 6,
+   "desc": "10kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C60490",
+   "q": [
+    "RC0402FR-0710KL 电阻",
+    "0402 10kΩ 0.0625W 厚膜 电阻",
+    "0402 10kΩ 电阻",
+    "0402 10kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 10000.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 7,
+   "desc": "50MHz",
+   "category": "passive",
+   "subtype": "",
+   "status": "needs_user",
+   "code": "C717684",
+   "q": [
+    "OT322550MJBA4SL 晶振",
+    "OT322550MJBA4SL SMD"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 8,
+   "desc": "0Ω",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C17168",
+   "q": [
+    "0402WGF0000TCE 电阻",
+    "0402 0R 电阻",
+    "0402 零欧电阻 0R",
+    "0402 0Ω 0.0625W 厚膜 电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 0.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 9,
+   "desc": "0.1uF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "",
+   "q": [
+    "0402 100nF 电容",
+    "0402 100nF 贴片电容",
+    "1005 100nF 电容",
+    "YAGEO(国巨) 100nF 电容"
+   ],
+   "params": {
+    "capacitance_f": 1e-07,
+    "dielectric": "X7R"
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 10,
+   "desc": "MMBT3904",
+   "category": "power",
+   "subtype": "",
+   "status": "ready",
+   "code": "C909754",
+   "q": [
+    "MMBT3904",
+    "MMBT3904 SOT-23-3",
+    "MMBT3904 原装 SOT-23-3",
+    "MMBT3904 全新"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 11,
+   "desc": "10kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "",
+   "q": [
+    "0402 10kΩ 电阻",
+    "0402 10kΩ 贴片电阻",
+    "1005 10kΩ 电阻",
+    "YAGEO(国巨) 10kΩ 电阻"
+   ],
+   "params": {
+    "resistance_ohm": 10000.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 12,
+   "desc": "4.7kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C25900",
+   "q": [
+    "0402WGF4701TCE 电阻",
+    "0402 4.7kΩ 0.0625W 厚膜 电阻",
+    "0402 4.7kΩ 电阻",
+    "0402 4.7kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 4700.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 13,
+   "desc": "0.1uF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "",
+   "q": [
+    "0402 100nF 电容",
+    "0402 100nF 贴片电容",
+    "1005 100nF 电容",
+    "YAGEO(国巨) 100nF 电容"
+   ],
+   "params": {
+    "capacitance_f": 1e-07,
+    "dielectric": "X7R"
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 14,
+   "desc": "NC",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "needs_user",
+   "code": "",
+   "q": [],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 15,
+   "desc": "PGC4KD-6ILPG144",
+   "category": "ic",
+   "subtype": "",
+   "status": "ready",
+   "code": "",
+   "q": [
+    "PGC4KD-6ILPG144",
+    "PGC4KD-6ILPG144 LQFP-144",
+    "PGC4KD-6ILPG144 原装 LQFP-144",
+    "PGC4KD-6ILPG144 全新"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 16,
+   "desc": "TS-1089S-02526",
+   "category": "other",
+   "subtype": "",
+   "status": "ready",
+   "code": "C455282",
+   "q": [
+    "TS-1089S-02526 轻触开关",
+    "TS-1089S-02526 SMD"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 17,
+   "desc": "10uF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "C17024",
+   "q": [
+    "CL21A106KPFNNNE 瓷片电容",
+    "0805 10uF 10V 瓷片 电容",
+    "0805 10uF 电容",
+    "0805 10uF 10V 电容"
+   ],
+   "params": {
+    "capacitance_f": 9.999999999999999e-06,
+    "tolerance_pct": 10.0,
+    "voltage_v": 10.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 18,
+   "desc": "8MHz",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "needs_user",
+   "code": "C2682775",
+   "q": [
+    "X32258MOB4SI 晶振",
+    "X32258MOB4SI SMD"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 19,
+   "desc": "CH347T",
+   "category": "ic",
+   "subtype": "",
+   "status": "ready",
+   "code": "C5122332",
+   "q": [
+    "CH347T",
+    "CH347T TSSOP-20",
+    "CH347T 原装 TSSOP-20",
+    "CH347T 全新"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 20,
+   "desc": "1MΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C26083",
+   "q": [
+    "0402WGF1004TCE 电阻",
+    "0402 1MΩ 0.0625W 厚膜 电阻",
+    "0402 1MΩ 电阻",
+    "0402 1MΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 1000000.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 21,
+   "desc": "12pF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "C1547",
+   "q": [
+    "0402CG120J500NT 瓷片电容",
+    "0402 12pF 50V 瓷片 电容",
+    "0402 12pF 电容",
+    "0402 12pF 50V 电容"
+   ],
+   "params": {
+    "capacitance_f": 1.2e-11,
+    "tolerance_pct": 5.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 22,
+   "desc": "TYPE-C-31-M-12",
+   "category": "connector",
+   "subtype": "",
+   "status": "ready",
+   "code": "C165948",
+   "q": [
+    "TYPE-C-31-M-12 连接器",
+    "TYPE-C 母座 16P",
+    "TYPE-C 16P 连接器",
+    "TYPE-C-31-M-12"
+   ],
+   "params": {
+    "pins": 16
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 23,
+   "desc": "SS34",
+   "category": "passive",
+   "subtype": "diode",
+   "status": "ready",
+   "code": "C727060",
+   "q": [
+    "SS34 二极管",
+    "SS34 SMA",
+    "SS34 SMA 全新",
+    "SS34 贴片"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 24,
+   "desc": "CBW201209U121T",
+   "category": "passive",
+   "subtype": "bead",
+   "status": "ready",
+   "code": "C139186",
+   "q": [
+    "CBW201209U121T 磁珠",
+    "CBW201209U121T 0805",
+    "CBW201209U121T 0805 全新",
+    "CBW201209U121T 贴片"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 25,
+   "desc": "ME6210A33PG",
+   "category": "ic",
+   "subtype": "",
+   "status": "ready",
+   "code": "C85233",
+   "q": [
+    "ME6210A33PG",
+    "ME6210A33PG SOT-89",
+    "ME6210A33PG 原装 SOT-89",
+    "ME6210A33PG 全新"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 26,
+   "desc": "4.7uF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "C1779",
+   "q": [
+    "CL21A475KAQNNNE 瓷片电容",
+    "0805 4.7uF 25V 瓷片 电容",
+    "0805 4.7uF 电容",
+    "0805 4.7uF 25V 电容"
+   ],
+   "params": {
+    "capacitance_f": 4.7e-06,
+    "tolerance_pct": 10.0,
+    "voltage_v": 25.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 27,
+   "desc": "A1257WR-S-2P",
+   "category": "connector",
+   "subtype": "",
+   "status": "ready",
+   "code": "C225125",
+   "q": [
+    "A1257WR-S-2P 连接器",
+    "1.25mm 2P 连接器",
+    "SMD 连接器",
+    "A1257WR-S-2P"
+   ],
+   "params": {
+    "pins": 2,
+    "pitch_mm": 1.25,
+    "rows": 1
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 28,
+   "desc": "125 X 300",
+   "category": "other",
+   "subtype": "",
+   "status": "needs_user",
+   "code": "",
+   "q": [],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 29,
+   "desc": "Test-Point",
+   "category": "other",
+   "subtype": "",
+   "status": "ready",
+   "code": "",
+   "q": [
+    "PCB 测试点 焊盘",
+    "贴片测试点",
+    "测试点 焊盘"
+   ],
+   "params": {},
+   "conflict": false
+  }
+ ],
+ "power-1to2": [
+  {
+   "line_no": 1,
+   "desc": "5.1kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C325521",
+   "q": [
+    "RMC04025.1K1%N 电阻",
+    "0402 5.1kΩ 0.0625W 厚膜 电阻",
+    "0402 5.1kΩ 电阻",
+    "0402 5.1kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 5100.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 2,
+   "desc": "33kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C138291",
+   "q": [
+    "AC0402FR-0733KL 电阻",
+    "0402 33kΩ 0.0625W 厚膜 电阻",
+    "0402 33kΩ 电阻",
+    "0402 33kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 33000.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 3,
+   "desc": "22pF/6.3V(10%)-0402",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "",
+   "q": [
+    "0402 22pF 电容",
+    "0402 22pF 6.3V 电容",
+    "0402 22pF 贴片电容",
+    "1005 22pF 电容"
+   ],
+   "params": {
+    "capacitance_f": 2.1999999999999998e-11,
+    "tolerance_pct": 10.0,
+    "voltage_v": 6.3
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 4,
+   "desc": "200kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C138077",
+   "q": [
+    "RC0402DR-07200KL 电阻",
+    "0402 200kΩ 0.0625W 厚膜 电阻",
+    "0402 200kΩ 电阻",
+    "0402 200kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 200000.0,
+    "tolerance_pct": 0.5,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 5,
+   "desc": "75kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C227416",
+   "q": [
+    "AC0402JR-0775KL 电阻",
+    "0402 75kΩ 0.0625W 厚膜 电阻",
+    "0402 75kΩ 电阻",
+    "0402 75kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 75000.0,
+    "tolerance_pct": 5.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 6,
+   "desc": "5.6Ω",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C325562",
+   "q": [
+    "0402 5.6Ω 0.0625W 厚膜 电阻",
+    "0402 5.6Ω 电阻",
+    "0402 5.6Ω 贴片电阻",
+    "1005 5.6Ω 电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 5.6,
+    "tolerance_pct": 5.0,
+    "voltage_v": 50.0
+   },
+   "conflict": true
+  },
+  {
+   "line_no": 7,
+   "desc": "330pF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "",
+   "q": [
+    "0402 330pF 电容",
+    "0402 330pF 贴片电容",
+    "1005 330pF 电容",
+    "EYANG(宇阳科技) 330pF 电容"
+   ],
+   "params": {
+    "capacitance_f": 3.3e-10,
+    "dielectric": "X7R"
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 8,
+   "desc": "TPS7A4701RGWT",
+   "category": "ic",
+   "subtype": "",
+   "status": "ready",
+   "code": "C68214",
+   "q": [
+    "TPS7A4701RGWT",
+    "TPS7A4701RGWT QFN-20",
+    "TPS7A4701RGWT 原装 QFN-20",
+    "TPS7A4701RGWT 全新"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 9,
+   "desc": "1uF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "C1582",
+   "q": [
+    "0402F105M160NT 瓷片电容",
+    "0402 1uF 16V 瓷片 电容",
+    "0402 1uF 电容",
+    "0402 1uF 16V 电容"
+   ],
+   "params": {
+    "capacitance_f": 1e-06,
+    "tolerance_pct": 20.0,
+    "voltage_v": 16.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 10,
+   "desc": "15kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C144727",
+   "q": [
+    "AC0402JR-0715KL 电阻",
+    "0402 15kΩ 0.0625W 厚膜 电阻",
+    "0402 15kΩ 电阻",
+    "0402 15kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 15000.0,
+    "tolerance_pct": 5.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 11,
+   "desc": "39kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C705069",
+   "q": [
+    "RT0402FRE0739KL 电阻",
+    "0402 39kΩ 0.0625W 薄膜 电阻",
+    "0402 39kΩ 电阻",
+    "0402 39kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 39000.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 12,
+   "desc": "10nF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "",
+   "q": [
+    "0402 10nF 电容",
+    "0402 10nF 贴片电容",
+    "1005 10nF 电容",
+    "EYANG(宇阳科技) 10nF 电容"
+   ],
+   "params": {
+    "capacitance_f": 1e-08,
+    "dielectric": "X7R"
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 13,
+   "desc": "10kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C723366",
+   "q": [
+    "RT0402FRE0710KL 电阻",
+    "0402 10kΩ 0.0625W 薄膜 电阻",
+    "0402 10kΩ 电阻",
+    "0402 10kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.0625,
+    "resistance_ohm": 10000.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 14,
+   "desc": "33kΩ",
+   "category": "passive",
+   "subtype": "resistor",
+   "status": "ready",
+   "code": "C328316",
+   "q": [
+    "AECR0402F33K0K9 电阻",
+    "0402 33kΩ 0.063W 厚膜 电阻",
+    "0402 33kΩ 电阻",
+    "0402 33kΩ 贴片电阻"
+   ],
+   "params": {
+    "power_w": 0.063,
+    "resistance_ohm": 33000.0,
+    "tolerance_pct": 1.0,
+    "voltage_v": 50.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 15,
+   "desc": "MPM3620AGQV",
+   "category": "ic",
+   "subtype": "",
+   "status": "ready",
+   "code": "",
+   "q": [
+    "MPM3620AGQV",
+    "MPM3620AGQV QFN-20",
+    "MPM3620AGQV 原装 QFN-20",
+    "MPM3620AGQV 全新"
+   ],
+   "params": {},
+   "conflict": false
+  },
+  {
+   "line_no": 16,
+   "desc": "100nF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "C1525",
+   "q": [
+    "CL05B104KO5NNNC 瓷片电容",
+    "0402 100nF 16V 瓷片 电容",
+    "0402 100nF 电容",
+    "0402 100nF 16V 电容"
+   ],
+   "params": {
+    "capacitance_f": 1.0000000000000001e-07,
+    "tolerance_pct": 10.0,
+    "voltage_v": 16.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 17,
+   "desc": "22uF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "",
+   "q": [
+    "0805 22uF 电容",
+    "0805 22uF 贴片电容",
+    "2012 22uF 电容",
+    "FOJAN(富捷) 22uF 电容"
+   ],
+   "params": {
+    "capacitance_f": 2.2e-05
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 18,
+   "desc": "47uF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "C7219",
+   "q": [
+    "TAJC476K016RNJ 钽电容",
+    "SMD 47uF 16V 钽 电容",
+    "SMD 47uF 电容",
+    "SMD 47uF 16V 电容"
+   ],
+   "params": {
+    "capacitance_f": 4.7e-05,
+    "tolerance_pct": 10.0,
+    "voltage_v": 16.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 19,
+   "desc": "47uF",
+   "category": "passive",
+   "subtype": "capacitor",
+   "status": "ready",
+   "code": "C7432787",
+   "q": [
+    "HGC1206R5476M100NSPJ 瓷片电容",
+    "1206 47uF 10V 瓷片 电容",
+    "1206 47uF 电容",
+    "1206 47uF 10V 电容"
+   ],
+   "params": {
+    "capacitance_f": 4.7e-05,
+    "tolerance_pct": 20.0,
+    "voltage_v": 10.0
+   },
+   "conflict": false
+  },
+  {
+   "line_no": 20,
+   "desc": "TPS7A3301RGWT",
+   "category": "ic",
+   "subtype": "",
+   "status": "ready",
+   "code": "C68215",
+   "q": [
+    "TPS7A3301RGWT",
+    "TPS7A3301RGWT QFN-20",
+    "TPS7A3301RGWT 原装 QFN-20",
+    "TPS7A3301RGWT 全新"
+   ],
+   "params": {},
+   "conflict": false
+  }
+ ]
+}

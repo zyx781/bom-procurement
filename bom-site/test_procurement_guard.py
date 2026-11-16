@@ -297,5 +297,91 @@ _qc = engine._build_queries("passive", "插件", {"capacitance_f": 10e-9, "volta
 check("搜索词带瓷片", any("瓷片" in x and "10nF" in x for x in _qc), _qc[:3])
 check("瓷片词同时带 50V", any("瓷片" in x and "50V" in x for x in _qc), _qc[:3])
 
+print("== 16. 立创编号锚定：按编号确定具体那一颗 ==")
+# 编号是物料的唯一标识：查到型号就该拿型号去搜，而不是只按「10nF 瓷片」碰运气
+_lc = {
+    "code": "C2832505",
+    "model": "CC1H103ZA1ED3F4D1100",
+    "matched_by": "code",
+    "attrs": {"容值": "10nF", "额定电压": "50V", "温度系数": "Y5V", "脚间距": "2.54mm"},
+    "params": {"capacitance_f": 10e-9, "voltage_v": 50.0},
+    "desc": "10nF -20%~+80% 50V Ceramic Capacitor Through Hole P=2.54mm",
+    "catalog": "Ceramic Capacitors",
+}
+_row = {
+    "line_no": 1, "mpn": "CC1H103ZA1ED3F4D1100", "desc": "10nF",
+    "package": "CAP-TH_L5.0-W2.5-P2.50", "qty": 1, "refs": "C13", "lcsc_info": _lc,
+}
+_l = engine.analyze_line(_row, 1)
+check("编号行的第一条搜索词是型号", "CC1H103ZA1ED3F4D1100" in _l["query_plan"][0], _l["query_plan"][:2])
+check("型号词带中文品类", "瓷片" in _l["query_plan"][0], _l["query_plan"][:2])
+check("封装噪声 Through 不进搜索词", all("Through" not in q for q in _l["query_plan"]), _l["query_plan"])
+check("参数词仍作为兜底保留", any("10nF" in q and "50V" in q for q in _l["query_plan"]), _l["query_plan"][:3])
+
+_l2 = engine.analyze_line(dict(_row, line_no=2, lcsc_info=dict(_lc, matched_by="model")), 2)
+check(
+    "同型号反查不当采购依据（型号可能是复制错的）",
+    not any("CC1H103" in q and "瓷片" in q for q in _l2["query_plan"]),
+    _l2["query_plan"][:2],
+)
+
+_lc_d = {
+    "code": "C7420365", "model": "SS34", "matched_by": "code",
+    "desc": "Diode Independent 40V 3A Surface Mount SMA(DO-214AC)",
+    "catalog": "Single Diodes", "attrs": {"整流电流": "3A"},
+    "params": {}, "package": "SMA(DO-214AC)",
+}
+_l3 = engine.analyze_line(
+    {"line_no": 3, "mpn": "SS34", "desc": "SS34", "package": "SMA(DO-214AC)", "qty": 1, "lcsc_info": _lc_d}, 3
+)
+check("二极管型号词配「二极管」", "二极管" in _l3["query_plan"][0], _l3["query_plan"][:2])
+check("二极管行不出现「电感」", all("电感" not in q for q in _l3["query_plan"]), _l3["query_plan"])
+
+_conf = {
+    "line_no": 4, "mpn": "MF1/4W-1KΩ±1%T52", "desc": "470", "package": RES_PKG, "qty": 1,
+    "value_conflict": "名称列写 470，型号对应 1kΩ，两者冲突",
+    "lcsc": {"code": "C713997", "model": "MF1/4W-1KΩ±1%T52", "matched_by": "code"},
+    "params": {"resistance_ohm": 470.0},
+}
+check("编号与名称列冲突 → 必须人工，不自动买", "冲突" in tr._review_reason(_conf), tr._review_reason(_conf))
+
+_b1 = tr._procurement_basis(
+    {"lcsc": {"code": "C2832505", "model": "CC1H103ZA1ED3F4D1100", "matched_by": "code"}},
+    {"candidate": {"title": "CC1H103ZA1ED3F4D1100 瓷片电容 10nF 50V"}},
+)
+check("采购依据：标题命中型号", _b1.get("hit") is True and _b1.get("code") == "C2832505", _b1)
+_b2 = tr._procurement_basis(
+    {"lcsc": {"code": "C2832505", "model": "CC1H103ZA1ED3F4D1100", "matched_by": "code"}},
+    {"candidate": {"title": "10nF 50V 瓷片电容 插件"}},
+)
+check("采购依据：未命中型号如实写「同规格替代」", _b2.get("hit") is False and "替代" in _b2.get("note", ""), _b2)
+check(
+    "同型号反查不产生采购依据",
+    tr._procurement_basis({"lcsc": {"code": "C1", "model": "X", "matched_by": "model"}}) == {},
+)
+check("老缓存无 matched_by 按编号解析处理", engine._lcsc_by_code({"code": "C1"}) is True)
+check("同型号记录不被当成编号", engine._lcsc_by_code({"code": "C1", "matched_by": "model"}) is False)
+
+# 同一型号被用在两个差一个数量级的值上（实测 #4 10nF / #7 100nF 共用 C2832505）：
+# 一个型号不可能有两种容值，八成是复制错型号 —— 不按名称硬买，交人工。
+_conf7 = {
+    "line_no": 7, "mpn": "CC1H103ZA1ED3F4D1100", "desc": "100nF",
+    "package": "CAP-TH_L5.0-W2.5-P2.50", "qty": 14,
+    "value_conflict": "BOM 名称列写 100nF，但立创同型号商品 C2832505 是 10nF，两者对不上",
+    "lcsc": {"code": "C2832505", "model": "CC1H103ZA1ED3F4D1100", "matched_by": "model",
+             "params": {"capacitance_f": 10e-9}},
+    "params": {"capacitance_f": 100e-9},
+}
+check("同型号容值差 10 倍 → 人工（复制错型号）", "10 倍" in tr._review_reason(_conf7), tr._review_reason(_conf7))
+
+_conf14 = {
+    "line_no": 14, "mpn": "MF1/4W-1KΩ±1%T52", "desc": "470", "package": RES_PKG, "qty": 42,
+    "value_conflict": "名称列写 470，型号对应 1kΩ，两者冲突",
+    "lcsc": {"code": "C713997", "model": "MF1/4W-1KΩ±1%T52", "matched_by": "model",
+             "params": {"resistance_ohm": 1000.0}},
+    "params": {"resistance_ohm": 470.0},
+}
+check("同型号只差 2 倍 → 按名称列买，不拦", tr._review_reason(_conf14) == "", tr._review_reason(_conf14))
+
 print(f"\nRESULT: {PASS} passed, {FAIL} failed")
 sys.exit(0 if FAIL == 0 else 1)

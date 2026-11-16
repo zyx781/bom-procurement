@@ -207,7 +207,13 @@ def _pins(text):
 
 
 def _mm(text):
-    return _one(text)
+    """「2.54mm」→ 2.54。
+
+    这里的 m 是毫米单位本身，不是「毫」——按 `_one` 走会先把 "2.54m" 当 0.00254，
+    脚距闸门拿它去比 2.54/5.08 就永远对不上（Type-C、排针整行会莫名被拒）。
+    """
+    m = re.search(r"(\d+(?:\.\d+)?)", str(text or ""))
+    return float(m.group(1)) if m else None
 
 
 def _amperes(text):
@@ -393,6 +399,10 @@ def _pack(raw: dict) -> dict:
         "datasheet": str(raw.get("pdfUrl") or "").strip(),
         "fetched_at": datetime.now().isoformat(timespec="seconds"),
         "source": "lcsc",
+        # 这条记录是怎么来的：编号解析（唯一标识，可当权威）还是同型号反查（只是参考）。
+        # 以前只有 resolve_model 才写这个字段，导致「按编号查到」的行被误判成
+        # 「没有权威身份」，采购时不敢用型号锚定。
+        "matched_by": "code",
     }
 
 

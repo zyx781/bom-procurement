@@ -2360,6 +2360,9 @@ class SessionRunner:
                         break
                 if _stop_after:
                     break
+                # 采购依据（编号→型号→标题是否命中）跟着结果落库：买完要能追溯
+                # 「凭什么是这一件」，演练也写，方便真跑前先看依据对不对。
+                res["basis"] = _procurement_basis(line, res)
                 self._batch_line_patch(i, **res)
                 # 自适应降温：连续 ≥2 行「点了但没回执」→ 疑似被限流，立刻拉长
                 # 冷却（60s×连续数，封顶 300s）。ok 正常则清零。跑批实测：从第 4
@@ -3266,6 +3269,34 @@ def _lcsc_attrs(line: dict) -> dict:
     return attrs if isinstance(attrs, dict) else {}
 
 
+def _procurement_basis(line: dict, res: dict | None = None) -> dict:
+    """这行为什么买这一件：立创编号 → 型号 → 标题里有没有命中型号。
+
+    买完要能追溯。只有「按编号查到」的行才有这条证据链 —— 同型号反查只是
+    参考（BOM 里的型号本身可能就是复制错的），不能当采购依据。
+    """
+    lc = line.get("lcsc") or {}
+    if not engine._lcsc_by_code(lc):
+        return {}
+    model = str(lc.get("model") or "").strip()
+    if not model:
+        return {}
+    cand = (res or {}).get("candidate") or {}
+    title = str(cand.get("title") or "")
+    hit = bool(title) and engine._norm_text(model) in engine._norm_text(title)
+    return {
+        "code": lc.get("code") or "",
+        "model": model,
+        "package": lc.get("package") or "",
+        "hit": hit,
+        "note": (
+            "标题含立创编号对应型号，是同一颗料"
+            if hit
+            else "标题未出现立创型号，已按编号规格逐项核对（同规格替代）"
+        ),
+    }
+
+
 _CAP_FILM_WORDS = (
     "CBB", "启动电容", "启动电容器", "薄膜", "涤纶", "安规电容", "校正电容",
     "X2电容", "MKP", "MKT", "CBB60", "CBB61", "CBB65",
@@ -3395,7 +3426,40 @@ def _review_reason(line: dict) -> str:
     note = str(line.get("value_conflict") or "").strip()
     if not note:
         return ""
+    # 冲突来自「立创编号」时一律人工：编号是物料的唯一标识，它和名称列对不上，
+    # 说明这份 BOM 自己前后矛盾（要么名称写错、要么编号复制错），
+    # 按哪一边买都可能买错，这种行不能自动下单。
+    lc = line.get("lcsc") or {}
+    if engine._lcsc_by_code(lc) and str(lc.get("model") or "").strip():
+        return (
+            f"BOM 名称列写 {str(line.get('desc') or '—')}，但立创编号 "
+            f"{lc.get('code') or '—'} 对应 {lc.get('model')}，两者冲突；"
+            f"编号是唯一标识，不替你猜——请核对原理图后改 BOM"
+        )
     p = line.get("params") or {}
+    # 同型号反查冲突：BOM 里同一个型号被用在两个差一个数量级的值上
+    # （实测 #4 写 10nF、#7 写 100nF，型号都是 CC1H103ZA1ED3F4D1100），
+    # 一个型号不可能有两种容值，八成是复制错型号。这种行别按名称硬买 ——
+    # 失败提示会变成「SKU 里容值 1.0401mF 对不上」，把人引到卖家写错的单位上。
+    lc_params = lc.get("params") or {}
+    for key, kind in (("resistance_ohm", "阻值"), ("capacitance_f", "容值"), ("inductance_h", "感值")):
+        mine = p.get(key)
+        theirs = lc_params.get(key)
+        if not mine or not theirs:
+            continue
+        try:
+            ratio = max(float(mine), float(theirs)) / min(float(mine), float(theirs))
+        except (TypeError, ValueError, ZeroDivisionError):
+            continue
+        # 只在「两个值都是标准档位」时下这个判断：BOM 写 5kΩ（不在 E24）时，
+        # 更该提示的是「这个值本身可疑」，交给下面的 E24 分支。
+        if ratio >= 5 and _is_standard_value(mine) and _is_standard_value(theirs):
+            return (
+                f"BOM 名称列写 {str(line.get('desc') or '—')}，但同一型号 "
+                f"{lc.get('model') or ''} 在立创是 {engine._fmt_param_value(key, theirs)}，"
+                f"一个{kind}差 {ratio:.0f} 倍；同型号不可能有两种值，"
+                f"八成是复制错型号，请核对原理图后改 BOM"
+            )
     for key, kind in (("resistance_ohm", "阻值"), ("capacitance_f", "容值"), ("inductance_h", "感值")):
         v = p.get(key)
         if v is None:

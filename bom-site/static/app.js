@@ -1208,7 +1208,13 @@
           ? `买 ${r.qty} 份${multi ? `（1份=${r.pack_size}只，到手${r.actual_pcs || r.qty * r.pack_size}只）` : ""}`
           : "";
         const tries = (r.attempts || []).length > 1 ? `试了 ${r.attempts.length} 个候选` : "";
-        const sub = [r.message, sku, tries].filter(Boolean).join(" ｜ ");
+        // 采购依据：这一件是凭「立创编号 → 型号」选的，还是型号没命中、按编号规格
+        // 逐项核对后的同规格替代。买完要能一眼追回去，不能只留一个金额。
+        const basis =
+          r.basis && r.basis.code
+            ? `依据 ${r.basis.code}${r.basis.hit ? "·型号命中" : "·同规格替代"}`
+            : "";
+        const sub = [r.message, sku, basis, tries].filter(Boolean).join(" ｜ ");
         // 收尾对账没做成（读车异常）时保留「已加购」，但要一眼能看出「未经核实」
         const unv = r.cart_unverified
           ? '<span class="bunv" title="收尾对账没做成（购物车没读对），请到购物车核对这一行">未核实</span>'

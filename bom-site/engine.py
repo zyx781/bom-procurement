@@ -704,6 +704,20 @@ def _lcsc_param_keys(category: str, subtype: str) -> set:
     return _LCSC_PARAM_KEYS.get((category, subtype or "")) or set()
 
 
+def _lcsc_by_code(info: dict) -> bool:
+    """这条立创记录是不是「按编号查到」的（唯一标识，可以当权威）。
+
+    老缓存的编号记录没有 matched_by 字段；型号反查的记录一定带 "model"，
+    所以缺字段时按编号解析处理。
+    """
+    if not isinstance(info, dict):
+        return False
+    mb = str(info.get("matched_by") or "").strip()
+    if mb:
+        return mb == "code"
+    return bool(str(info.get("code") or "").strip())
+
+
 def _category_from_catalog(text: str) -> str:
     """立创的品类路径（Passives / Resistors…）→ 我们的品类。
 
@@ -1270,6 +1284,11 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
     queries = _build_queries(
         category, package, params, mpn, desc, row.get("brand"), subtype,
         res_type=_res_type, cap_kind=_cap_kind,
+        # 编号锚定：只有「按编号查到」才是这颗料的权威身份。同名反查
+        # （matched_by=model）不算 —— 实测一份 BOM 里 470Ω/2.2K/5kΩ 三行
+        # 共用同一个 1kΩ 料号，按它搜型号会把三行全买成 1kΩ。
+        model=(str(lcsc_info.get("model") or "") if _lcsc_by_code(lcsc_info) else ""),
+        kind_hint=_lcsc_kind_cn(lcsc_info or {}),
     )
     risks = _build_risks(category, package, params, mpn, gates)
     if value_conflict:
@@ -1303,6 +1322,10 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
                 "packet": lcsc_info.get("packet") or "",
                 "unit": lcsc_info.get("unit") or "",
                 "attrs": lcsc_info.get("attrs") or {},
+                # 立创解析出的**结构化规格**（阻值/容值/耐压…）。采购层要靠它
+                # 判断「同一个型号是不是被用在两个差一个数量级的值上」，
+                # 只传 attrs（中文原文）还得再解析一遍，容易漏。
+                "params": lcsc_info.get("params") or {},
                 "datasheet": lcsc_info.get("datasheet") or "",
                 "matched_by": lcsc_info.get("matched_by") or ("code" if lcsc_info.get("code") else "model"),
             }
@@ -1491,10 +1514,67 @@ def _fmt_watt_label(w) -> str:
     return f"{v:g}W"
 
 
-def _build_queries(category, package, p, mpn, desc, brand, subtype="", res_type="", cap_kind=""):
+# 封装里这些词是「安装方式」不是封装：'Through Hole,8.7x4.4mm' 用空格切出来是
+# 'Through'，搜索词会变成「SK12D07VG5 Through」——淘宝零结果，白跑一次搜索。
+_PKG_NOISE_HEAD = re.compile(r"(?i)^(through[\s_-]*hole|tht|connector|plug|socket|header)\b")
+
+# 立创品类英文 → 淘宝常用中文品类词。型号单独搜索会被标题里的品类词带偏，
+# 「SK12D07VG5 拨动开关」比裸型号召回得准。
+_LCSC_KIND_CN = (
+    (r"toggle\s+switch", "拨动开关"),
+    (r"slide\s+switch", "滑动开关"),
+    (r"dip\s+switch", "拨码开关"),
+    (r"tactile\s+switch|push\s*button|touch\s+switch", "轻触开关"),
+    (r"rocker\s+switch", "船型开关"),
+    (r"key\s+switch|button\s+switch", "按键开关"),
+    (r"aluminum\s+electrolytic|electrolytic\s+capacitor", "电解电容"),
+    (r"ceramic\s+capacitor", "瓷片电容"),
+    (r"film\s+capacitor", "薄膜电容"),
+    (r"tantalum\s+capacitor", "钽电容"),
+    (r"resistor", "电阻"),
+    (r"inductor", "电感"),
+    (r"\bled\b|light\s+emitting", "LED"),
+    (r"diode|rectifier", "二极管"),
+    (r"transistor|mosfet", "三极管"),
+    (r"crystal|oscillator", "晶振"),
+    (r"connector|receptacle|header", "连接器"),
+    (r"fuse", "保险丝"),
+)
+
+
+def _pkg_word(package) -> str:
+    """封装里能当搜索词的那一段；纯安装方式（Through Hole/Connector）返回空串。"""
+    p = str(package or "").strip()
+    if not p:
+        return ""
+    if _PKG_NOISE_HEAD.match(p):
+        return ""
+    return p.split(" ")[0]
+
+
+def _lcsc_kind_cn(info: dict) -> str:
+    """立创这条料是什么东西，给搜索词配一个中文品类词（认不出返回空串）。"""
+    if not isinstance(info, dict):
+        return ""
+    blob = " ".join(
+        [
+            str(info.get("desc") or ""),
+            str(info.get("catalog") or ""),
+            " ".join(str(x) for x in (info.get("catalog_path") or [])),
+        ]
+    ).lower()
+    for pat, cn in _LCSC_KIND_CN:
+        if re.search(pat, blob):
+            return cn
+    return ""
+
+
+def _build_queries(
+    category, package, p, mpn, desc, brand, subtype="", res_type="", cap_kind="", model="", kind_hint=""
+):
     brand = str(brand or "").strip()
     q = []
-    pkg = package.split(" ")[0] if package else ""
+    pkg = _pkg_word(package)
     metric = ""
     if package and "(" in package:
         metric = package.split("(")[1].split(")")[0]
@@ -1661,6 +1741,34 @@ def _build_queries(category, package, p, mpn, desc, brand, subtype="", res_type=
         head = re.sub(r"\s+", " ", head).strip(" ,;")
         if head:
             q.append(head)
+
+    # ------------------------------------------------------------------
+    # 立创编号锚定：编号对应的**型号**才是那一颗料，参数只是它的属性
+    # ------------------------------------------------------------------
+    # 有编号的行，先搜型号：淘宝卖家标题几乎都会写型号，命中就是同一颗料；
+    # 只搜「10nF 瓷片 电容」买回来的是「一样的容值、不一样的元件」——
+    # 体积、脚距、温度系数、品牌全凭运气。型号搜不到会自动回退参数词，
+    # 所以这条词放最前不增加失败面，只增加确定性。
+    model = str(model or "").strip()
+    if model and len(model) >= 4 and category in ("passive", "connector", "other"):
+        _hint = ""
+        if category == "passive":
+            if cap_kind:
+                # 立创品类给的「瓷片电容/电解电容」比裸「瓷片」召回更准
+                _hint = str(kind_hint or "").strip() or f"{cap_kind}电容"
+            elif "resistance_ohm" in p:
+                _hint = "电阻"
+            elif "capacitance_f" in p:
+                _hint = "电容"
+            elif "inductance_h" in p:
+                _hint = "电感"
+            # 二极管/LED/磁珠/保险丝没有阻容感值：型号本身就是身份，
+            # 硬配一个「电感」只会把搜索结果带偏（SS34 → SS34 电感）。
+        elif category == "connector":
+            _hint = "连接器"
+        if not _hint:
+            _hint = str(kind_hint or "").strip()
+        q.insert(0, f"{model} {_hint}".strip() if _hint and _hint not in model else model)
 
     out, seen = [], set()
     for item in q:
@@ -2059,6 +2167,14 @@ def _check_title(line, cand, extra_ctx):
                 checks.append(("按模块特征匹配", 10, True))
             else:
                 return "H02", f"标题未出现完整型号 {mpn}", checks, hit_risk
+
+    # 立创编号对应的型号：标题里出现它，证明「是同一颗料」，而不只是「参数凑巧一样」。
+    # 不做硬门槛（淘宝标题经常省掉型号，尤其小厂被动件），只加分让它排到前面。
+    _lc_line = line.get("lcsc") or {}
+    if _lcsc_by_code(_lc_line) and cat not in ("ic", "power", "module"):
+        _lc_model = str(_lc_line.get("model") or "").strip()
+        if len(_lc_model) >= 4:
+            checks.append(("立创编号对应型号", 20, _norm_text(_lc_model) in nt))
 
     if cat == "passive":
         req_r, req_c, req_i = p.get("resistance_ohm"), p.get("capacitance_f"), p.get("inductance_h")

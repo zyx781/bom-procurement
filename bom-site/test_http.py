@@ -29,6 +29,10 @@ def _restore_active_bom():
 
 atexit.register(_restore_active_bom)
 
+# 本机 HTTP 一律绕开系统代理：这台机器设了 HTTP_PROXY，127.0.0.1 的请求
+# 被代理接走后返回 502，测试会误报成「服务挂了」。
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 
 def post(path, payload):
     req = urllib.request.Request(
@@ -38,14 +42,14 @@ def post(path, payload):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with _OPENER.open(req, timeout=10) as r:
             return r.status, json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read().decode("utf-8"))
 
 
 def get(path):
-    with urllib.request.urlopen(BASE + path, timeout=10) as r:
+    with _OPENER.open(BASE + path, timeout=10) as r:
         return r.status, r.read()
 
 
@@ -137,7 +141,7 @@ req = urllib.request.Request(
     method="POST",
 )
 try:
-    with urllib.request.urlopen(req, timeout=10) as r:
+    with _OPENER.open(req, timeout=10) as r:
         print("CROSS-ORIGIN POST", r.status, "(应 403)")
 except urllib.error.HTTPError as e:
     body = e.read().decode("utf-8")
@@ -147,7 +151,7 @@ except urllib.error.HTTPError as e:
 print("SAME-ORIGIN STILL OK", post("/api/type-check", {})[0], "(404 = 路由不存在，说明没被 403 误杀)")
 
 # 4) 批量结果导出（CSV，Excel 直接打开不乱码）
-with urllib.request.urlopen(BASE + "/api/taobao/batch/export.csv", timeout=10) as r:
+with _OPENER.open(BASE + "/api/taobao/batch/export.csv", timeout=10) as r:
     _csv = r.read().decode("utf-8-sig")
     print(
         "BATCH EXPORT",
@@ -163,7 +167,7 @@ with urllib.request.urlopen(BASE + "/api/taobao/batch/export.csv", timeout=10) a
 # 5) 实时推送（SSE）：页面靠这条流刷新进度。断成死流前端会退回轮询，
 #    但「能连上却永远不发第一帧」是查不出来的静默故障，所以这里必须验第一帧。
 try:
-    _s = urllib.request.urlopen(BASE + "/api/taobao/batch/stream", timeout=10)
+    _s = _OPENER.open(BASE + "/api/taobao/batch/stream", timeout=10)
     _ctype = _s.headers.get("Content-Type") or ""
     _first = _s.readline().decode("utf-8", "replace").strip()
     _data = ""

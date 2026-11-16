@@ -182,11 +182,13 @@ def debug_browser_alive(port: int = 9222, timeout: float = 0.8) -> bool:
     """调试浏览器还在不在（HTTP 探一下 CDP 端口，纯 socket，不起进程、不弹窗）。
 
     关掉浏览器后没必要再去 powershell 查进程：先问这个，端口都死了就直接返回。
+
+    必须绕开系统代理：这台机器上 HTTP_PROXY 指向本地代理，127.0.0.1 的请求
+    被丢给代理后一律 502，会把「浏览器好好的」误判成「已关闭」，整批被中止。
     """
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        with urllib.request.urlopen(
-            f"http://127.0.0.1:{int(port)}/json/version", timeout=timeout
-        ) as resp:
+        with opener.open(f"http://127.0.0.1:{int(port)}/json/version", timeout=timeout) as resp:
             return getattr(resp, "status", 200) == 200
     except Exception:
         return False

@@ -333,6 +333,14 @@ check("名称里像编号也不算",
       lcsc.code_of_row({"raw": {"Name": "C123"}}) == "", "不该整行乱扫")
 check("非 dict 安全", lcsc.code_of_row(None) == "")
 
+print("== 脚距单位 ==")
+# 立创写「脚间距 2.54mm」：m 是毫米单位，不能按「毫」再乘 1e-3（会变成 0.00254，
+# 脚距闸门拿去比 2.54/5.08 永远对不上，Type-C、排针整行会莫名被拒）
+check("2.54mm → 2.54", lcsc.extract_params({"脚间距": "2.54mm"}).get("pitch_mm") == 2.54,
+      lcsc.extract_params({"脚间距": "2.54mm"}))
+check("5.08mm → 5.08", lcsc.extract_params({"脚间距": "5.08mm"}).get("pitch_mm") == 5.08)
+check("2.5mm → 2.5", lcsc.extract_params({"脚间距": "2.5mm"}).get("pitch_mm") == 2.5)
+
 
 print(f"\nRESULT: {PASS} passed, {FAIL} failed")
 sys.exit(0 if FAIL == 0 else 1)

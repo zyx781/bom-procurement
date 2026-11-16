@@ -134,5 +134,85 @@ check("天猫 detail", tr._item_id_of("https://detail.tmall.com/item.htm?itemId=
 check("无 id 返回空", tr._item_id_of("https://cart.taobao.com/cart.htm") == "")
 
 print()
+print("== 删车之后，进度必须跟着作废 ==")
+# 2026-11-16 真机踩到：新 BOM 跑完 17 行（购物车 0 → 17），再点「删上次加购的」，
+# 车删回 0，进度却还是 17 行 ok。接着点「继续加购」会全部跳过 —— 页面说已加购 17 行，
+# 购物车里一件没有。删掉的商品，进度里就不能再算「已加购」。
+import json  # noqa: E402
+import tempfile  # noqa: E402
+
+_tmp = pathlib.Path(tempfile.mkdtemp(prefix="cartfix-"))
+_saved = tr.PROGRESS_FILE
+tr.PROGRESS_FILE = _tmp / "batch-progress.json"
+try:
+    tr.save_batch_progress(
+        {
+            "updated_at": "2026-11-16T20:03:15",
+            "total": 3,
+            "lines": {
+                "1": {
+                    "status": "ok",
+                    "qty": 1,
+                    "candidate": {
+                        "title": "TYPE-C 16PIN USB连接器 Type-C母座 卧贴16P",
+                        "url": "https://item.taobao.com/item.htm?id=111",
+                    },
+                },
+                "2": {
+                    "status": "ok",
+                    "qty": 1,
+                    "candidate": {
+                        "title": "STM32F103C8T6 LQFP-48 ARM Cortex-M3 32位微控",
+                        "url": "https://item.taobao.com/item.htm?id=222",
+                    },
+                },
+                "3": {"status": "failed", "message": "没找到", "candidate": {}},
+            },
+        }
+    )
+    out = tr.invalidate_removed_progress(["TYPE-C 16PIN USB连接器 Type-C母座 卧贴16P"])
+    after = json.loads(tr.PROGRESS_FILE.read_text(encoding="utf-8"))
+    check("删掉的那行改成 removed", after["lines"]["1"]["status"] == "removed", after["lines"]["1"])
+    check("留在车里的行还是 ok", after["lines"]["2"]["status"] == "ok", after["lines"]["2"])
+    check("failed 行不动", after["lines"]["3"]["status"] == "failed", after["lines"]["3"])
+    check("计数只算真正改到的", out["updated"] == 1, out)
+    check("留了删除时间", bool(after["lines"]["1"].get("removed_at")), after["lines"]["1"])
+
+    skip = tr.done_map_from_progress(after)
+    check("removed 行不会被续跑跳过", "1" not in skip, skip)
+    check("还在车里的行照常跳过", "2" in skip, skip)
+
+    # 执行层回的标题可能被截断，前缀互含要认得出是同一件
+    tr.save_batch_progress(
+        {
+            "total": 1,
+            "lines": {
+                "1": {
+                    "status": "ok",
+                    "candidate": {"title": "原装贴片电阻0402 5.1kΩ ±1% 62.5mW 0402WGF5101TCE 100只"},
+                }
+            },
+        }
+    )
+    tr.invalidate_removed_progress(["原装贴片电阻0402 5.1kΩ ±1% 62.5mW"])
+    after2 = json.loads(tr.PROGRESS_FILE.read_text(encoding="utf-8"))
+    check("标题截断也能认出", after2["lines"]["1"]["status"] == "removed", after2["lines"]["1"])
+
+    # 执行层没回标题时的兜底：目标全删掉了，这批 ok 行就都不在车里了
+    tr.save_batch_progress(
+        {"total": 1, "lines": {"1": {"status": "ok", "candidate": {"title": "无标题记录"}}}}
+    )
+    out3 = tr.invalidate_removed_progress([], all_ok=True)
+    after3 = json.loads(tr.PROGRESS_FILE.read_text(encoding="utf-8"))
+    check("没标题时按 all_ok 兜底", out3["updated"] == 1, out3)
+    check("兜底也改成 removed", after3["lines"]["1"]["status"] == "removed", after3["lines"]["1"])
+
+    tr.save_batch_progress({"total": 1, "lines": {"1": {"status": "ok", "candidate": {"title": "X"}}}})
+    out4 = tr.invalidate_removed_progress(["完全不相干的东西啊啊啊啊"])
+    check("对不上就不动（宁少改不多改）", out4["updated"] == 0, out4)
+finally:
+    tr.PROGRESS_FILE = _saved
+
+print()
 print(f"RESULT: {PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

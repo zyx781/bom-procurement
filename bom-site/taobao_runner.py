@@ -417,6 +417,54 @@ def batch_removal_targets(prog: dict | None = None) -> list[dict]:
     return out
 
 
+def _norm_title(text) -> str:
+    return "".join(str(text or "").strip().lower().split())
+
+
+def _title_match(a: str, b: str) -> bool:
+    """同一个商品的标题，可能一边被截断到 120 字。前缀互含就算同一件。"""
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    short, long_ = (a, b) if len(a) <= len(b) else (b, a)
+    return len(short) >= 12 and long_.startswith(short)
+
+
+def invalidate_removed_progress(titles, all_ok: bool = False) -> dict:
+    """购物车删完，把被删掉的行从「已加购」改回「待加购」。
+
+    进度文件的唯一含义是「这些行已经在购物车里」。车删空之后它还写着 ok 就是假话：
+    点「继续加购」会把这些行全跳过，页面显示已加购 17 行、购物车却一件没有。
+    2026-11-16 真机踩到：新 BOM 跑完 17 行（购物车 0 → 17）后点了「删上次加购的」，
+    车清回 0，进度却仍是 17 行 ok —— 再点加购会瞬间「跑完」，一件都不加。
+
+    all_ok=True 用于「执行层没回标题、但删掉的件数 ≥ 目标数」的兜底：
+    目标全部落删，那这批 ok 行必然都不在车里了。
+    """
+    wanted = [_norm_title(t) for t in (titles or []) if _norm_title(t)]
+    if not wanted and not all_ok:
+        return {"updated": 0}
+    data = load_batch_progress() or {}
+    lines = data.get("lines") or {}
+    updated, now = 0, datetime.now().isoformat(timespec="seconds")
+    for rec in lines.values():
+        rec = rec or {}
+        if rec.get("status") != "ok":
+            continue
+        title = _norm_title((rec.get("candidate") or {}).get("title"))
+        if not all_ok and not any(_title_match(title, w) for w in wanted):
+            continue
+        rec["status"] = "removed"
+        rec["removed_at"] = now
+        rec["message"] = "已从购物车删除，需要重新加购"
+        updated += 1
+    if updated:
+        data["updated_at"] = now
+        save_batch_progress(data)
+    return {"updated": updated}
+
+
 def done_map_from_progress(prior: dict, redo_lines=None) -> dict:
     """续跑时哪些行可以跳过。
 
@@ -834,7 +882,9 @@ class SessionRunner:
                     "total_ms": v.get("total_ms"),
                 }
             )
-        settled = ("ok", "failed", "uncertain", "skipped")
+        # removed 也是定局：这一行本来加购成功，被「删最近一批」从车里删掉了。
+        # 不算定局的话，重启装载时会把整批当成「没跑完」，页面挂「服务重启」文案。
+        settled = ("ok", "failed", "uncertain", "skipped", "removed")
         has_pending = any(r["status"] not in settled for r in results)
         # P2-4：上一轮已经跑完（没有 pending 行）就不要说「服务重启」——
         # 那是中断态文案，会误导人以为有一批没跑完。
@@ -1789,17 +1839,38 @@ class SessionRunner:
         }
 
     def cart_remove_last_batch(self, dry: bool = False) -> dict:
-        """只删「上一批加购进去」的那些商品，用户自己加的保持不动。
+        """只删「最近一次批量加购」的那些商品，用户自己加的保持不动。
 
         dry=True 时执行层只扫描并返回计划（会删哪几件、跳过哪几件），
         一个按钮都不点 —— 前端先用它给用户看清，再决定要不要真删。
+
+        注意「最近一次」= 进度文件里那一批，也就是**刚跑完的这批**。
+        用户嘴里的「上一批」通常指更早那份 BOM，两者不是一回事，
+        所以计划里必须带上这批的开始/结束时间和行数，让人一眼认出删的是哪批。
         """
-        targets = batch_removal_targets()
+        prog = load_batch_progress() or {}
+        targets = batch_removal_targets(prog)
+        from_archive = False
+        if not targets and not (prog.get("lines") or {}):
+            # 进度被「重跑 / 重置」整个清过，商品可能还在车里 —— 用底档再认一次。
+            # 只在这一批**根本没有记录**时才翻底档：进度里明明有这批（哪怕全失败/
+            # 已删车）却去删更早那批，就成了「按错批次的名单删车」。
+            prog = load_archived_progress() or {}
+            targets = batch_removal_targets(prog)
+            from_archive = bool(targets)
+        meta = {
+            "started_at": prog.get("started_at"),
+            "finished_at": prog.get("finished_at"),
+            "total": prog.get("total"),
+            "fingerprint": prog.get("fingerprint") or "",
+            "from_archive": from_archive,
+        }
         if not targets:
             return {
                 "ok": False,
                 "code": "NO_BATCH_RECORD",
                 "message": "没有可用的批量加购记录：上次批量没有成功加购的行",
+                "batch": meta,
                 "delete": [],
                 "skip": [],
                 "missing": [],
@@ -1814,21 +1885,41 @@ class SessionRunner:
                 "ok": False,
                 "code": err.get("code") or "CART_REMOVE_FAILED",
                 "message": err.get("message") or "删除购物车条目失败",
+                "batch": meta,
                 "screenshot": self.persist_screenshot(
                     err.get("screenshot") or resp.get("screenshot")
                 ),
             }
         data = resp.get("data") or {}
+        removed = data.get("removed")
+        invalidated = {"updated": 0}
+        if not dry and isinstance(removed, int) and removed > 0:
+            # 车删了，进度必须跟着作废：否则「继续加购」会按 ok 全跳过。
+            # all_ok 只在「目标覆盖了这批全部 ok 行、且全删掉了」时成立，
+            # 有跳过/有没认出来的行就退回按标题逐个匹配，宁可少改不可多改。
+            ok_lines = sum(
+                1
+                for v in (prog.get("lines") or {}).values()
+                if (v or {}).get("status") == "ok"
+            )
+            invalidated = invalidate_removed_progress(
+                data.get("removed_titles") or [],
+                all_ok=removed >= len(targets) and len(targets) >= ok_lines,
+            )
+            if invalidated.get("updated"):
+                self._mark_removed_in_memory()
         return {
             "ok": True,
             "dry": bool(data.get("dry")),
+            "batch": meta,
             "targets": data.get("targets"),
             "delete": data.get("delete") or [],
             "skip": data.get("skip") or [],
             "missing": data.get("missing") or [],
             "merged": data.get("merged") or [],
-            "removed": data.get("removed"),
+            "removed": removed,
             "removed_titles": data.get("removed_titles") or [],
+            "progress_invalidated": invalidated.get("updated") or 0,
             "before": data.get("before"),
             "after": data.get("after"),
             "verified": data.get("verified"),
@@ -1838,6 +1929,33 @@ class SessionRunner:
             "message": data.get("message"),
             "screenshot": self.persist_screenshot(resp.get("screenshot")),
         }
+
+    def _mark_removed_in_memory(self) -> int:
+        """把内存里这批的 ok 行同步改成 removed，页面才不会继续显示「已加购」。
+
+        以进度文件为准逐个对：只删了部分行（其余被跳过）时，没删的行仍留在车里，
+        界面不能把整批都写成「已删车」。
+        """
+        prog = load_batch_progress() or {}
+        removed_ids = {
+            str(k)
+            for k, v in (prog.get("lines") or {}).items()
+            if (v or {}).get("status") == "removed"
+        }
+        changed = 0
+        with self._state_lock:
+            for r in self._batch.get("results") or []:
+                if (r or {}).get("status") != "ok":
+                    continue
+                if str(r.get("line_no")) not in removed_ids:
+                    continue
+                r["status"] = "removed"
+                r["message"] = "已从购物车删除，需要重新加购"
+                changed += 1
+            if changed:
+                self._batch["ok_count"] = 0
+                self._batch["cart_invalidated"] = changed
+        return changed
 
     # ---------------- 批量加购 ----------------
     def batch_status(self) -> dict:
@@ -2097,7 +2215,7 @@ class SessionRunner:
         with self._state_lock:
             rows = {}
             for r in self._batch.get("results") or []:
-                if r.get("status") not in ("ok", "failed", "uncertain"):
+                if r.get("status") not in ("ok", "failed", "uncertain", "removed"):
                     continue
                 ln = r.get("line_no")
                 if ln is None:
@@ -2406,7 +2524,7 @@ class SessionRunner:
                         for r in self._batch["results"]
                         # skipped 也算「处理过了」：无搜索词的残缺行和用户中途
                         # 停止后剩下的行都是 skipped，不算进去的话进度条永远差几行。
-                        if r["status"] in ("ok", "failed", "uncertain", "skipped")
+                        if r["status"] in ("ok", "failed", "uncertain", "skipped", "removed")
                     )
                 # 每行都落盘：随时暂停/关机都不丢进度，下次接着跑
                 # 演练模式不写进度：否则假的「ok 无金额」会覆盖真实进度

@@ -47,7 +47,7 @@ pip install -r requirements.txt
 启动BOM选型台.bat      ← 第 2 步：自检 → 后台起服务 → 打开界面
 ```
 
-三个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.9.8）。
+三个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.9.9）。
 
 打开 <http://127.0.0.1:8765/>。
 
@@ -108,7 +108,7 @@ bom-site/                     本地网站与调度
   lcsc.py                     立创商城器件查询（编号/型号 → 权威规格）
   window_pos.py               调试浏览器窗口显隐（跑批时不抢前台）
   static/                     前端（无框架）
-  test_*.py                   833 项断言（11 套纯 Python 测试）
+  test_*.py                   844 项断言（11 套纯 Python 测试）
   samples/                    示例 BOM / 候选
 Taobao-Search-Skill/scripts/  淘宝执行层（Playwright over CDP）
 taobao-bom-procurement/       决策层 SKILL 文档
@@ -127,13 +127,13 @@ python test_runner.py                   # 179 项：调度、对账、进度、�
 python test_verification_recovery.py    #  27 项：验证/风控恢复
 python test_window_focus.py            #  58 项：窗口显隐与不抢前台
 python test_click_guard.py              #  14 项：点击三守卫
-python test_cart_cleanup.py             #  24 项：精准清车不误删
+python test_cart_cleanup.py             #  35 项：精准清车不误删、删车后进度作废
 python test_batch_progress_guard.py     #  62 项：换 BOM 不误用上一批进度、重跑语义、引擎升级不误判换表
 python test_procurement_guard.py        #  99 项：采购正确性（编号锚定/设计值/单价/同系列降规格/演练同闸门）
 python test_integration.py             #  24 项：假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
 ```
 
-以上 11 套共 833 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+以上 11 套共 844 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
 另有 `python test_http.py`：需要服务**已经在 8765 跑着**，只做 HTTP 冒烟打印，不断言，故不进 CI。
 所有测试都把批量进度隔离到临时目录，不会碰到 `runs/` 里的真实进度。
 GitHub Actions 在 Windows runner 上跑 11 套测试 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。

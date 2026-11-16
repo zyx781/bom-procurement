@@ -1038,7 +1038,7 @@
 
   /* ---------- 一键全部加购 ---------- */
 
-  const BATCH_LABEL = { pending: "待处理", running: "进行中", ok: "已加购", failed: "失败", uncertain: "待核对", skipped: "跳过" };
+  const BATCH_LABEL = { pending: "待处理", running: "进行中", ok: "已加购", failed: "失败", uncertain: "待核对", skipped: "跳过", removed: "已删车·待重加" };
   // 演练的 ok 是「选型过了」，不是「买到了」。写「已加购」会让人以为车里有货。
   function batchLabel(status, dry) {
     if (status === "ok" && dry) return "选型通过";
@@ -1196,7 +1196,7 @@
     box.innerHTML = results
       .map((r) => {
         const cls =
-          r.status === "ok" ? "ok" : r.status === "failed" ? "bad" : r.status === "uncertain" ? "run" : r.status === "running" ? "run" : r.status === "skipped" ? "skip" : "";
+          r.status === "ok" ? "ok" : r.status === "failed" ? "bad" : r.status === "uncertain" ? "run" : r.status === "running" ? "run" : r.status === "skipped" || r.status === "removed" ? "skip" : "";
         const cand = r.candidate || {};
         const price = cand.price != null ? fmtMoney(cand.price) : r.price_from != null ? "起 " + fmtMoney(r.price_from) : "";
         const unit =
@@ -1511,7 +1511,7 @@
   async function cartRemoveLastBatch() {
     if (!sessionReady) return toast("先启动淘宝会话");
     const box = $("#cart-remove-result");
-    box.textContent = "正在核对上一批的加购记录…（会打开购物车页面）";
+    box.textContent = "正在核对最近一次加购记录…（会打开购物车页面）";
 
     let plan;
     try {
@@ -1531,10 +1531,18 @@
     const skip = plan.skip || [];
     const miss = plan.missing || [];
     const merged = plan.merged || [];
+    const bt = plan.batch || {};
+    // 删的到底是哪一批，必须写死在这句话里：用户说的「上一批」常常指更早那份 BOM，
+    // 而这里能动的是**最近跑完的这批**。2026-11-16 真机踩到：新 BOM 刚加完 17 件，
+    // 点「删上次加购的」把新加的当上一批全删了，还以为是清旧货。
+    const when = String(bt.finished_at || bt.started_at || "").replace("T", " ").slice(0, 16);
+    const ageMin = bt.finished_at ? (Date.now() - new Date(bt.finished_at).getTime()) / 60000 : null;
+    const fresh = ageMin != null && ageMin >= 0 && ageMin < 30;
     const shown = del.slice(0, 8).map((d) => `<li>${esc(d.title)}（${d.row_qty} 件）</li>`).join("");
     box.innerHTML =
       `<div class="exec-result ${del.length ? "ok" : "bad"}">` +
-      `<b>将删除 ${del.length} 件</b>：本工具上一批加进去的商品` +
+      `<b>将删除 ${del.length} 件</b>：${esc(when || "时间未知")} 这批加购的（共 ${bt.total ?? "?"} 行` +
+      `${bt.from_archive ? "，取自历史底档" : ""}）` +
       (skip.length
         ? `<br>跳过 ${skip.length} 件（你自己也往这些行加过数量）：${esc(
             skip.map((s) => `${s.title}（${s.reason || ""}）`).join("；")
@@ -1543,10 +1551,16 @@
       (merged.length ? `<br>已合并 ${merged.length} 条（同一商品买过多次，购物车里只有一行）` : "") +
       (miss.length ? `<br>没找到 ${miss.length} 件（可能已手动删过，或在购物车其它页）` : "") +
       (del.length ? `<ul>${shown}${del.length > 8 ? `<li>…还有 ${del.length - 8} 件</li>` : ""}</ul>` : "") +
+      (fresh ? `<br><b>注意：这批是 ${Math.max(1, Math.round(ageMin))} 分钟前才加进去的。</b>` : "") +
       `</div>`;
 
     if (!del.length) return;
-    if (!window.confirm(`确认删除这 ${del.length} 件？只删本工具加购的，其余不动。`)) {
+    const ask =
+      `确认删除这 ${del.length} 件？\n\n` +
+      `删的是 ${when || "时间未知"} 这批（共 ${bt.total ?? "?"} 行），不是更早的 BOM。` +
+      (fresh ? "\n\n⚠️ 这批刚加购不久，删掉后需要重新跑一遍加购。" : "") +
+      `\n\n只删本工具加购的，其余不动。`;
+    if (!window.confirm(ask)) {
       box.insertAdjacentHTML("beforeend", `<div class="fineprint">已取消，未删除任何商品。</div>`);
       return;
     }
@@ -1563,8 +1577,12 @@
         (d.skip && d.skip.length ? `<br>跳过 ${d.skip.length} 件（你加过同款，未动）` : "") +
         (d.merged && d.merged.length ? `<br>已合并 ${d.merged.length} 条（本来就只有一行）` : "") +
         (d.missing && d.missing.length ? `<br>没找到 ${d.missing.length} 件` : "") +
+        (d.progress_invalidated
+          ? `<br>进度已把这 ${d.progress_invalidated} 行改回「待加购」：点「一键全部加购」会重新加回去（不会因为「已加过」被跳过）。`
+          : "") +
         `</div>` +
         (d.screenshot ? `<img class="shot" src="${d.screenshot}">` : "");
+      if (n > 0) pollBatch().catch(() => {});
     } catch (e) {
       box.innerHTML = `<span class="sess-warn">${esc(e.message)}</span>`;
     }

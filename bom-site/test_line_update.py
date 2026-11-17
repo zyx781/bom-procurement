@@ -98,6 +98,18 @@ try:
 except ValueError:
     check("白名单外字段被拒绝", True)
 
+print("== 标记不买：dont_buy 落盘，另一行不受影响 ==")
+_seed()
+r = tr.update_saved_line(0, {"line_no": 1, "dont_buy": True})
+la = json.loads(LA.read_text(encoding="utf-8"))["result"]["lines"]
+bl = json.loads(BL.read_text(encoding="utf-8"))["lines"]
+check("last-analysis 标记不买", la[0].get("dont_buy") is True, la[0])
+check("batch-lines 标记不买", bl[0].get("dont_buy") is True)
+check("待确认行不受影响", la[1].get("dont_buy") is None)
+r = tr.update_saved_line(0, {"line_no": 1, "dont_buy": False})
+la = json.loads(LA.read_text(encoding="utf-8"))["result"]["lines"]
+check("恢复采购清掉标记", la[0].get("dont_buy") is False)
+
 print("== 文件缺失不炸 ==")
 LA.unlink()
 BL.unlink()

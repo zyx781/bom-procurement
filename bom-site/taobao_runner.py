@@ -274,6 +274,25 @@ def should_clear_stale_progress(batch_state: dict, ran: int) -> bool:
     return bool(ran == 0 and resumed_n and downgraded and len(downgraded) >= resumed_n)
 
 
+def _line_skip_reason(line: dict) -> str:
+    """跑批前判断这一行为什么要直接跳过（不进搜索）。返回原因文案，空串 = 正常跑。
+
+    两类跳过：
+    - dont_buy：网页上人工标记「这行不买了」（结构件/自制件/自己有库存）。
+      不买是采购决策不是解析失败，记 skipped、写明原因，进度条不欠账。
+    - 残缺行：型号/名称/参数都空，没有搜索词可搜，跑下去只会在 search() 里
+      抛 NO_QUERY，白等一轮再记一条「失败」。
+    """
+    if line.get("dont_buy"):
+        return "人工标记不买"
+    if line.get("query_plan") or (line.get("decision") or {}).get("search_queries"):
+        return ""
+    return (
+        "；".join(line.get("blocking") or [])
+        or "该行没有可用搜索词（型号/名称/参数都为空）"
+    )
+
+
 def batch_progress_summary(active_fingerprint: str = "") -> dict:
     """给前端/接口用的进度摘要。
 
@@ -355,8 +374,8 @@ def load_last_analysis() -> dict:
     }
 
 
-# 人工在网页上改过的行（确认放行 / 改搜索词）要落盘的字段白名单
-_LINE_PATCH_KEYS = ("query_plan", "status", "blocking", "missing", "user_approved")
+# 人工在网页上改过的行（确认放行 / 改搜索词 / 标记不买）要落盘的字段白名单
+_LINE_PATCH_KEYS = ("query_plan", "status", "blocking", "missing", "user_approved", "dont_buy")
 
 
 def update_saved_line(index: int, patch: dict) -> dict:
@@ -405,7 +424,7 @@ def update_saved_line(index: int, patch: dict) -> dict:
             d = ln.get("decision")
             if isinstance(d, dict):
                 d["search_queries"] = list(clean["query_plan"])
-        for k in ("status", "blocking", "missing", "user_approved"):
+        for k in ("status", "blocking", "missing", "user_approved", "dont_buy"):
             if k in clean:
                 ln[k] = list(clean[k]) if isinstance(clean[k], list) else clean[k]
         return True
@@ -2241,7 +2260,10 @@ class SessionRunner:
         if resume and not redo:
             # 全部可跑行都已定局 → 再跑一遍就是纯重复加购。以前这里静默全跳过，
             # 用户看到进度条瞬间满格、报告「已跑完」，以为重跑了。
-            runnable = [ln for ln in lines if line_has_query(ln)]
+            # 「不买」的行不算可跑：标记后这批只剩不买的行时，应该报空而不是全跳过。
+            runnable = [
+                ln for ln in lines if line_has_query(ln) and not ln.get("dont_buy")
+            ]
             if runnable and all(str(ln.get("line_no")) in done_map for ln in runnable):
                 raise SessionError(
                     f"这批 {len(runnable)} 行上次已全部跑完，直接再跑会重复加购。"
@@ -2519,27 +2541,23 @@ class SessionRunner:
                     if self._batch["results"][i].get("resumed"):
                         # 上次已经加过的行：直接跳过，不重复下单
                         continue
-                    if not (
-                        line.get("query_plan")
-                        or (line.get("decision") or {}).get("search_queries")
-                    ):
-                        # 残缺行（型号/名称/参数都空，只剩一个封装）：没有搜索词可搜，
-                        # 跑下去只会在 search() 里抛 NO_QUERY，白等一轮再记一条「失败」。
-                        # 直接标「跳过」并写清原因，让人回去补 BOM。
-                        _skip_why = (
-                            "；".join(line.get("blocking") or [])
-                            or "该行没有可用搜索词（型号/名称/参数都为空）"
-                        )
-                        self._batch["results"][i].update(
-                            status="skipped", message=f"跳过：{_skip_why}"
-                        )
-                    else:
+                if not (
+                    line.get("query_plan")
+                    or (line.get("decision") or {}).get("search_queries")
+                ) or line.get("dont_buy"):
+                    # 残缺行没有搜索词可搜，白等一轮再记「失败」；「不买」是
+                    # 人工的采购决策 —— 两种都直接标「跳过」并写清原因。
+                    _skip_why = _line_skip_reason(line)
+                    self._batch["results"][i].update(
+                        status="skipped", message=f"跳过：{_skip_why}"
+                    )
+                else:
                         self._batch["index"] = i
                         self._batch["phase"] = f"第 {i + 1}/{len(lines)} 行"
                         self._batch["results"][i]["status"] = "running"
                 if _skip_why:
                     self._append_log(
-                        f"[batch] line #{line.get('line_no')} 跳过（无搜索词）：{_skip_why}"
+                        f"[batch] line #{line.get('line_no')} 跳过：{_skip_why}"
                     )
                     continue
                 if ran:

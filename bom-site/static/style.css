@@ -406,6 +406,13 @@ button.cta:hover:not(:disabled){background:var(--signal-deep, var(--signal));bor
   background:var(--bad-wash);color:var(--bad);
   font-size:10px;font-weight:600;line-height:1.6;vertical-align:1px;
 }
+/* 「不买」是人工决策不是错误：中性灰，不跟「关键」的红色抢眼 */
+.li-flag.nobuy{
+  border-color:var(--rule-strong);background:var(--surface-sunk);color:var(--ink-3);
+}
+/* 标了不买的行整体压暗，但标题仍要能读 */
+.line-item.nobuy-row .li-title,
+.line-item.nobuy-row .li-sub{color:var(--ink-3)}
 
 /* ============================================================
    drawer

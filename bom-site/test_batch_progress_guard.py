@@ -128,6 +128,13 @@ _with_cand = make_lines(["NE555P", "CD4518BE", "SS34"])
 _with_cand[0]["candidates"] = [{"title": "某商品", "price": 9.9}]
 check("候选商品变化不算换 BOM", FP_A == tr.batch_fingerprint(_with_cand))
 
+print("== 1b. 跳过原因判定（含「不买」）==")
+check("正常行不跳过", tr._line_skip_reason(BOM_A[0]) == "")
+check("残缺行报无搜索词", tr._line_skip_reason({"blocking": [], "query_plan": []}) != "")
+_nobuy = dict(BOM_A[0], dont_buy=True)
+check("标记不买的行给出原因", tr._line_skip_reason(_nobuy) == "人工标记不买")
+check("不买的行即使有搜索词也跳过", tr._line_skip_reason(_nobuy) != "")
+
 print("== 2. 进度归属判定 ==")
 ok, why = tr.progress_belongs_to(prior_for(BOM_A), BOM_A)
 check("同 BOM 判定可续跑", ok is True, why)
@@ -249,6 +256,19 @@ with tempfile.TemporaryDirectory() as td:
               raised is not None and raised.code == "BATCH_ALL_DONE", raised)
         check("拒绝时不动进度文件", len((tr.load_batch_progress().get("lines") or {})) == 3)
         check("拒绝时不起批量任务", not r7._batch.get("running"))
+
+        # 全部标「不买」的行不算可跑：即使它们上次都跑完了，也不该被
+        # BATCH_ALL_DONE 拦住（用户标完不买，点继续就是想结束这批）。
+        _nobuy_all = [dict(ln, dont_buy=True) for ln in BOM_B]
+        tr.save_batch_progress(prior_for(BOM_B, FP_B))
+        r7b = FakeRunner()
+        raised_b = None
+        try:
+            r7b.start_batch(_nobuy_all, resume=True)
+        except tr.SessionError as exc:  # noqa: PERF203
+            raised_b = exc
+        check("全部行标不买 → 不再报 BATCH_ALL_DONE", raised_b is None, raised_b)
+        check("不买的行不进 runnable，批次正常建立", r7b._batch.get("total") == 3)
 
         # 只重跑第 2 行
         r8 = FakeRunner()

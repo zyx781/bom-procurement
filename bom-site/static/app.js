@@ -378,10 +378,11 @@
         const rec = bm.get(Number(no));
         const ready = ln.status === "ready";
         const critical = ln.criticality === "critical" ? '<span class="li-flag">关键</span>' : "";
-        return `<button class="line-item ${i === state.activeIndex ? "active" : ""}" data-idx="${i}">
+        const nobuy = ln.dont_buy ? '<span class="li-flag nobuy">不买</span>' : "";
+        return `<button class="line-item ${i === state.activeIndex ? "active" : ""}${ln.dont_buy ? " nobuy-row" : ""}" data-idx="${i}">
         <span class="li-no">${String(no).padStart(2, "0")}</span>
         <span class="li-body">
-          <span class="li-title">${esc(ln.decision.headline || ln.mpn || "未识别")}${critical}</span>
+          <span class="li-title">${esc(ln.decision.headline || ln.mpn || "未识别")}${critical}${nobuy}</span>
           <span class="li-sub">${esc(ln.mpn || catLabel(ln.category))}</span>
         </span>
         <span class="li-pkg col-pkg">${esc(shortPkg(ln.package))}</span>
@@ -419,6 +420,7 @@
       ln.status === "ready"
         ? `<span class="badge">可执行</span>`
         : `<span class="badge needs_user">待确认</span>`;
+    const nobuyBadge = ln.dont_buy ? `<span class="badge idle">不买</span>` : "";
     const critBadge =
       ln.criticality === "critical" ? `<span class="badge critical">关键件，G3 逐行</span>` : "";
     const meta = [
@@ -495,7 +497,7 @@
     )}</span>${ln.params_text ? `<span>${esc(ln.params_text)}</span>` : ""}</div>
           <h3>${esc(d.headline)}</h3>
         </div>
-        <div class="detail-badges">${statusBadge}${critBadge}</div>
+        <div class="detail-badges">${statusBadge}${nobuyBadge}${critBadge}</div>
       </div>
       ${blocking}
       <div class="detail-meta">${meta}</div>
@@ -528,6 +530,9 @@
                 ? `<span class="badge ok-badge">人工已确认</span>`
                 : ""
           }
+          <button class="ghost small" data-dontbuy-idx="${idx}" type="button">${
+            ln.dont_buy ? "恢复采购" : "这行不买了"
+          }</button>
           <button class="ghost small" data-score-idx="${idx}" type="button">用这行评分</button>
         </span>
       </div>`;
@@ -623,6 +628,32 @@
         renderLineList();
         renderDetail(idx);
         toast(`第 ${ln.line_no} 行已人工确认，标记为可执行`);
+      });
+    }
+
+    // 标记不买 / 恢复采购：人工的采购决策（结构件、自制件、自己有库存…）。
+    // 只影响跑批 —— 标了不买的行直接跳过并记「跳过：人工标记不买」，进度不欠账。
+    const dontbuyBtn = $("#line-detail").querySelector("[data-dontbuy-idx]");
+    if (dontbuyBtn) {
+      dontbuyBtn.addEventListener("click", async () => {
+        const to = !ln.dont_buy;
+        try {
+          await api("/api/lines/update", {
+            index: idx,
+            line_no: ln.line_no,
+            patch: { dont_buy: to },
+          });
+        } catch (e) {
+          console.warn("不买标记落盘失败：", e.message);
+        }
+        ln.dont_buy = to;
+        renderLineList();
+        renderDetail(idx);
+        toast(
+          to
+            ? `第 ${ln.line_no} 行已标记不买，批量加购会跳过它`
+            : `第 ${ln.line_no} 行已恢复采购`
+        );
       });
     }
     const t = $("#drawer-title");
@@ -778,7 +809,7 @@
         ln.package,
         ln.params_text,
         ln.qty ?? "",
-        ln.status === "ready" ? "可执行" : "待确认",
+        (ln.status === "ready" ? "可执行" : "待确认") + (ln.dont_buy ? "（标记不买）" : ""),
         (d.buy_spec || []).join(" | "),
         ...q,
         codes,

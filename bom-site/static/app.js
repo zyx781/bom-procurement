@@ -887,6 +887,14 @@
       : st.last_error || "";
     const recheck = $("#btn-sess-recheck");
     if (recheck) recheck.classList.toggle("hidden", !st.verification);
+    // 没启动时「启动淘宝会话」用实心主按钮样式 —— 用户反馈过找不到它在哪，
+    // 灰 ghost 小按钮混在顶栏里毫无存在感；启动后就退回普通样式并禁用。
+    const startBtn = $("#btn-session-start");
+    startBtn.classList.toggle("cta", !st.running);
+    if (st.running) startBtn.classList.remove("cta");
+    // 投放区那行「先启动淘宝会话」的引导：会话跑起来后就撤掉，别占地方
+    const hint = $("#sess-hint");
+    if (hint) hint.classList.toggle("hidden", !!st.running);
     if (st.logs) {
       logs.textContent = st.logs.slice(-30).join("\n");
       logs.scrollTop = logs.scrollHeight;

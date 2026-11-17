@@ -191,6 +191,20 @@ input[type=file]{display:none}
 .verify-banner .vb-go:hover{background:var(--warn-deep)}
 .verify-banner .ghost{background:var(--surface);border-color:var(--warn-rule);color:var(--warn)}
 
+/* 首次使用引导 + 顶栏主按钮：没启动会话时「启动淘宝会话」要一眼看到 */
+.first-run{
+  margin:0 0 10px;padding:8px 12px;
+  border:1px dashed var(--rule-strong);border-radius:var(--r-sm);
+  background:var(--surface-sunk);
+  font-size:var(--fs-12);color:var(--ink-2);
+}
+.first-run b{color:var(--ink);font-weight:650}
+button.cta{
+  background:var(--signal);border-color:var(--signal);color:#fff;
+  font-weight:600;
+}
+button.cta:hover:not(:disabled){background:var(--signal-deep, var(--signal));border-color:var(--signal-deep, var(--signal));color:#fff}
+
 /* ============================================================
    layout
    ============================================================ */

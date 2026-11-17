@@ -383,7 +383,7 @@ function Start-App {
     if ($conn) {
         $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
         $name = if ($proc) { $proc.ProcessName } else { "未知进程" }
-        Fail "端口 $Port 被占用（$name，PID $($conn.OwningProcess)）" "先双击 停止BOM选型台.bat，或结束该进程后重试。"
+        Fail "端口 $Port 被占用（$name，PID $($conn.OwningProcess)）" "先跑 启动BOM选型台.bat stop，或结束该进程后重试。"
     }
     Write-Row "端口 $Port" "空闲" $C_Ok
 
@@ -440,7 +440,7 @@ function Start-App {
     Write-Host ""
     Write-Host ("  " + ("-" * 60)) -ForegroundColor $C_Dim
     Write-Footer "就绪   $Url" $C_Ok
-    Write-Footer "停止   页面右上角「退出服务」，或双击 停止BOM选型台.bat" $C_Dim
+    Write-Footer "停止   页面右上角「退出服务」，或 启动BOM选型台.bat stop" $C_Dim
     Write-Footer "本窗口 3 秒后自动关闭" $C_Dim
     Start-Sleep -Seconds 3
 }
@@ -584,7 +584,7 @@ function Show-Usage {
     Write-Footer "  启动BOM选型台.bat status     只看运行状态"
     Write-Footer "  启动BOM选型台.bat diag       只读体检（环境 / 端口 / 日志）"
     Write-Footer "  启动BOM选型台.bat restart   重启服务"
-    Write-Footer "  停止BOM选型台.bat            停服务 + 关调试 Edge"
+    Write-Footer "  启动BOM选型台.bat stop       停服务 + 关调试 Edge"
     Write-Host ""
 }
 

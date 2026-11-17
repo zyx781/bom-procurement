@@ -57,9 +57,9 @@ pip install -r requirements.txt
 |---|---|
 | `启动BOM选型台.bat status` | 只看运行状态，不启动任何东西 |
 | `启动BOM选型台.bat diag` | 只读体检：Python / 依赖 / Edge / 端口 / PID / 日志 |
+| `启动BOM选型台.bat stop` | 停服务 + 关调试版 Edge（普通 Edge 不动） |
 | `启动BOM选型台.bat restart` | 重启服务 |
 | `启动BOM选型台.bat help` | 打印用法 |
-| `停止BOM选型台.bat` | 停服务 + 关调试版 Edge（普通 Edge 不动） |
 
 也可以手动起服务（等价，但没有自检）：
 
@@ -79,7 +79,7 @@ python server.py            # 默认 127.0.0.1:8765
 ### 4. 关闭
 
 - 网页右上角 **退出服务**：停批量、停会话、关浏览器、退进程（最常用）
-- 或双击 `停止BOM选型台.bat`（备用）：只结束本项目的服务进程与带 `--remote-debugging-port=9222` 的 Edge，不碰你自己的普通浏览器窗口
+- 或 `启动BOM选型台.bat stop`（备用）：只结束本项目的服务进程与带 `--remote-debugging-port=9222` 的 Edge，不碰你自己的普通浏览器窗口
 
 ---
 
@@ -167,7 +167,7 @@ SKU 夹具同样可重建：`python tests/build_sku_replay.py` 从 `runs/sku-obs
 |---|---|
 | 撞到滑块/图片验证 | 页面顶部会出现提示条，批量原地等（默认 30 分钟），**不会把淘宝窗口突然弹到前台**；想看窗口点「显示淘宝窗口」，过完验证点「验证已完成，重新检测」 |
 | 双击 bat 后中文乱码 | 脚本已固定 `chcp 65001` + UTF-8；若仍乱码，确认按 `.gitattributes` 检出（`.bat` 为 CRLF），别用记事本另存为 ANSI |
-| 启动器说 8765 被占用 | 先跑 `启动BOM选型台.bat diag` 看是谁占着；多半是上次没退干净，双击 `停止BOM选型台.bat` 再启动 |
+| 启动器说 8765 被占用 | 先跑 `启动BOM选型台.bat diag` 看是谁占着；多半是上次没退干净，跑 `启动BOM选型台.bat stop` 再启动 |
 | 提示缺少 playwright / openpyxl | `pip install -r requirements.txt` |
 | 9222 被普通 Edge 占了 / CDP 不通 | 关掉所有 Edge 窗口再双击 `打开调试版Edge.bat`；脚本会先探测 CDP，已就绪就不重复启动 |
 | 服务起不来，窗口一闪而过 | 窗口不会自动关（失败会 pause），看报错；或跑 `diag` 查 `bom-site/runs/server.err.log` |

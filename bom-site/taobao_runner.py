@@ -1724,17 +1724,20 @@ class SessionRunner:
                 for it in got
             ]
             scored_try = engine.score_candidates(line, candidates=cands_try, execution=True)
-            usable = any((c.get("score") or 0) > 0 for c in scored_try["candidates"])
-            if usable and require_scored:
-                # 分数够 ≠ 买得过：3KV 高压瓷片、绕线 1W 电阻的分数一样很高。
-                # 如果这条词召回的候选**全部**被材料/结构闸门拒掉，就当这条词没搜到，
-                # 换下一条更精确的（「10nF 瓷片 电容」「470Ω 1/4W 金属膜 电阻」）。
-                # 不这么做的话，第一条宽词永远占着位置，精确词一次都没机会执行。
-                usable = any(
-                    (c.get("score") or 0) > 0
-                    and not _material_conflict(line, c.get("title") or "")
-                    for c in scored_try["candidates"]
-                )
+            # 「可用」的口径必须和下游 _buy_one 的放行规则一致：
+            # score > 0 只是及格线，淘汰级（decision=淘汰 且 <20 分）在下游同样被拒
+            # （评分 11.1 分的候选一个都买不成）。以前这里只看 score>0，结果型号词
+            # 召回一堆 11.1 分的近似型号也当「这条词成功了」，后面「2.54mm 排针 40P」
+            # 这种能拿 78.7 分的通用词一次都没机会执行，整行白死。
+            def _cand_usable(c) -> bool:
+                sc = c.get("score") or 0
+                if sc <= 0:
+                    return False
+                if str(c.get("decision") or "") == "淘汰" and sc < 20:
+                    return False
+                return not _material_conflict(line, c.get("title") or "")
+
+            usable = any(_cand_usable(c) for c in scored_try["candidates"])
             items, used, scored = got, q, scored_try
             if usable or not require_scored or qi == len(tried) - 1:
                 break

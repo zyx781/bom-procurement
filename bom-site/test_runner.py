@@ -245,6 +245,51 @@ finally:
 check("第一条词不匹配会继续试", len(_searched) >= 2, _searched)
 check("最终命中的是完整料号那条词", _res.get("query") == _dmp["query_plan"][1], (_res.get("query"), _dmp["query_plan"]))
 
+print("== 搜索：候选全是淘汰级分数也要换词（真机回放：PZ254 排针） ==")
+# 2026-11-17 真机事故：型号词「PZ254-2-20-Z-8.5 连接器」召回 20 个候选全部 11.1 分
+# （淘汰级），换词条件只看 score>0 → 11.1>0 被当成「这条词成功了」，后面能拿
+# 78.7 分的通用词「2.54mm 排针 40P」根本没执行，整行白死。
+_searched2 = []
+
+
+def _fake_elim_send(req):
+    if req.get("cmd") == "search":
+        _searched2.append(req.get("keyword"))
+        if len(_searched2) == 1:
+            return {
+                "status": "success",
+                "data": {"items": [
+                    {"title": "XZ254-2-20 排针 近似型号", "price_value": 1.1, "index": 0},
+                    {"title": "2.0mm 间距连接器 40P", "price_value": 1.5, "index": 1},
+                ]},
+            }
+        return {
+            "status": "success",
+            "data": {"items": [
+                {"title": "40P 排针 2.54mm 单排 直插 8.5mm", "price_value": 1.2, "index": 0},
+            ]},
+        }
+    return _orig_send(req)
+
+
+# 真机第 1 行：PZ254-2-20-Z-8.5 40P 间距 2.54mm 插件 ×2
+_pz = [l for l in tr.load_batch_lines() if l.get("line_no") == 1]
+_pz = _pz[0] if _pz else engine.analyze_line(
+    {"refs": "J1", "desc": "PZ254-2-20-Z-8.5 40P 间距 2.54mm 插件", "mpn": "PZ254-2-20-Z-8.5", "package": "插件"}, 1
+)
+runner.send = _fake_elim_send
+try:
+    _res2 = runner.search(_pz, require_scored=True)
+finally:
+    runner.send = _orig_send
+check("淘汰级候选也算这条词失败，继续试", len(_searched2) >= 2, _searched2)
+check("换到通用词后拿到可用候选", (_res2.get("query") or "").endswith(("40P", "40P 排针")) and _res2.get("ok"), (_res2.get("query"), _res2.get("ok")))
+check("可用候选分数过放行线", all(
+    not ((c.get("decision") == "淘汰") and (c.get("score") or 0) < 20)
+    for c in (_res2.get("candidates") or [])
+    if c.get("index") == 0
+), [c.get("score") for c in (_res2.get("candidates") or [])])
+
 print("== 批量行落盘：重启后能读回来接着跑 ==")
 _saved = tr.load_batch_lines()
 _bak_lines = (_saved, tr.BATCH_LINES_FILE)

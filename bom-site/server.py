@@ -325,6 +325,11 @@ class Handler(BaseHTTPRequestHandler):
                 # 记住当前这份 BOM；换表后把上一批进度隐藏掉，否则前端会弹
                 # 「上次已完成 N 行，接着跑」，实际一行都不会执行。
                 fp = tr.set_active_bom(result.get("lines") or [])
+                # 分析完就把「这一批要跑的行」落盘：单行执行（/api/taobao/run-line）
+                # 和重启后续跑都从这份文件取行，不落盘的话它们会拿到上一次分析的
+                # 旧参数（实测：刚读出「双排」的新结论，跑单行时用的还是旧行，
+                # 于是把 1*40P 单排条加进了购物车）。
+                tr.save_batch_lines(result.get("lines") or [])
                 result["progress"] = tr.batch_progress_summary(active_fingerprint=fp)
                 # 落一份，供刷新/新标签页恢复（前端 sessionStorage 只在本标签页有效）
                 tr.save_last_analysis(dict(result, bom_fingerprint=fp), rows=rows)

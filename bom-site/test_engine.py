@@ -523,6 +523,55 @@ _b_xtal3 = engine.analyze_line(
 eq("没写频率的晶振拦下待确认", _b_xtal3["status"], "needs_user")
 eq("缺的是频率不是阻容感", _b_xtal3["missing"], ["频率"])
 
+print("== 连接器排数：40P 可能是 1×40 也可能是 2×20（2026-11-17） ==")
+_pz_attrs = {
+    "连接器类型": "直插", "排数": "双排", "间距": "2.54mm", "总PIN数": "40P",
+    "插针结构": "2x20P",
+}
+_b_pz = engine.analyze_line(
+    {
+        "line_no": 1, "mpn": "PZ254-2-20-Z-8.5", "desc": "PZ254-2-20-Z-8.5",
+        "package": "HDR-TH_40P-P2.54-V-M-R2-C20-S2.54", "qty": "2", "refs": "U2,U1",
+        "lcsc": "C3012260",
+        "lcsc_info": {
+            "code": "C3012260", "model": "PZ254-2-20-Z-8.5", "mount": "", "params": {"current_a": 3},
+            "catalog": "Headers, Male Pins", "attrs": _pz_attrs,
+        },
+    },
+    1, {},
+)
+eq("排数从立创属性读出来", _b_pz["params"].get("rows"), 2)
+eq("针数仍是 40", _b_pz["params"].get("pins"), 40)
+check("摘要写清双排", "双排" in _b_pz["params_text"], _b_pz["params_text"])
+check("硬门槛加排数", any("排数 = 双排" in g for g in _b_pz["hard_gates"]), _b_pz["hard_gates"])
+check("双排搜索词写明双排", any("双排排针 40P" in q for q in _b_pz["query_plan"]), _b_pz["query_plan"])
+check("双排再给 2*20P 写法", any("2*20P" in q for q in _b_pz["query_plan"]), _b_pz["query_plan"])
+check("不再给「单排排针」这种反向词", not any("单排排针" in q for q in _b_pz["query_plan"]), _b_pz["query_plan"])
+
+_b_1x4 = engine.analyze_line(
+    {"line_no": 2, "mpn": "PinHeader_1x04_P2.54mm", "desc": "排针 4P", "package": "插件", "qty": 1, "refs": "J1"},
+    2, {},
+)
+eq("封装 1x04 读成单排", _b_1x4["params"].get("rows"), 1)
+check("单排才写单排搜索词", any("单排排针" in q for q in _b_1x4["query_plan"]), _b_1x4["query_plan"])
+
+_b_2x20 = engine.analyze_line(
+    {"line_no": 3, "mpn": "PinHeader_2x20_P2.54mm", "desc": "排针 40P", "package": "插件", "qty": 1, "refs": "J2"},
+    3, {},
+)
+eq("封装 2x20 读成双排", _b_2x20["params"].get("rows"), 2)
+eq("2x20 针数 40", _b_2x20["params"].get("pins"), 40)
+
+_pz_cand = """title,price,sales,rating,shop_type,is_tmall,real_photo
+2.54mm 单排排针 1*40P 直插 直针,0.6,9000,0.97,企业店,false,true
+2.54mm 双排排针 2*20P 40P 直插,0.7,8000,0.97,企业店,false,true
+"""
+_pz_sc = engine.score_candidates(_b_pz, _pz_cand)
+_pz_by = {c["title"]: c for c in _pz_sc["candidates"]}
+eq("单排标题淘汰（双排 BOM）", _pz_by["2.54mm 单排排针 1*40P 直插 直针"]["score"], 0)
+check("双排标题放行", _pz_by["2.54mm 双排排针 2*20P 40P 直插"]["score"] > 0,
+      _pz_by["2.54mm 双排排针 2*20P 40P 直插"])
+
 print()
 print(f"RESULT: {PASS} passed, {FAIL} failed")
 sys.exit(0 if FAIL == 0 else 1)

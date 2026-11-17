@@ -17,6 +17,10 @@ _ACTIVE_BOM = ROOT / "runs" / "active-bom.json"
 _active_bom_bak = _ACTIVE_BOM.read_bytes() if _ACTIVE_BOM.exists() else None
 _LAST_ANALYSIS = ROOT / "runs" / "last-analysis.json"
 _last_analysis_bak = _LAST_ANALYSIS.read_bytes() if _LAST_ANALYSIS.exists() else None
+# /api/analyze 现在同时落一份「这一批要跑的行」，单行执行/续跑都读它 ——
+# 测试不还原的话，用户真实那 29 行会被两张测试表覆盖，点「只跑这一行」跑到假数据。
+_BATCH_LINES = ROOT / "runs" / "batch-lines.json"
+_batch_lines_bak = _BATCH_LINES.read_bytes() if _BATCH_LINES.exists() else None
 
 
 def _restore_active_bom():
@@ -29,6 +33,10 @@ def _restore_active_bom():
             _LAST_ANALYSIS.unlink(missing_ok=True)
         else:
             _LAST_ANALYSIS.write_bytes(_last_analysis_bak)
+        if _batch_lines_bak is None:
+            _BATCH_LINES.unlink(missing_ok=True)
+        else:
+            _BATCH_LINES.write_bytes(_batch_lines_bak)
     except Exception:
         pass
 

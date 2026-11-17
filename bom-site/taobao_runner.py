@@ -1773,13 +1773,26 @@ class SessionRunner:
             # （评分 11.1 分的候选一个都买不成）。以前这里只看 score>0，结果型号词
             # 召回一堆 11.1 分的近似型号也当「这条词成功了」，后面「2.54mm 排针 40P」
             # 这种能拿 78.7 分的通用词一次都没机会执行，整行白死。
+            _need_kinds = _required_spec_kinds(line)
+
             def _cand_usable(c) -> bool:
                 sc = c.get("score") or 0
                 if sc <= 0:
                     return False
                 if str(c.get("decision") or "") == "淘汰" and sc < 20:
                     return False
-                return not _material_conflict(line, c.get("title") or "")
+                if _candidate_veto(line, c.get("title") or ""):
+                    return False
+                if _material_conflict(line, c.get("title") or ""):
+                    return False
+                # 硬规格（型号/针数）在标题里核实不到，下游 _buy_one 一定会拒。
+                # 只看分数就 break 的话，词 1 会拿一堆「分数不低但核实不到针数」的
+                # 候选把整行判死：PZ254-2-20-Z-8.5 → 搜回来全是「2.54MM排针」系列词条，
+                # 标题只写间距不写 40P，最后一句话「没有识别到针数」失败，
+                # 而后面「2.54mm 排针 40P」明明有 73 分、针数可核实的货。
+                if _need_kinds - _spec_kinds(c):
+                    return False
+                return True
 
             usable = any(_cand_usable(c) for c in scored_try["candidates"])
             items, used, scored = got, q, scored_try
@@ -4425,7 +4438,7 @@ def _score_sku_value(line: dict, label: str, text: str) -> float:
     full_pkg = line.get("package") or ""
     # 连接器系列：XH / 排针 / 端子台。库里叫 XH2.50mm-4P，标题写 XH2.54-4P，
     # 直接比字符串必然不中，要换成系列写法再比。
-    conn_series = engine.connector_series(full_pkg, line.get("desc"), line.get("mpn"))
+    conn_series = _conn_kind(line)
     pkg = full_pkg.split(" ")[0]
     if conn_series:
         variants = engine.connector_pkg_variants(full_pkg)
@@ -4445,17 +4458,8 @@ def _score_sku_value(line: dict, label: str, text: str) -> float:
         elif re.search(r"[NP]\s*(?:沟道|channel|mos)", str(text), re.I):
             score -= 40
     if "pins" in p:
-        txt = str(text)
-        m = re.search(r"(\d+)\s*(?:p\b|pin|针)", txt, re.I)
-        if not m:
-            # JST/排针类 SKU 几乎都写成 XH2.54-3PWT / PH2.0-4AW / DC3-10P贴片，
-            # 第一个正则要求 "3P" 后面是词边界，"3PWT" 就整组漏掉 → 必须补一条宽松的。
-            m = re.search(r"(?<![\d.])(\d{1,2})\s*[pP](?=[A-Z]|[-_(\s]|$|[\u4e00-\u9fff])", txt)
-        if not m:
-            # XH 系列的 4AW / 3A（A=带扣，W=弯针），针数就在 A 前面
-            m = re.search(r"(?<![\d.])(\d{1,2})\s*[aA][wW]?(?=[-_)\s]|$|[\u4e00-\u9fff])", txt)
-        if m:
-            n = int(m.group(1))
+        n = _sku_pins(text)
+        if n is not None:
             want = int(p["pins"])
             if n == want:
                 score += 15
@@ -4474,6 +4478,8 @@ def _score_sku_value(line: dict, label: str, text: str) -> float:
         if "双排" in params_text and rows.group(1) == "1":
             score -= 45
         if "单排" in params_text and rows.group(1) == "1":
+            score += 15
+        if "双排" in params_text and rows.group(1) == "2":
             score += 15
     if "pitch_mm" in p:
         txt = str(text)
@@ -4521,7 +4527,21 @@ def _line_blob(line: dict) -> str:
 
 
 def _line_rows(line: dict):
+    """这一行的排数（1 单排 / 2 双排）。立创属性是权威证据。
+
+    只扫 BOM 文本是不够的：`PZ254-2-20-Z-8.5` 这种料号看不出单排双排，
+    封装名又常被归一成「插件」，于是一行「40P 排针」看着像单排 ——
+    购物车里就多了条 1*40P 的单排条，装不到 2×20 的焊盘上。
+    立创属性里明写「排数=双排 / 插针结构=2x20P」，用它兜住。
+    """
     blob = _line_blob(line)
+    attrs = ((line.get("lcsc") or {}).get("attrs") or {})
+    if isinstance(attrs, dict):
+        n = engine._parse_rows(
+            " ".join(str(attrs.get(k) or "") for k in ("排数", "插针结构", "Pin Structure"))
+        )
+        if n:
+            return n
     for word, n in (("单排", 1), ("双排", 2), ("三排", 3), ("四排", 4)):
         if word in blob:
             return n
@@ -4529,7 +4549,25 @@ def _line_rows(line: dict):
 
 
 def _conn_kind(line: dict) -> str | None:
-    return engine.connector_series(line.get("package") or "", line.get("desc"), line.get("mpn"))
+    # 原始封装名（HDR-TH_40P…）和立创品类都算证据：BOM 的 package 列常被归一成
+    # 「插件」，光看它连「是不是排针」都判不出来，剪断放宽/母头互斥就全失效。
+    kind = engine.connector_series(
+        line.get("package") or "", line.get("desc"), line.get("mpn"),
+        (line.get("row") or {}).get("package"),
+    )
+    if kind:
+        return kind
+    cat = " ".join(
+        [str((line.get("lcsc") or {}).get("catalog") or "")]
+        + [str(x) for x in ((line.get("lcsc") or {}).get("catalog_path") or [])]
+    ).lower()
+    if "female" in cat:
+        return "排母"
+    if "header" in cat or "male pins" in cat:
+        return "排针"
+    if "terminal block" in cat:
+        return "端子台"
+    return ""
 
 
 def _pkg_code(text: str) -> str:
@@ -4618,9 +4656,16 @@ def _sku_veto(line: dict, label: str, text: str) -> str | None:
         n = _sku_pins(t)
         if n is not None and n != want:
             kind = _conn_kind(line)
-            rows = _rows_of(t) or _line_rows(line) or 1
-            # 排针整条卖（1*40P 剪成 3P）是可接受的；但 3*40P 三排不能顶 1*3P
-            strip_ok = kind in ("排针", "排母") and n > want and rows == 1
+            want_rows = _line_rows(line)
+            sku_rows = _rows_of(t)
+            # 排针整条卖，剪断即可 —— 但只能沿针位方向剪：双排 2*40P 能剪成 2*20P，
+            # 单排 1*40P 却剪不出双排。以前这里写死 `rows == 1` 才放行，等于默认
+            # 所有排针都是单排，双排的整条货反而被拒。
+            if sku_rows and want_rows:
+                same_rows = sku_rows == want_rows
+            else:
+                same_rows = want_rows is None and sku_rows in (None, 1)
+            strip_ok = kind in ("排针", "排母") and n > want and same_rows
             if not strip_ok:
                 return f"针数 {n} ≠ 要求 {want}"
     # 单排/双排/三排：2*2p 是双排 4 针，顶不了"2P 单排"
@@ -4660,6 +4705,12 @@ def _sku_veto(line: dict, label: str, text: str) -> str | None:
 
 def _sku_pins(text: str):
     txt = str(text or "")
+    # 行列写法（2*20P / 1*40P）先认：双排 2*20P 是 40 针，直接抓 `(\d+)P`
+    # 只会读到 20，于是「2*20P」被当成 20 针 40P 的位子 → 扣分输给 2*40P，
+    # 真机上就这么选了整条 80P 的双排（能剪，但多花一倍钱）。
+    m = re.search(r"(?<![\d.])([1-4])\s*[*xX×]\s*(\d{1,3})\s*[pP]?(?![\d.])", txt)
+    if m:
+        return int(m.group(1)) * int(m.group(2))
     m = re.search(r"(\d+)\s*(?:p\b|pin|针)", txt, re.I) \
         or re.search(r"(?<![\d.])(\d{1,2})\s*[pP](?=[A-Z]|[-_(\s]|$|[\u4e00-\u9fff])", txt)
     if not m:

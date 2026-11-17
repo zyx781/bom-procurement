@@ -127,6 +127,38 @@ _sel, _un = pick(_h2, [group("颜色分类",
 check("双排 2*2p 被拒", "2*2p" not in str(_sel.get("颜色分类")), _sel)
 check("选中 1*2p", "1*2p" in str(_sel.get("颜色分类")), _sel)
 
+print("== 双排排针：40P 的位子不能选 1*40P 单排条（2026-11-17 误加购） ==")
+# 真机事故：PZ254-2-20-Z-8.5 是 2×20 双排 40P，链接里同时挂 1*40P / 2*40P，
+# 页面默认选中「2.54mm/白色1*40P（10只）」，自动加购照抄默认值 ——
+# 40 针没错、间距没错，但一条单排条装不到 2×20 的焊盘上。
+_h40 = mkrow(desc="PZ254-2-20-Z-8.5", package="HDR-TH_40P-P2.54-V-M-R2-C20-S2.54",
+             params="", qty=2, lcsc="C3012260",
+             lcsc_info={"code": "C3012260", "model": "PZ254-2-20-Z-8.5",
+                        "catalog": "Headers, Male Pins",
+                        "attrs": {"排数": "双排", "间距": "2.54mm", "总PIN数": "40P",
+                                  "插针结构": "2x20P"}})
+check("行排数读到双排", tr._line_rows(_h40) == 2, tr._line_rows(_h40))
+_sel, _un = pick(_h40, [group("颜色分类切换大图模式",
+                              ["2.54mm/白色1*40P（10只）", "2.54mm/黑色2*20P（10只）",
+                               "2.54mm/白色2*40P（10只）"],
+                              selected=0)])
+check("单排 1*40P 被拒", "1*40P" not in str(_sel.get("颜色分类切换大图模式")), _sel)
+check("选中双排 2*20P", "2*20P" in str(_sel.get("颜色分类切换大图模式")), (_sel, _un))
+
+_sel2, _un2 = pick(_h40, [group("颜色分类", ["2.54mm/白色1*40P（10只）"])])
+check("只有单排选项 → unresolved，不自动买", not _sel2 and bool(_un2), (_sel2, _un2))
+
+# 老数据没有 rows 字段（分析落盘前存下的行）：必须靠立创属性兜住
+_h40_stale = {k: v for k, v in _h40.items() if k != "params"}
+_h40_stale["params"] = {"pins": 40, "pitch_mm": 2.54}
+_h40_stale["params_text"] = "40P 间距 2.54mm"
+check("旧行没 rows 也能从立创属性读出双排", tr._line_rows(_h40_stale) == 2, tr._line_rows(_h40_stale))
+check("旧行也不许选单排条",
+      tr._sku_veto(_h40_stale, "颜色分类", "2.54mm/白色1*40P（10只）") is not None)
+
+check("双排 2*40P 整条可剪，放行",
+      tr._sku_veto(_h40, "颜色分类", "2.54mm/白色2*40P（10只）") is None)
+
 print("== 连接器：要板端针座，不能买带线母头 ==")
 _xh = mkrow(desc="CAN: H,L,GND,NC", package="XH2.50mm-4P", params="4P 间距2.5mm", qty=1)
 _sel, _un = pick(_xh, [group("颜色分类", ["2P适用单头渡锡线", "4P单头渡锡线20CM（1条）"], selected=0)])

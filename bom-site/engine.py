@@ -643,6 +643,29 @@ def _parse_pins(t):
     return None
 
 
+def _parse_rows(t):
+    """连接器的排数（单排/双排）。针数对得上、排数不对，一样插不进去。
+
+    BOM 写 40P 的排针，其实可能是 1×40 单排，也可能是 2×20 双排 ——
+    两者针数都是 40，孔距也对，但一条 40 针的单排根本没法装到 2×20 的
+    焊盘上（长度差一倍）。立创属性「排数=双排 / 插针结构=2x20P」和
+    Altium 封装 `HDR-TH_40P-P2.54-V-M-R2-C20` 里的 R2 都能给出排数。
+    """
+    s = str(t or "")
+    m = re.search(r"([单双两三])\s*排", s)
+    if m:
+        return {"单": 1, "双": 2, "两": 2, "三": 3}[m.group(1)]
+    # 2x20 / 2*20P / 1×40：行列写法，前一段就是排数
+    m = _RE_PIN_PAIRS.search(s)
+    if m:
+        return int(m.group(1))
+    # Altium/KiCad 封装名：HDR-TH_40P-P2.54-V-M-R2-C20-S2.54 → R2 = 2 排
+    m = re.search(r"(?<![A-Za-z0-9])R([1-4])-C\d+", s)
+    if m:
+        return int(m.group(1))
+    return None
+
+
 def _parse_pitch(t):
     for m in _RE_PITCH.finditer(t):
         try:
@@ -871,6 +894,9 @@ def parse_params(text: str, category: str) -> dict:
             pitch = _parse_pitch_loose(t)
         if pitch is not None:
             p["pitch_mm"] = pitch
+        rows = _parse_rows(t)
+        if rows is not None:
+            p["rows"] = rows
 
     return p
 
@@ -904,6 +930,10 @@ def params_text(category: str, p: dict) -> str:
         parts.append(str(p["frequency"]))
     if "pins" in p:
         parts.append(f"{p['pins']}P")
+    if "rows" in p:
+        # 40P 可能是 1×40 也可能是 2×20，只写针数看不出来 —— 排数必须露在摘要里，
+        # 否则人眼看「40P 间距 2.54mm」也分不清买的是不是同一个东西。
+        parts.append({1: "单排", 2: "双排", 3: "三排"}.get(int(p["rows"] or 0), f"{int(p['rows'])} 排"))
     if "pitch_mm" in p:
         parts.append(f"间距 {p['pitch_mm']:g}mm")
     return " ".join(parts)
@@ -1238,6 +1268,16 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
         for _k, _v in (lcsc_info.get("params") or {}).items():
             if _k in _allowed and _k not in params and _v is not None:
                 params[_k] = _v
+        # 排数只从封装名猜是不够的：`HDR-TH_40P-…` 这种库名里未必带 R2，
+        # 而「是单排还是双排」决定能不能装上去。立创属性（排数=双排 /
+        # 插针结构=2x20P）是权威证据，以它为准覆盖猜出来的值。
+        if category == "connector":
+            _attrs = lcsc_info.get("attrs") or {}
+            _rows = _parse_rows(
+                " ".join(str(_attrs.get(k) or "") for k in ("排数", "插针结构", "Pin Structure"))
+            )
+            if _rows:
+                params["rows"] = _rows
     # 名称列（Altium 的 Name/Comment）才是原理图上的设计值：470 / 2.2K / 5kΩ / 10nF。
     # Manufacturer Part 常常是从库里复制过来、忘了改的旧型号 —— 实测一份 BOM 里
     # 5kΩ、470Ω、2.2K 三行的型号全是 MF1/4W-1KΩ±1%T52，按型号解析会把三条线
@@ -1386,7 +1426,7 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
 
     status = "needs_user" if blocking else "ready"
 
-    gates = _build_gates(category, package, params, mpn, subtype)
+    gates = _build_gates(category, package, params, mpn, subtype, footprint)
     # 立创会直接写「连接器类型 = Type-C / 触点数量 = 2P」。这是判断
     # 「KH-TYPE-C-2P 买成 VH3.96 二针座」那类错货的硬依据，单独列成一条闸门。
     if lcsc_info and category == "connector":
@@ -1514,7 +1554,7 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
     return badge
 
 
-def _build_gates(category, package, p, mpn, subtype=""):
+def _build_gates(category, package, p, mpn, subtype="", footprint=""):
     g = []
     if mpn and category in ("ic", "power"):
         g.append(f"型号 = {mpn}（含后缀，不接受同系列替代）")
@@ -1552,9 +1592,21 @@ def _build_gates(category, package, p, mpn, subtype=""):
         if "rds_mohm" in p:
             g.append(f"Rds(on) ≤ {p['rds_mohm']:g}mΩ")
     elif category == "connector":
-        series = connector_series(package, mpn)
+        # 封装名被归一成「插件」后，`HDR-TH_40P…` 里的 HDR(=排针) 就没了 ——
+        # 必须把原始封装名一起喂进去，否则 PZ254 这种料号看不出是排针，
+        # 「整条可自行剪断」这条放宽规则也永远轮不到它。
+        series = connector_series(package, mpn, footprint)
         if "pins" in p:
             g.append(f"针数 = {p['pins']}P")
+        if "rows" in p:
+            # 排数是和针数同等硬的门槛：1×40 与 2×20 针数一样、孔距一样，
+            # 但装不到同一个焊盘上。
+            _rows = int(p["rows"] or 0)
+            _label = {1: "单排", 2: "双排", 3: "三排"}.get(_rows, f"{_rows} 排")
+            if "pins" in p and _rows > 0 and int(p["pins"]) % _rows == 0:
+                g.append(f"排数 = {_label}（{_rows}×{int(p['pins']) // _rows}P）")
+            else:
+                g.append(f"排数 = {_label}")
         if "pitch_mm" in p:
             if pitch_match(p["pitch_mm"], 2.54):
                 # JST XH 真实 2.50mm，淘宝通用写法 XH2.54 —— 让人知道两者是一回事
@@ -1888,15 +1940,18 @@ def _build_queries(
         elif series in ("排针", "排母"):
             ptxt = f"{pitch:g}mm" if pitch else "2.54mm"
             rows = int(p.get("rows") or 0)
-            q.append(f"{ptxt} {series} {pin_txt}".strip())
             if rows >= 2 and pins:
-                # 双排必须写明：2.54 排针搜出来默认是单排，40P 单排是 2×40，
-                # 装到 2×20 的焊盘上根本插不进去（孔距对、长度差一倍）。
+                # 先按「几乘几」搜，再退化到通用词：40P 双排用「2.54mm 排针 40P」
+                # 搜回来全是「1*40 / 2*40 都卖」的挂链接，SKU 里未必有 2*20 ——
+                # 写死 2*20P 才能命中同形状的货（PZ254V-12-40P 双排针2*20P）。
                 per_row = int(pins) // rows
-                q.append(f"{ptxt} 双排{series} {pin_txt}".strip())
                 q.append(f"{ptxt} {rows}*{per_row}P {series}")
-            else:
+                q.append(f"{ptxt} 双排{series} {pin_txt}".strip())
+            elif rows == 1:
                 q.append(f"单排{series} {ptxt} {pin_txt}".strip())
+            # rows 未知时不敢断言排数：双排排针搜「单排排针」只会把结果带偏，
+            # 真正的双排货一条都进不来（40P 的 PZ254 就这样整行买不到）。
+            q.append(f"{ptxt} {series} {pin_txt}".strip())
         elif series in ("TYPE-C", "MICRO-USB", "MINI-USB"):
             # USB 座有公头/母座之分，只搜「TYPE-C」会出来一堆公头和线材。
             # 板子上焊的都是母座，这条限定词必须带。
@@ -2473,7 +2528,10 @@ def _check_title(line, cand, extra_ctx):
                 + [str((line.get("row") or {}).get("params") or "")]
             )
         )
-        series = connector_series(line.get("desc"), line.get("package"), line.get("mpn"))
+        series = connector_series(
+            line.get("desc"), line.get("package"), line.get("mpn"),
+            (line.get("row") or {}).get("package"),
+        )
         # 立创品类是「排针/排母」的权威证据。BOM 的名称栏常常只有料号
         # （PZ254-2-20-Z-8.5），看不出公母，`want` 里也没有「排针」二字 ——
         # 于是「2.54mm 排母 双排 2*20P」会被当成合格品买回来：间距对、针数对、

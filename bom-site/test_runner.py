@@ -266,7 +266,9 @@ def _fake_elim_send(req):
         return {
             "status": "success",
             "data": {"items": [
-                {"title": "40P 排针 2.54mm 单排 直插 8.5mm", "price_value": 1.2, "index": 0},
+                # 真机第 1 行要的是双排 2*20P：这里写单排会被 H01 直接淘汰（0 分），
+                # 所以回放数据必须是同规格的双排货。
+                {"title": "2.54mm 双排排针 2*20P 40P 直插 8.5mm", "price_value": 1.2, "index": 0},
             ]},
         }
     return _orig_send(req)
@@ -283,12 +285,52 @@ try:
 finally:
     runner.send = _orig_send
 check("淘汰级候选也算这条词失败，继续试", len(_searched2) >= 2, _searched2)
-check("换到通用词后拿到可用候选", (_res2.get("query") or "").endswith(("40P", "40P 排针")) and _res2.get("ok"), (_res2.get("query"), _res2.get("ok")))
+check("换到通用词后拿到可用候选", bool(_res2.get("ok")) and _res2.get("query") != _pz["query_plan"][0],
+      (_res2.get("query"), _pz["query_plan"], _res2.get("ok")))
 check("可用候选分数过放行线", all(
     not ((c.get("decision") == "淘汰") and (c.get("score") or 0) < 20)
     for c in (_res2.get("candidates") or [])
     if c.get("index") == 0
 ), [c.get("score") for c in (_res2.get("candidates") or [])])
+
+print("== 搜索：分数不低但核实不到针数，也要换词（真机回放：PZ254 第 1 行） ==")
+# 2026-11-17 真机事故（第二次）：型号词召回 20 个「2.54MM排针」系列词条，
+# 有的能拿 57.9 分（不算淘汰级），但标题只写间距、没写针数。换词判断只看分数
+# 就 break，候选拿到 _buy_one 里被「核实不到关键规格（针数）」全拒 → 整行失败。
+# 后面「2.54mm 排针 40P」有 73 分、针数可核实的货，一次都没轮到。
+_searched3 = []
+
+
+def _fake_nopin_send(req):
+    if req.get("cmd") == "search":
+        _searched3.append(req.get("keyword"))
+        if len(_searched3) == 1:
+            return {
+                "status": "success",
+                "data": {"items": [
+                    {"title": "PZ254-1-02/03/04/08/10/20/30/40-Z-8.5 2.54MM排针", "price_value": 0.5, "index": 0},
+                    {"title": "华灿天禄 2.54mm 排针 塑高2.5 黑色 单排", "price_value": 0.4, "index": 1},
+                ]},
+            }
+        return {
+            "status": "success",
+            "data": {"items": [
+                {"title": "单/双 排针 2.54MM 间距 1*40 2*40P 直针 弯针 贴片 长排针", "price_value": 0.6, "index": 0},
+            ]},
+        }
+    return _orig_send(req)
+
+
+runner.send = _fake_nopin_send
+try:
+    _res3 = runner.search(_pz, require_scored=True)
+finally:
+    runner.send = _orig_send
+check("核实不到针数的词不算可用，继续试", len(_searched3) >= 2, _searched3)
+check("换词后拿到的候选针数可核实", _res3.get("ok") and any(
+    any(str(h).startswith("针数") for h in (c.get("hits") or []))
+    for c in (_res3.get("candidates") or [])
+), [(c.get("title"), c.get("hits")) for c in (_res3.get("candidates") or [])][:3])
 
 print("== 批量行落盘：重启后能读回来接着跑 ==")
 _saved = tr.load_batch_lines()

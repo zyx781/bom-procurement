@@ -397,5 +397,34 @@ finally:
     tr.PROGRESS_FILE, tr.RUNS = _dry_saved
 
 print()
+print("== 会话重启/停止不会把台账上的加购结论抹掉 ==")
+# 事故：点一次「启动淘宝会话」→ start() 里 _reset_state() 清空内存批次 →
+# 台账整列变「未跑」，页头却还写着「已完成 N 行」。进度文件才是事实，清完要装回来。
+_restore_tmp = pathlib.Path(tempfile.mkdtemp(prefix="restore-"))
+_restore_saved = tr.PROGRESS_FILE
+tr.PROGRESS_FILE = _restore_tmp / "batch-progress.json"
+try:
+    tr.save_batch_progress(
+        {
+            "total": 2,
+            "fingerprint": "fp",
+            "lines": {
+                "1": {"line_no": 1, "status": "ok", "candidate": {"title": "A"}},
+                "2": {"line_no": 2, "status": "failed", "message": "x"},
+            },
+        }
+    )
+    _r = tr.SessionRunner()
+    _r._reset_state()
+    check("_reset_state 后仍装载进度", len(_r._batch.get("results") or []) == 2, _r._batch.get("results"))
+    check("装载后 running 仍是 false", _r._batch.get("running") is False, _r._batch.get("running"))
+    check("第 1 行结论保留", _r._batch["results"][0].get("status") == "ok", _r._batch["results"][0])
+finally:
+    tr.PROGRESS_FILE = _restore_saved
+    import shutil as _sh3
+
+    _sh3.rmtree(_restore_tmp, ignore_errors=True)
+
+print()
 print(f"RESULT: {PASS} passed, {FAIL} failed")
 sys.exit(0 if FAIL == 0 else 1)

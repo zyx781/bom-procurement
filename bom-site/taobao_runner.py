@@ -605,6 +605,76 @@ def batch_removal_targets(prog: dict | None = None) -> list[dict]:
     return out
 
 
+def cart_target_for_line(prog: dict | None, line_no) -> dict:
+    """单行删车：从进度里挑出「这一行买的那个商品」，做成执行层的删除目标。
+
+    和 batch_removal_targets 的区别：
+    - 只认这一行，一次一件；
+    - qty 传 0。执行层的数量守卫是给「整批删上一批」用的（车里件数多于工具
+      加购数 = 你自己也加过同款，不删）；行级删车是用户明确点了「从购物车删掉」，
+      整行删除才是他要的结果，被守卫拦住反而删不掉（车里 3 件、工具加了 2 件
+      是常见情形）。
+
+    返回 {"ok": bool, "target": dict|None, "code": str, "message": str}
+    """
+    rec = ((prog or {}).get("lines") or {}).get(str(line_no))
+    if not isinstance(rec, dict):
+        return {
+            "ok": False,
+            "target": None,
+            "code": "NO_LINE_RECORD",
+            "message": "这一行还没有加购记录（没跑过或进度已清空），不知道要删哪一件",
+        }
+    status = str(rec.get("status") or "")
+    if status not in ("ok", "uncertain"):
+        return {
+            "ok": False,
+            "target": None,
+            "code": "NOT_IN_CART",
+            "message": f"这一行当前是「{status or '未跑'}」，购物车里没有它的加购记录",
+        }
+    cand = rec.get("candidate") or {}
+    title = str(cand.get("title") or rec.get("headline") or "").strip()
+    item_id = _item_id_of(str(cand.get("url") or ""))
+    if not item_id and not title:
+        return {
+            "ok": False,
+            "target": None,
+            "code": "NO_TARGET",
+            "message": "这一行没有商品标题/链接，认不出购物车里哪件是它",
+        }
+    return {
+        "ok": True,
+        "target": {
+            "item_id": item_id,
+            "title": title[:120],
+            "qty": 0,
+            "line_no": str(line_no),
+        },
+        "code": "",
+        "message": "",
+    }
+
+
+def mark_line_removed(line_no, message: str) -> int:
+    """单行删车后只把这一行改回「待加购」，其它行的结论原样不动。
+
+    status=removed 与整批删车一致：既不是 ok（会被续跑跳过），也不是 failed
+    （会被误当成搜索失败），页面显示「已删车」，再点加购会重新买这一行。
+    """
+    prog = load_batch_progress() or {}
+    rec = (prog.get("lines") or {}).get(str(line_no))
+    if not isinstance(rec, dict):
+        return 0
+    now = datetime.now().isoformat(timespec="seconds")
+    rec["status"] = "removed"
+    rec["removed_at"] = now
+    rec["message"] = message
+    prog["updated_at"] = now
+    save_batch_progress(prog)
+    return 1
+
+
 def _norm_title(text) -> str:
     return "".join(str(text or "").strip().lower().split())
 
@@ -1351,6 +1421,14 @@ class SessionRunner:
                 "stopped_reason": "会话已结束，批量任务中止" if was_running else None,
                 "verification": None,
             }
+        # 会话重启不能把「哪些行已经在购物车里」从界面上抹掉：进度文件才是事实。
+        # 以前这里清完就完，点一次「启动淘宝会话」台账整列变「未跑」，页头却
+        # 还写着「已完成 N 行」，两边打架，用户根本不敢确认自己买了什么。
+        self._restore_batch_from_progress()
+        if was_running:
+            with self._state_lock:
+                self._batch["stopped_reason"] = "会话已结束，批量任务中止（进度已保存）"
+                self._batch["phase"] = "会话已结束，进度已保存，可点「继续加购」接着跑"
         while True:
             try:
                 self._responses.get_nowait()
@@ -2192,6 +2270,64 @@ class SessionRunner:
                 self._batch["ok_count"] = 0
                 self._batch["cart_invalidated"] = changed
         return changed
+
+    def cart_remove_line(self, line_no) -> dict:
+        """把「这一行买的东西」从购物车删掉，其它行不动。
+
+        和整批删车共用执行层（cart-remove items）：只传这一个目标，按商品 id
+        精确匹配；删完只把这一行改成 removed（待加购），不会连坐整批。
+        """
+        if self._batch.get("running"):
+            raise SessionError("批量任务正在跑，等它跑完再删", "BATCH_RUNNING")
+        if self._proc is None or self._proc.poll() is not None:
+            raise SessionError(
+                "淘宝会话未启动（或已退出），先点右上角「启动淘宝会话」", "NO_SESSION"
+            )
+        if self._browser_gone or self._browser_unreachable():
+            raise SessionError("淘宝浏览器已关闭，先点「启动淘宝会话」重建会话", "BROWSER_GONE")
+
+        picked = cart_target_for_line(load_batch_progress() or {}, line_no)
+        if not picked["ok"]:
+            raise SessionError(picked["message"], picked["code"])
+        target = picked["target"]
+
+        resp = self.send({"cmd": "cart-remove", "items": [target]}, timeout=240)
+        if resp.get("status") == "error":
+            err = resp.get("error") or {}
+            raise SessionError(
+                err.get("message") or "删除购物车条目失败",
+                err.get("code") or "CART_REMOVE_FAILED",
+            )
+        data = resp.get("data") or {}
+        removed = int(data.get("removed") or 0)
+        # 没删到不等于出错：可能用户已经手动删过了。无论哪种，进度都必须和
+        # 购物车对齐 —— 否则「继续加购」还会按 ok 跳过这一行，显示已买实际没买。
+        msg = (
+            "已从购物车删除，需要重新加购"
+            if removed
+            else "购物车里没找到这一件（可能已手动删除），已改回待加购"
+        )
+        changed = mark_line_removed(line_no, msg)
+        if changed:
+            self._mark_removed_in_memory()
+        self._append_log(
+            f"[line] 第 {line_no} 行从购物车删车：removed={removed} "
+            f"{data.get('message') or ''}"
+        )
+        return {
+            "ok": True,
+            "line_no": line_no,
+            "removed": removed,
+            "title": target.get("title") or "",
+            "before": data.get("before"),
+            "after": data.get("after"),
+            "skip": data.get("skip") or [],
+            "missing": data.get("missing") or [],
+            "progress_invalidated": changed,
+            "code": data.get("code"),
+            "message": data.get("message") or msg,
+            "screenshot": self.persist_screenshot(resp.get("screenshot")),
+        }
 
     # ---------------- 批量加购 ----------------
     def batch_status(self) -> dict:

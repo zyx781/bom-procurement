@@ -416,6 +416,7 @@
     });
 
     const d = ln.decision;
+    const rec = batchRecMap().get(Number(ln.line_no));
     const statusBadge =
       ln.status === "ready"
         ? `<span class="badge">可执行</span>`
@@ -457,6 +458,14 @@
         ? ""
         : '<p class="fineprint">参数不足，未生成搜索词。</p>';
     const verify = (d.must_verify || []).map((v) => `<li>${esc(v)}</li>`).join("");
+    // 行级删车：只对这一行已经加购（或待核对）的记录出现。删完这行会变成
+    // 「已删车」，可以重新跑，别的行和购物车里其它商品都不动。
+    const cartDelBtn =
+      rec && ["ok", "uncertain"].includes(rec.status)
+        ? `<button class="ghost small danger" data-cartdel-idx="${idx}" type="button" title="只把这一行买的东西从购物车删掉，其它行不动">从购物车删掉</button>`
+        : rec && rec.status === "removed"
+          ? `<button class="ghost small" type="button" disabled title="这一行已经从购物车删除">已删车</button>`
+          : "";
     const risks = (d.risk_notes || [])
       .map(
         (r) => `<div class="risk"><span class="code">${esc(r.code || "R")}</span><span>${esc(r.text)}</span></div>`
@@ -538,6 +547,7 @@
           <button class="ghost small" data-dontbuy-idx="${idx}" type="button">${
             ln.dont_buy ? "恢复采购" : "这行不买了"
           }</button>
+          ${cartDelBtn}
           <button class="ghost small" data-score-idx="${idx}" type="button">用这行评分</button>
         </span>
       </div>`;
@@ -705,6 +715,57 @@
         );
       });
     }
+
+    // 行级删车：买错了/不想买这一件时，只把这行的商品从购物车删掉，
+    // 不用整批重来，也不会动别的行。删完这行改回「待加购」，可重新跑。
+    const cartDelEl = $("#line-detail").querySelector("[data-cartdel-idx]");
+    if (cartDelEl) {
+      cartDelEl.addEventListener("click", async () => {
+        if (cartDelEl.disabled) return;
+        const what = (rec && rec.candidate && rec.candidate.title) || ln.mpn || `第 ${ln.line_no} 行`;
+        const ok = window.confirm(
+          `把这一行买的东西从购物车删掉？\n\n` +
+            `「${what}」\n\n` +
+            `只删这一件（整行删除，包括你自己加的同款数量），购物车里其它商品不动。\n` +
+            `删完这一行会改回「待加购」，可以重新跑。`
+        );
+        if (!ok) return;
+        const oldText = cartDelEl.textContent;
+        cartDelEl.disabled = true;
+        cartDelEl.textContent = "正在删…";
+        try {
+          const res = await api("/api/taobao/cart-remove-line", { line_no: ln.line_no });
+          try {
+            const st = await fetch("/api/taobao/batch", { cache: "no-store" }).then((r) => r.json());
+            applyBatchStatus(st);
+          } catch {
+            /* 状态刷新失败不影响删除结果 */
+          }
+          renderSummary();
+          renderLineList();
+          if (res.removed) {
+            toast(
+              `第 ${ln.line_no} 行已从购物车删除` +
+                (res.before != null && res.after != null ? `（车内 ${res.before} → ${res.after} 件）` : "")
+            );
+          } else {
+            toast(`购物车里没找到这一件，已把第 ${ln.line_no} 行改回「待加购」`);
+          }
+          renderDetail(idx);
+        } catch (e) {
+          const hint =
+            e.code === "NO_SESSION"
+              ? "先点右上角「启动淘宝会话」"
+              : e.code === "BATCH_RUNNING"
+                ? "等批量任务跑完再试"
+                : e.message;
+          toast(`这一行没删成：${hint}`);
+          cartDelEl.disabled = false;
+          cartDelEl.textContent = oldText;
+        }
+      });
+    }
+
     const t = $("#drawer-title");
     const _ln = state.result.lines[idx] || {};
     if (t) t.textContent = `行 ${String(_ln.line_no ?? idx + 1).padStart(2, "0")}`;

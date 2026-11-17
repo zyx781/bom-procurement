@@ -390,6 +390,12 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("清空整个购物车需要 confirm=\"清空\"")
                 return self._send(200, tr.RUNNER.cart_remove(keyword=keyword or None, remove_all=remove_all))
 
+            if path == "/api/taobao/cart-remove-line":
+                # 行级删车：只删这一行买的那一件，购物车里其它东西（含别的行、
+                # 你自己加的商品）一律不动。删完只把这一行改回「待加购」。
+                _ln = _int_field(body, "line_no", 0, 99999, label="line_no")
+                return self._send(200, tr.RUNNER.cart_remove_line(_ln))
+
             if path == "/api/lines/update":
                 # 网页上的人工修改：确认放行（status=ready）/ 改搜索词（query_plan）。
                 # 只按 index + line_no 双重定位、只覆盖白名单字段，改错的行改不进来。

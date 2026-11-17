@@ -3,7 +3,8 @@
   "use strict";
 
   const $ = (sel, root = document) => root.querySelector(sel);
-  const state = { rows: null, result: null, activeIndex: -1, lastScore: null, lastScoreIndex: -1, sets: 1 };
+  const state = { rows: null, result: null, activeIndex: -1, lastScore: null, lastScoreIndex: -1, sets: 1,
+                  batch: null, filter: "all", intakeName: "" };
   const exec = { lineIndex: -1, search: null, chosen: null, open: null, result: null };
   let sessionReady = false;
   let batchRunning = false;
@@ -218,10 +219,13 @@
   /* ---------- 渲染主结果 ---------- */
   function render() {
     $("#result-panel").classList.remove("hidden");
-    $("#score-panel").classList.remove("hidden");
-    $("#exec-panel").classList.remove("hidden");
     const setsInput = $("#sets-input");
     if (setsInput) setsInput.value = state.sets || 1;
+    // 有清单了就把它压成一条：投放区只在「还没东西」的时候需要占地方
+    const intake = $("#input-panel");
+    if (intake) intake.classList.add("collapsed");
+    if ($("#intake-toggle")) $("#intake-toggle").setAttribute("aria-expanded", "false");
+    renderIntakeBar();
     renderSummary();
     renderLineList();
     renderScoreSelect();
@@ -231,38 +235,61 @@
     pollSession();
   }
 
+  // 折叠条上要能一眼看出「现在看的是哪份、几行、几行能跑」
+  function renderIntakeBar() {
+    const r = state.result;
+    if (!r) return;
+    const name = $("#intake-name");
+    const meta = $("#intake-meta");
+    if (name) name.textContent = state.intakeName || "投放清单";
+    if (meta) {
+      const s = r.summary || {};
+      meta.innerHTML = `<b>${s.total ?? r.lines.length}</b> 行 · <b>${s.ready ?? 0}</b> 可执行` +
+        (s.needs_user ? ` · <b>${s.needs_user}</b> 待确认` : "");
+    }
+  }
+
+
   function renderSummary() {
     const r = state.result;
-    const s = r.summary;
-    const cats = Object.entries(r.categories || {})
-      .map(([k, v]) => `${catLabel(k)} ${v}`)
-      .join("，");
-    // 立创核准行数：有编号的按编号，没编号的按完整型号，分开数
+    if (!r) return;
+    const s = r.summary || {};
+    const results = batchFits() ? (state.batch && state.batch.results) || [] : [];
+    const okN = results.filter((x) => x.status === "ok").length;
+    const issueN = results.filter((x) => x.status === "failed" || x.status === "uncertain").length;
     const lcst = r.lcsc || {};
-    const lcCode = lcst.by_code || 0;
-    const lcModel = lcst.by_model || 0;
-    const lcChip =
-      lcCode + lcModel > 0
-        ? `<div class="chip ok" title="${esc(r.lcsc_summary || "")}"><b>${lcCode + lcModel}</b>立创核准</div>`
-        : "";
-    let html = `
-      <div class="chip"><b>${s.total}</b>行</div>
-      <div class="chip ok"><b>${s.ready}</b>可执行</div>
-      <div class="chip warn"><b>${s.needs_user}</b>待确认</div>
-      <div class="chip ${s.critical ? "bad" : ""}"><b>${s.critical}</b>关键件</div>
-      ${lcChip}
-      <div class="chip">${esc(cats)}</div>`;
-    $("#summary").innerHTML = html;
+    const lcN = (lcst.by_code || 0) + (lcst.by_model || 0);
+    const f = state.filter || "all";
+    const chip = (key, label, count, cls, title) =>
+      `<button class="chip ${cls}" data-filter="${key}" aria-pressed="${f === key ? "true" : "false"}"` +
+      `${title ? ` title="${esc(title)}"` : ""}><b>${count}</b>${label}</button>`;
 
-    const old = $("#summary").nextElementSibling;
-    if (old && old.classList.contains("warnbar")) old.remove();
+    let html =
+      chip("all", "行", s.total ?? r.lines.length, "") +
+      chip("ready", "可执行", s.ready ?? 0, "ok") +
+      chip("buyok", "已加购", okN, "ok") +
+      chip("issue", "待处理", (s.needs_user || 0) + issueN, "warn") +
+      (lcN ? `<span class="chip plain" title="${esc(r.lcsc_summary || "")}"><b>${lcN}</b>立创核准</span>` : "");
+    $("#summary").innerHTML = html;
+    $("#summary").querySelectorAll("[data-filter]").forEach((b) =>
+      b.addEventListener("click", () => {
+        state.filter = b.dataset.filter;
+        renderSummary();
+        renderLineList();
+      })
+    );
+
+    const old = $("#summary").parentElement.parentElement.querySelector(".warnbar");
+    if (old) old.remove();
     if (r.warnings && r.warnings.length) {
       const div = document.createElement("div");
       div.className = "warnbar";
       div.innerHTML = "BOM 检查提示：<ul>" + r.warnings.map((w) => `<li>${esc(w)}</li>`).join("") + "</ul>";
-      $("#summary").insertAdjacentElement("afterend", div);
+      const bar = $("#summary").closest(".statusbar");
+      if (bar) bar.insertAdjacentElement("afterend", div);
     }
   }
+
 
   function catLabel(c) {
     return { passive: "被动件", ic: "芯片", power: "功率", connector: "连接器", module: "模组", other: "其他" }[c] || c;
@@ -273,32 +300,111 @@
     return String(pkg || "").trim().split(/[\s(（]/)[0] || "—";
   }
 
-  function renderLineList() {
-    const lines = state.result.lines;
-    const head = `<div class="ledger-head"><span>行</span><span>用料</span><span>封装</span><span>数量</span><span>状态</span></div>`;
-    $("#line-list").innerHTML =
-      head +
-      lines
-        .map((ln, i) => {
-          const status = ln.status === "ready" ? "ready" : "needs_user";
-          const critical = ln.criticality === "critical" ? `<span class="li-flag">关键</span>` : "";
-          return `<button class="line-item ${i === state.activeIndex ? "active" : ""}" data-idx="${i}">
-          <span class="li-no">${String(ln.line_no ?? i + 1).padStart(2, "0")}</span>
-          <span class="li-body">
-            <span class="li-title">${esc(ln.decision.headline || ln.mpn || "未识别")}${critical}</span>
-            <span class="li-sub">${esc(ln.mpn || catLabel(ln.category))}${ln.lcsc && ln.lcsc.code ? ` · ${esc(ln.lcsc.code)}` : ""}</span>
-          </span>
-          <span class="li-pkg">${esc(shortPkg(ln.package))}</span>
-          <span class="li-qty">${ln.qty ?? "—"}</span>
-          <span class="badge ${status}">${status === "ready" ? "可执行" : "待确认"}</span>
-        </button>`;
-        })
-        .join("");
+  const BATCH_SHORT = {
+    ok: ["已加购", "s-ok"],
+    failed: ["失败", "s-bad"],
+    uncertain: ["待核对", "s-unc"],
+    running: ["加购中", "s-run"],
+    pending: ["等待", "s-idle"],
+    skipped: ["跳过", "s-idle"],
+    removed: ["已删车", "s-idle"],
+  };
 
-    $("#line-list").querySelectorAll("[data-idx]").forEach((btn) => {
-      btn.addEventListener("click", () => renderDetail(Number(btn.dataset.idx)));
+  // 批次属于哪一份清单：服务端 progress 已按 BOM 指纹过滤过，total 对得上才是这一份。
+  // 对不上就不能往行上写状态 —— 上一批 18 行会把这份 6 行的 #1..#6 全标成「已删车」，
+  // 用户看到的是「这批都买过了」，其实是另一份 BOM 的记录。
+  function batchFits() {
+    const n = ((state.result && state.result.lines) || []).length;
+    const st = state.batch || {};
+    const total = st.total || (st.results || []).length || 0;
+    if (!n || !total) return false;
+    const pgTotal = (st.progress || {}).total || 0;
+    return pgTotal ? pgTotal === n : total === n;
+  }
+
+  function batchRecMap() {
+    const m = new Map();
+    if (!batchFits()) return m;
+    for (const r of (state.batch && state.batch.results) || []) m.set(Number(r.line_no), r);
+    return m;
+  }
+
+  function buyCell(rec) {
+    if (!rec) return '<span class="bstate s-idle"><b>未跑</b></span>';
+    const [label, cls] = BATCH_SHORT[rec.status] || ["—", "s-idle"];
+    const price = rec.cost != null ? rec.cost : rec.candidate && rec.candidate.price;
+    let sub = price != null ? fmtMoney(price) : "";
+    if (rec.status === "ok" && rec.cart_unverified) sub = "未核实";
+    if ((rec.status === "failed" || rec.status === "uncertain") && rec.message) sub = rec.message.slice(0, 12);
+    return `<span class="bstate ${cls}"><b>${esc(label)}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</span>`;
+  }
+
+  function costCell(rec) {
+    const v = rec ? (rec.cost != null ? rec.cost : rec.candidate && rec.candidate.price) : null;
+    // 已删车 / 跳过 的金额是历史值，灰掉：别让人以为这一件还在购物车里
+    const dim = rec && ["removed", "skipped"].includes(rec.status);
+    return `<span class="li-cost${v == null || dim ? " none" : ""}">${v == null ? "—" : fmtMoney(v)}</span>`;
+  }
+
+  // 筛选：一眼只看「该处理的」或「已经买到的」
+  function visibleRows(lines, bm) {
+    const f = state.filter || "all";
+    const rows = lines.map((ln, i) => ({ ln, i }));
+    if (f === "all") return rows;
+    return rows.filter(({ ln, i }) => {
+      const rec = bm.get(Number(ln.line_no ?? i + 1));
+      if (f === "ready") return ln.status === "ready";
+      if (f === "buyok") return !!rec && rec.status === "ok";
+      if (f === "issue")
+        return ln.status !== "ready" || (!!rec && ["failed", "uncertain", "skipped"].includes(rec.status));
+      return true;
     });
   }
+
+  function renderLineList() {
+    if (!state.result) return;
+    const lines = state.result.lines;
+    const bm = batchRecMap();
+    const shown = visibleRows(lines, bm);
+    const box = $("#line-list");
+    if (!shown.length) {
+      box.innerHTML =
+        '<div class="empty"><span>这个筛选下没有行</span><span class="empty-sub">点上面第一颗「全部」看回所有行</span></div>';
+      return;
+    }
+    box.innerHTML = shown
+      .map(({ ln, i }) => {
+        const no = ln.line_no ?? i + 1;
+        const rec = bm.get(Number(no));
+        const ready = ln.status === "ready";
+        const critical = ln.criticality === "critical" ? '<span class="li-flag">关键</span>' : "";
+        return `<button class="line-item ${i === state.activeIndex ? "active" : ""}" data-idx="${i}">
+        <span class="li-no">${String(no).padStart(2, "0")}</span>
+        <span class="li-body">
+          <span class="li-title">${esc(ln.decision.headline || ln.mpn || "未识别")}${critical}</span>
+          <span class="li-sub">${esc(ln.mpn || catLabel(ln.category))}</span>
+        </span>
+        <span class="li-pkg col-pkg">${esc(shortPkg(ln.package))}</span>
+        <span class="li-qty col-qty">${ln.qty ?? "—"}</span>
+        <span class="li-code col-code">${ln.lcsc && ln.lcsc.code ? esc(ln.lcsc.code) : "—"}</span>
+        <span><span class="badge ${ready ? "" : "needs_user"}">${ready ? "可执行" : "待确认"}</span></span>
+        <span>${buyCell(rec)}</span>
+        <span class="col-cost">${costCell(rec)}</span>
+      </button>`;
+      })
+      .join("");
+
+    box.querySelectorAll("[data-idx]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.idx);
+        state.activeIndex = idx;
+        box.querySelectorAll(".line-item").forEach((el) => el.classList.toggle("active", el === btn));
+        renderDetail(idx);
+        openDrawer("detail");
+      })
+    );
+  }
+
 
   function renderDetail(idx) {
     state.activeIndex = idx;
@@ -409,12 +515,21 @@
     $("#line-detail")
       .querySelectorAll("[data-copy]")
       .forEach((b) => b.addEventListener("click", () => copyText(b.dataset.copy)));
+    const t = $("#drawer-title");
+    const _ln = state.result.lines[idx] || {};
+    if (t) t.textContent = `行 ${String(_ln.line_no ?? idx + 1).padStart(2, "0")}`;
     const scoreBtn = $("#line-detail").querySelector("[data-score-idx]");
     if (scoreBtn) {
       scoreBtn.addEventListener("click", () => {
         $("#score-line").value = String(idx);
-        $("#score-panel").scrollIntoView({ behavior: "smooth", block: "start" });
-        $("#cand-text").focus();
+        const fold = $(".score-fold");
+        if (fold) fold.open = true;
+        openDrawer("detail");
+        const ta = $("#cand-text");
+        if (ta) {
+          ta.scrollIntoView({ behavior: "smooth", block: "center" });
+          ta.focus();
+        }
       });
     }
   }
@@ -1187,54 +1302,32 @@
   function renderBatch(st) {
     const box = $("#batch-progress");
     const results = (st && st.results) || [];
-    if (!results.length) {
+    const total = st.total || results.length || 0;
+    if (!total) {
       box.classList.add("hidden");
       box.innerHTML = "";
       return;
     }
     box.classList.remove("hidden");
-    box.innerHTML = results
-      .map((r) => {
-        const cls =
-          r.status === "ok" ? "ok" : r.status === "failed" ? "bad" : r.status === "uncertain" ? "run" : r.status === "running" ? "run" : r.status === "skipped" || r.status === "removed" ? "skip" : "";
-        const cand = r.candidate || {};
-        const price = cand.price != null ? fmtMoney(cand.price) : r.price_from != null ? "起 " + fmtMoney(r.price_from) : "";
-        const unit =
-          r.unit_price != null && r.pack_size && r.pack_size > 1 ? `单只 ${fmtMoney(r.unit_price)}` : "";
-        const sku = (r.sku || []).map((s) => `${s.label}=${s.value}`).join("，");
-        // 标题里已经带了需要量（×120），这里只在买了多份或一份多只时才补一句
-        const multi = r.pack_size && r.pack_size > 1;
-        const qty = r.qty && (r.qty > 1 || multi)
-          ? `买 ${r.qty} 份${multi ? `（1份=${r.pack_size}只，到手${r.actual_pcs || r.qty * r.pack_size}只）` : ""}`
-          : "";
-        const tries = (r.attempts || []).length > 1 ? `试了 ${r.attempts.length} 个候选` : "";
-        // 采购依据：这一件是凭「立创编号 → 型号」选的，还是型号没命中、按编号规格
-        // 逐项核对后的同规格替代。买完要能一眼追回去，不能只留一个金额。
-        const basis =
-          r.basis && r.basis.code
-            ? `依据 ${r.basis.code}${r.basis.hit ? "·型号命中" : "·同规格替代"}`
-            : "";
-        const sub = [r.message, sku, basis, tries].filter(Boolean).join(" ｜ ");
-        // 收尾对账没做成（读车异常）时保留「已加购」，但要一眼能看出「未经核实」
-        const unv = r.cart_unverified
-          ? '<span class="bunv" title="收尾对账没做成（购物车没读对），请到购物车核对这一行">未核实</span>'
-          : "";
-        // 有实付金额就显示合计（买的份数 × 每份价），否则退回候选标价
-        const money =
-          r.cost != null
-            ? `<b>${fmtMoney(r.cost)}</b>${unit ? `<span class="bsub">${esc(unit)}</span>` : ""}`
-            : `${esc(price)}${unit ? `<span class="bsub">${esc(unit)}</span>` : ""}`;
-        return `<div class="brow ${cls}">
-          <span class="bst">${esc(batchLabel(r.status, st.dry_run))}${unv}</span>
-          <span class="bbody">
-            <span class="bt">#${esc(r.line_no)} ${esc(r.headline || "")} ${esc(qty)}</span>
-            <span class="bs">${esc(sub || "等待中…")}</span>
-          </span>
-          <span class="bprice">${money}</span>
-        </div>`;
-      })
-      .join("");
+    const settled = results.filter((x) =>
+      ["ok", "failed", "uncertain", "skipped", "removed"].includes(x.status)
+    ).length;
+    const done = st.done != null ? st.done : settled;
+    const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    const now = results.find((x) => x.status === "running");
+    const stale = !batchFits() && !st.running;
+    const nowTxt = now
+      ? `正在跑 #${now.line_no} ${now.headline || ""}`
+      : st.running
+      ? st.phase || "准备中"
+      : stale
+      ? "上一批（另一份清单）的记录，不写进这张表"
+      : "已停止";
+    box.innerHTML = `<span class="rail-num">${done}/${total}</span>
+      <span class="rail-track"><span class="rail-fill" style="width:${pct}%"></span></span>
+      <span class="rail-now">${esc(nowTxt)}</span>`;
   }
+
 
   async function pollBatch() {
     // 推送还活着就别再问了：两套一起跑只会让「到底谁在刷新」更难查
@@ -1327,26 +1420,50 @@
     }
   }
 
-  function ensureExecVisible() {
-    const panel = $("#exec-panel");
-    if (panel && panel.classList.contains("hidden")) panel.classList.remove("hidden");
+  function openDrawer(tab) {
+    const d = $("#drawer");
+    if (!d) return;
+    d.classList.remove("hidden");
+    if (tab) setDrawerTab(tab);
   }
 
-  // 批次区在页面下半部分。开跑时如果它不在视野里就滚过去一次 ——
-  // 否则人盯着首屏，看不到任何跳动，只会以为没跑（2026-11-16 用户反馈）。
+  function closeDrawer() {
+    const d = $("#drawer");
+    if (d) d.classList.add("hidden");
+  }
+
+  function setDrawerTab(name) {
+    document.querySelectorAll(".dtab").forEach((b) =>
+      b.classList.toggle("active", b.dataset.tab === name)
+    );
+    document.querySelectorAll(".drawer-pane").forEach((p) =>
+      p.classList.toggle("hidden", p.dataset.pane !== name)
+    );
+    const d = $("#drawer");
+    if (d) d.classList.remove("hidden");
+  }
+
+  // 旧版要把下半屏的「执行区」露出来；现在只有一个工作台，跑批时开抽屉的单行执行页
+  function ensureExecVisible() {
+    const d = $("#drawer");
+    if (d && d.classList.contains("hidden")) return; // 不替用户抢开抽屉
+  }
+
+
+  // 进度轨就在首屏顶栏下面，开跑时不需要滚动；只有用户滚到很下面时才拉回视野一次
   let batchScrolled = false;
   function revealBatch() {
     if (batchScrolled) return;
     const box = $("#batch-progress");
     if (!box || box.classList.contains("hidden")) return;
     const r = box.getBoundingClientRect();
-    if (r.top < 0 || r.top > window.innerHeight - 80) {
-      box.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
+    if (r.top < 0) box.scrollIntoView({ behavior: "smooth", block: "start" });
     batchScrolled = true;
   }
 
+
   function applyBatchStatus(st) {
+    state.batch = st;
     batchRunning = !!st.running;
     batchProgress = st.progress || batchProgress;
     // 服务端有批次数据就要把执行区露出来：刷新/新开标签页后前端记忆可能没了，
@@ -1355,6 +1472,11 @@
     batchHasRows = nRows > 0 || (st.total || 0) > 0 || !!((st.progress || {}).total);
     if (batchHasRows) ensureExecVisible();
     renderBatch(st);
+    // 行状态就写在台账里：不重渲的话「已加购」只存在于进度条，表格永远停在「未跑」
+    if (state.result) {
+      renderLineList();
+      renderSummary();
+    }
     renderVerifyBanner(st);
     syncBatchButtons();
     $("#btn-batch-stop").disabled = !batchRunning;
@@ -1591,6 +1713,24 @@
   /* ---------- 事件 ---------- */
 
   function wire() {
+    // 投放条折叠 / 抽屉开关 / 详情页签
+    const it = $("#intake-toggle");
+    if (it) {
+      it.addEventListener("click", () => {
+        const box = $("#input-panel");
+        const collapsed = box.classList.toggle("collapsed");
+        it.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      });
+    }
+    const dc = $("#drawer-close");
+    if (dc) dc.addEventListener("click", closeDrawer);
+    document.querySelectorAll(".dtab").forEach((b) =>
+      b.addEventListener("click", () => setDrawerTab(b.dataset.tab))
+    );
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeDrawer();
+    });
+
     $("#file").addEventListener("change", (e) => {
       const f = e.target.files && e.target.files[0];
       if (f) parseFile(f).catch((err) => {

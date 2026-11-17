@@ -67,3 +67,6 @@ taobao-bom-procurement/蒸馏方案.md
 
 # ---- 用户投喂的原始 BOM（回归用的副本在 tests/fixtures/boms/，别在根目录留两份）----
 /BOM_*.xlsx
+
+# 前端截图/冒烟脚本（本机 playwright）
+bom-site/_shots/

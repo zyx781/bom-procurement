@@ -3,7 +3,7 @@ name: taobao-bom-procurement
 description: 把硬件 BOM（CSV/Excel：型号、数量、封装、参数、位号）蒸馏为逐行采购意图，驱动本地已登录的淘宝会话（Taobao-Search-Skill v4 session 模式）完成搜索、候选评估、SKU 匹配与加购；结算与付款永远由人工完成。当用户上传 BOM 并要求「按 BOM 采购 / 配单 / 询价 / 比价 / 加购物车 / 找替代料」，或提到阻容感、MCU、功率器件、连接器等电子元器件采购时使用。禁止自动支付、模拟登录、Cookie 劫持、验证码绕过与平台风控规避。
 ---
 
-# 淘宝 BOM 采购（决策层 Skill）v0.11.0
+# 淘宝 BOM 采购（决策层 Skill）v0.11.1
 
 > **绑定实现**：执行层 Taobao-Search-Skill v4.0.0（`scripts/taobao.py` session 模式）
 > ＋ 决策引擎 `bom-site/engine.py`（`ENGINE_VERSION = "0.1.0"`）
@@ -239,7 +239,8 @@ search(require_scored) → 候选池(score>0) → 排序 → 逐个 open → sug
      之后由 `ping` 探活（**非阻塞抢锁**，抢不到就跳过，绝不排队）：状态轮询里每隔 2.5 s 自动探一次，
      人工完成后 **2–3 秒内自动解除**，也可 `POST /api/session/recheck` 手动触发。
   4. 已经点过「加入购物车」的行**绝不重跑**（`verification_next_step(added=True) → stop`），防重复下单。
-- **截图清理**：跑完/停止/撞验证时清 `runs/*.png` 与执行层 artifacts，保留 `settings.screenshot_keep` 张（默认 0 = 全清）；**运行中跳过**（删正在写的文件会让界面图裂）。
+- **截图清理（v0.11.1 改口径）**：跑完 / 停止 / 撞验证时清一次，**只留这一批的证据图**——进度里 `screenshot` 点名的那些（正好是用户下一次点「删上次加购」时要核对的图），其余全删；`settings.screenshot_keep` 只是额外保留最近 N 张，不再是「全清 / 全留」的开关。
+  两个历史坑：① 以前只 glob `*.png`，而实际存的是 `.jpg`，**一张都没删掉过**（runs/ 堆到 223 张 27 MB）；② 停会话按「全清」执行，把下一步核对要用的图一起删了。**跑批中一律不碰**（删正在写的文件会让界面图裂）。
 - **重头跑的正确顺序**：点「重新开始」清进度 → **先清空购物车** → 再「一键全部加购」。顺序反了会得到「旧料 + 又加一遍」的重复清单。
 
 ---
@@ -697,7 +698,7 @@ select-sku → final_price（选完 SKU 的每份价）
 | `bom-site/runs/batch-progress.json` | 逐行结论（ok/failed/uncertain/skipped）+ 金额 + 缩略信息，**这是续跑的依据** |
 | `bom-site/runs/batch-lines.json` | 本轮 BOM 行（重启后不传 lines 也能续跑） |
 | `bom-site/runs/session-*.log` | 会话日志（含 `[batch] line #N status total=… search=… open=… sku=… add=…`） |
-| `bom-site/runs/*.png` | 失败截图与加购证据（跑完按 `screenshot_keep` 清理） |
+| `bom-site/runs/*.jpg` | 加购证据图：跑完只留本批（进度里点名的），旧批与采集图当场删 |
 | `bom-site/采购统计-*.html` | 由 `stat_report.py` 生成的统计报告（KPI/分类/已下单/失败/未跑/超量） |
 
 > v0.3 里写的 `purchase_intent.json` / `candidates.csv` / `cart_manifest.json` / `run_log.jsonl`

@@ -504,9 +504,17 @@ def _cleanup_old_runs(keep_days: int = 14) -> None:
     if keep_days <= 0:
         return
     cutoff = time.time() - keep_days * 86400
+    # 本批证据图例外：不管多久以前，只要进度里还点着名就不能删 ——
+    # 用户点「删上次加购」时要对着这些图核对买了什么。
+    try:
+        keep_shots = tr.batch_screenshot_names()
+    except Exception:  # noqa: BLE001
+        keep_shots = set()
     removed = freed = 0
     for pattern in ("*.log", "*.jpg"):
         for path in RUNS.glob(pattern):
+            if path.name in keep_shots:
+                continue
             try:
                 st = path.stat()
                 if st.st_mtime < cutoff:

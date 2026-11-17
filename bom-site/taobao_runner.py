@@ -400,6 +400,28 @@ def _item_id_of(url: str) -> str:
     return m.group(1) if m else ""
 
 
+SHOT_EXTS = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def batch_screenshot_names(prog: dict | None = None) -> set[str]:
+    """进度里点名的截图文件名 —— 这一批「买了什么」的证据图。
+
+    这些图要留到下一次点「删上一次加购」时核对，所以清理时按名单豁免。
+    进度被清过（重跑 / 重置）时退到底档，理由同 batch_removal_targets。
+    """
+    data = prog if isinstance(prog, dict) else load_batch_progress()
+    if not (data.get("lines") or {}):
+        data = load_archived_progress()
+    out: set[str] = set()
+    for rec in (data.get("lines") or {}).values():
+        if not isinstance(rec, dict):
+            continue
+        val = rec.get("screenshot")
+        if isinstance(val, str) and val.strip():
+            out.add(Path(val).name)
+    return out
+
+
 def batch_removal_targets(prog: dict | None = None) -> list[dict]:
     """从上次批量记录里挑出「本工具加进去的商品」，供购物车精准删除。
 
@@ -1151,7 +1173,7 @@ class SessionRunner:
             # 先落盘再清内存：顺序反了会把进度覆盖成空（见 _save_progress 注释）
             self._save_progress()
             self._reset_state()
-            # 会话都收工了，截图也没人要了
+            # 会话收工也照旧只留本批证据图：下一批开跑前要对着这些图核对「上次买了什么」
             self.cleanup_screenshots()
             return self.status()
 
@@ -1474,19 +1496,27 @@ class SessionRunner:
         return "/runs/" + name
 
     def cleanup_screenshots(self, keep: int | None = None) -> dict:
-        """清掉采集过程留下的截图。
+        """每跑完一批清一次：只留这一批的证据图，其余删掉。
 
-        一行淘宝会截 1~3 张首屏图，119 行就是三四百 MB，而且只有当下核对
-        用得上 —— 跑完就是纯垃圾。默认全清（settings.screenshot_keep=0），
-        想留几张排查就把 screenshot_keep 调大。
+        这里踩过两个坑，合起来等于「清理从没生效过」：
+
+        1. 只 glob `*.png`，而 `persist_screenshot` 存的是 `.jpg` —— 一张都没删掉过，
+           实测 `runs/` 堆到 223 张 27 MB。
+        2. 停会话时按「全清」执行。用户下一步要点的正是「删上一次加购」，
+           靠的就是这批图核对买了什么；全清等于把核对依据一起删了。
+
+        现在按**进度记录**判：进度里点名的截图（本批真正跑过的行）一张不动，
+        其余（更早批次、试跑、临时采集图）全删。`screenshot_keep` 只额外保留
+        最近 N 张用于排查，不是「保留全部」。
 
         会话还在跑的时候不删：正在写的文件删了会让界面上的图裂掉。
         """
-        proc = self._proc
-        if proc is not None and proc.poll() is None:
-            with self._state_lock:
-                if self._batch.get("running"):
-                    return {"deleted": 0, "freed_bytes": 0, "skipped": "批量运行中"}
+        # 只看批量标志，不看进程对象：以前要求「进程活着且在跑批」才跳过，
+        # 一旦 _proc 为空（换会话、进程对象丢了）就会在跑批途中删图，
+        # 正在写的文件直接裂在界面上。跑批中一律不碰。
+        with self._state_lock:
+            if self._batch.get("running"):
+                return {"deleted": 0, "freed_bytes": 0, "skipped": "批量运行中"}
         if keep is None:
             try:
                 keep = int(load_settings().get("screenshot_keep") or 0)
@@ -1494,15 +1524,29 @@ class SessionRunner:
                 keep = 0
         keep = max(0, keep)
 
+        keep_names = batch_screenshot_names()
         deleted = 0
         freed = 0
+        kept = 0
+        extra_kept = 0
         for folder in {self._artifacts, RUNS}:
             try:
-                shots = [p for p in Path(folder).glob("*.png") if p.is_file()]
+                shots = [
+                    p
+                    for p in Path(folder).iterdir()
+                    if p.is_file() and p.suffix.lower() in SHOT_EXTS
+                ]
                 shots.sort(key=lambda p: p.stat().st_mtime, reverse=True)
             except OSError:
                 continue
-            for p in shots[keep:]:
+            for p in shots:
+                if p.name in keep_names:
+                    kept += 1
+                    continue
+                if extra_kept < keep:
+                    extra_kept += 1
+                    kept += 1
+                    continue
                 try:
                     size = p.stat().st_size
                     p.unlink()
@@ -1513,8 +1557,16 @@ class SessionRunner:
 
         if deleted:
             mb = freed / 1024 / 1024
-            self._append_log(f"[site] 已清理 {deleted} 张截图，释放 {mb:.1f} MB")
-        return {"deleted": deleted, "freed_bytes": freed, "kept": keep}
+            self._append_log(
+                f"[site] 清理截图：删 {deleted} 张（{mb:.1f} MB），保留本批证据 {kept} 张"
+            )
+        return {
+            "deleted": deleted,
+            "freed_bytes": freed,
+            "kept": kept,
+            "kept_batch": len(keep_names),
+            "keep_extra": keep,
+        }
 
     # ---------------- 业务封装 ----------------
     def search(self, line: dict, query: str | None = None, require_scored: bool = False) -> dict:
@@ -2162,7 +2214,7 @@ class SessionRunner:
                         "attempts": [],
                     }
                 )
-        # 开跑前先清掉上一轮 / 手动操作留下的截图（默认全清，见 settings.screenshot_keep）
+        # 开跑前清一轮：只留进度里点名的证据图（上一批的），更早的、试跑的、手动采集的全删
         with self._state_lock:
             already = bool(self._batch.get("running"))
         if not already:

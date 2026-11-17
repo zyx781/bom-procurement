@@ -47,7 +47,7 @@ pip install -r requirements.txt
 启动BOM选型台.bat      ← 第 2 步：自检 → 后台起服务 → 打开界面
 ```
 
-三个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.11.0）。
+三个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.11.1）。
 
 打开 <http://127.0.0.1:8765/>。
 
@@ -108,7 +108,7 @@ bom-site/                     本地网站与调度
   lcsc.py                     立创商城器件查询（编号/型号 → 权威规格）
   window_pos.py               调试浏览器窗口显隐（跑批时不抢前台）
   static/                     前端（无框架）
-  test_*.py                  1179 项断言（14 套纯 Python 测试）
+  test_*.py                  1195 项断言（15 套纯 Python 测试）
   samples/                    示例 BOM / 候选
 Taobao-Search-Skill/scripts/  淘宝执行层（Playwright over CDP）
 taobao-bom-procurement/       决策层 SKILL 文档
@@ -133,13 +133,14 @@ python test_procurement_guard.py       # 107 项：采购正确性（编号锚�
 python test_bom_regression.py          # 265 项：三份真实 BOM 的多品类回归（金标快照 + 危险不变式）
 python test_candidate_replay.py        #  10 项：候选回放（31 条真机标题 + 6 条对抗样本，判定不许漂移）
 python test_sku_replay.py              #  48 项：SKU 档位回放（33 家真店的选项组，选中即核实）
+python test_screenshot_retention.py    #  16 项：截图留存（只留本批证据图，.jpg 也要能删）
 python test_integration.py             #  24 项：假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
 ```
 
-以上 14 套共 1179 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+以上 15 套共 1195 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
 另有 `python test_http.py`：需要服务**已经在 8765 跑着**，只做 HTTP 冒烟打印，不断言，故不进 CI。
 所有测试都把批量进度隔离到临时目录，不会碰到 `runs/` 里的真实进度。
-GitHub Actions 在 Windows runner 上跑 14 套测试 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。
+GitHub Actions 在 Windows runner 上跑 15 套测试 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。
 
 ### 多品类回归与候选回放（v0.10.0 → v0.11.0）
 
@@ -190,7 +191,7 @@ SKU 夹具同样可重建：`python tests/build_sku_replay.py` 从 `runs/sku-obs
 | `TAOBAO_COOLDOWN_EVERY` / `TAOBAO_COOLDOWN_SEC` | 20 / 40 | 每 N 行冷却 M 秒 |
 | `TAOBAO_UNC_TRIGGER` / `TAOBAO_UNC_COOL` / `TAOBAO_UNC_COOL_MAX` | 2 / 60 / 300 | 连续无回执时的自适应降温 |
 | `TAOBAO_CART_WARN` / `TAOBAO_CART_STOP` | 150 / 190 | 购物车件数提醒 / 拒跑阈值 |
-| `BOM_KEEP_DAYS` | 14 | runs/ 里日志与截图的保留天数（0 = 不清理） |
+| `BOM_KEEP_DAYS` | 14 | runs/ 里日志与旧截图的保留天数（0 = 不清理）；本批证据图不受此限 |
 
 ## License
 

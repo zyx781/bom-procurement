@@ -68,6 +68,27 @@ cd bom-site
 python server.py            # 默认 127.0.0.1:8765
 ```
 
+### 2.1 配置与数据放在哪
+
+本机配置是 `bom-site/settings.json`，**不进仓库**；仓库里只放模板 [`settings.example.json`](bom-site/settings.example.json)。没有 `settings.json` 时程序直接读模板，所以 clone 下来不复制也能跑；想改端口或节奏再自己建一份：
+
+```bash
+cd bom-site
+cp settings.example.json settings.json
+```
+
+它控制调试端口（`cdp_url`）、跑批节奏（`pace` / `speed`）和每行金额上限（`max_line_cost`）。写坏了也不会起不来：解析失败会打一行警告并退回模板。
+
+登录态和浏览器数据都在**项目目录里**，不写系统用户目录，也不随 git 走：
+
+| 路径 | 什么时候产生 |
+|---|---|
+| `bom-site/.cdp-profile/` | 用调试版 Edge（配了 `cdp_url`）时的浏览器用户目录，登录 cookie 在 `Default/Network/Cookies` |
+| `bom-site/.browser-profile/` | 不配 `cdp_url`、走内置 Playwright 时的用户目录，同样含 cookie |
+| `Taobao-Search-Skill/scripts/.cache/` | 绕过网页直接跑执行层命令时的默认 profile |
+
+三处都在 `.gitignore` 里。**分享项目时只给代码，别把这两个 profile 目录一起拷走** —— 里面的 cookie 等同于登录凭证。需要换位置（比如放加密盘）可以用环境变量 `TAOBAO_PROFILE_DIR`，默认值就是项目内的 `.browser-profile`。
+
 ### 3. 首次使用
 
 1. 上传 BOM（CSV / XLSX），确认解析结果与警告
@@ -133,7 +154,8 @@ bom-site/                     本地网站与调度
   lcsc.py                     立创商城器件查询（编号/型号 → 权威规格）
   window_pos.py               调试浏览器窗口显隐（跑批时不抢前台）
   static/                     前端（无框架）
-  test_*.py                  1195 项断言（15 套纯 Python 测试）
+  settings.example.json       本机配置模板（settings.json 本身不进仓库）
+  test_*.py                  1298 项断言（18 套纯 Python 测试）
   samples/                    示例 BOM / 候选
 Taobao-Search-Skill/scripts/  淘宝执行层（Playwright over CDP）
 taobao-bom-procurement/       决策层 SKILL 文档
@@ -145,27 +167,31 @@ VERSION                       当前版本号
 
 ```bash
 cd bom-site
-python test_engine.py                 # 193 项：解析与规则
+python test_engine.py                 # 217 项：解析与规则
 python test_lcsc.py                    #  80 项：立创编号解析与型号核准
-python test_sku_selection.py            #  77 项：SKU 选择与门禁
-python test_runner.py                   # 179 项：调度、对账、进度、续跑
+python test_sku_selection.py            #  84 项：SKU 选择与门禁
+python test_runner.py                   # 184 项：调度、对账、进度、续跑
 python test_verification_recovery.py    #  27 项：验证/风控恢复
 python test_window_focus.py            #  58 项：窗口显隐与不抢前台
 python test_click_guard.py              #  14 项：点击三守卫
 python test_cart_cleanup.py             #  35 项：精准清车不误删、删车后进度作废
-python test_batch_progress_guard.py     #  62 项：换 BOM 不误用上一批进度、重跑语义、引擎升级不误判换表
+python test_batch_progress_guard.py     #  71 项：换 BOM 不误用上一批进度、重跑语义、引擎升级不误判换表
 python test_procurement_guard.py       # 107 项：采购正确性（编号锚定/设计值/单价/同系列降规格/演练同闸门）
-python test_bom_regression.py          # 265 项：三份真实 BOM 的多品类回归（金标快照 + 危险不变式）
+python test_bom_regression.py          # 262 项：三份真实 BOM 的多品类回归（金标快照 + 危险不变式）
 python test_candidate_replay.py        #  10 项：候选回放（31 条真机标题 + 6 条对抗样本，判定不许漂移）
 python test_sku_replay.py              #  48 项：SKU 档位回放（33 家真店的选项组，选中即核实）
 python test_screenshot_retention.py    #  16 项：截图留存（只留本批证据图，.jpg 也要能删）
+python test_single_run.py              #  18 项：单行执行（前置拦截、进度只覆盖这一行）
+python test_line_update.py             #  19 项：人工放行 / 改搜索词会落盘
+python test_cart_remove_line.py        #  25 项：行级删车（只删这一件，别的行不动）
+python test_settings.py                #  23 项：配置回落 example、登录态目录可被环境变量覆盖
 python test_integration.py             #  24 项：假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
 ```
 
-以上 15 套共 1195 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+以上 18 套共 1298 项断言 + 24 项端到端，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
 另有 `python test_http.py`：需要服务**已经在 8765 跑着**，只做 HTTP 冒烟打印，不断言，故不进 CI。
 所有测试都把批量进度隔离到临时目录，不会碰到 `runs/` 里的真实进度。
-GitHub Actions 在 Windows runner 上跑 15 套测试 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。
+GitHub Actions 在 Windows runner 上跑 18 套测试 + 端到端 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。
 
 ### 多品类回归与候选回放（v0.10.0 → v0.11.0）
 
@@ -194,6 +220,8 @@ SKU 夹具同样可重建：`python tests/build_sku_replay.py` 从 `runs/sku-obs
 | 双击 bat 后中文乱码 | 脚本已固定 `chcp 65001` + UTF-8；若仍乱码，确认按 `.gitattributes` 检出（`.bat` 为 CRLF），别用记事本另存为 ANSI |
 | 启动器说 8765 被占用 | 先跑 `启动BOM选型台.bat diag` 看是谁占着；多半是上次没退干净，跑 `启动BOM选型台.bat stop` 再启动 |
 | 提示缺少 playwright / openpyxl | `pip install -r requirements.txt` |
+| clone 下来没有 `bom-site/settings.json` | 正常，它不进仓库。没有就按 `settings.example.json` 跑；要改配置再 `copy settings.example.json settings.json` |
+| 登录态在哪个文件，能不能直接分享项目文件夹 | 在 `bom-site/.cdp-profile/` 或 `.browser-profile/` 里（`Default/Network/Cookies`）。这是登录凭证，分享时只给代码，别拷这两个目录 |
 | 9222 被普通 Edge 占了 / CDP 不通 | 关掉所有 Edge 窗口再双击 `打开调试版Edge.bat`；脚本会先探测 CDP，已就绪就不重复启动 |
 | 服务起不来，窗口一闪而过 | 窗口不会自动关（失败会 pause），看报错；或跑 `diag` 查 `bom-site/runs/server.err.log` |
 | 加购频繁「无回执」 | 多为限流前兆，程序会自动降温；可调 `TAOBAO_LINE_GAP`、`TAOBAO_COOL_*` 环境变量放慢 |

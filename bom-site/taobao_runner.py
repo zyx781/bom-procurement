@@ -40,7 +40,11 @@ ARTIFACTS = (REPO / "scripts" / ".cache" / "taobao-search-skill" / "artifacts").
 # 否则集成测试会把用户真实的 batch-progress.json 覆盖成 1 行假数据。
 RUNS = Path(os.environ.get("TAOBAO_RUNS_DIR") or (BASE / "runs")).resolve()
 RUNS.mkdir(parents=True, exist_ok=True)
+# 本机配置不进仓库：调过的节奏、单价上限、CDP 端口都是「这台机器的事」。
+# 仓库里只放 settings.example.json，新人 clone 下来直接可用；他改自己的
+# settings.json 也不会把本机参数带进下一次提交。
 SETTINGS_FILE = BASE / "settings.json"
+SETTINGS_EXAMPLE_FILE = BASE / "settings.example.json"
 
 
 PROGRESS_FILE = RUNS / "batch-progress.json"
@@ -751,11 +755,44 @@ def line_has_query(line: dict) -> bool:
     return bool(ln.get("query_plan") or (ln.get("decision") or {}).get("search_queries"))
 
 
+_settings_warned = False
+
+
 def load_settings() -> dict:
+    """读本机配置；没有 settings.json 就退回仓库里的 example。
+
+    settings.json 现在被 .gitignore 挡着，纯本地文件。缺它时不能直接返回 {}：
+    example 里有 cdp_url / 节奏 / 单价上限，新人 clone 下来必须拿到同一套默认，
+    否则「打开调试版 Edge → 启动会话」这条 README 主流程会连不上。
+    """
+    global _settings_warned
     try:
         return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
-    except Exception:
+    except FileNotFoundError:
+        pass
+    except Exception as exc:  # noqa: BLE001 —— 手改坏一个逗号不该让服务起不来
+        if not _settings_warned:
+            _settings_warned = True
+            _log(f"[site] settings.json 解析失败（{exc}），改用 settings.example.json")
+    try:
+        return json.loads(SETTINGS_EXAMPLE_FILE.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
         return {}
+
+
+def session_env() -> dict:
+    """执行层子进程的环境变量。
+
+    TAOBAO_PROFILE_DIR 用 setdefault：默认登录态落在项目内的
+    .browser-profile（跟项目走，删项目就没了，也不会串到系统用户目录），
+    但允许外部用环境变量改到别处 —— 以前是硬赋值，设了也不生效。
+    """
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONUNBUFFERED"] = "1"
+    env.setdefault("TAOBAO_PROFILE_DIR", str(BASE / ".browser-profile"))
+    return env
 
 
 # ---------------- 调试浏览器（CDP）自动就绪 ----------------
@@ -1186,11 +1223,7 @@ class SessionRunner:
             self._log_path = RUNS / f"session-{self._task_id}.log"
             self._log_path.write_text("", encoding="utf-8")
 
-            env = os.environ.copy()
-            env["PYTHONIOENCODING"] = "utf-8"
-            env["PYTHONUTF8"] = "1"
-            env["PYTHONUNBUFFERED"] = "1"
-            env["TAOBAO_PROFILE_DIR"] = str(BASE / ".browser-profile")
+            env = session_env()
             settings = load_settings()
             cdp_url = os.environ.get("TAOBAO_CDP_URL") or settings.get("cdp_url")
             if cdp_url:

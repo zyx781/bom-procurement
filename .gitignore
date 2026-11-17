@@ -4,6 +4,11 @@ bom-site/.cdp-profile/
 *.cookie
 *.cookies
 
+# ---- 本机配置：模板在 settings.example.json，实际用的这份不进仓库 ----
+# 里面是本机的调试端口、跑批节奏、单行金额上限；进仓库会让别人继承
+# 我的调参（比如把拟人停顿压到 0.2 更容易撞风控），也容易日后写进敏感项。
+bom-site/settings.json
+
 # ---- 运行数据（含真实商品、价格、会话日志、截图）----
 bom-site/runs/
 runs/

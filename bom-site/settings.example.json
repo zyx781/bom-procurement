@@ -1,7 +1,7 @@
 {
   "cdp_url": "http://127.0.0.1:9222",
   "pace": "fast",
-  "speed": 0.2,
+  "speed": 0.35,
   "idle_timeout": 2,
   "screenshot_keep": 0,
   "max_line_cost": {

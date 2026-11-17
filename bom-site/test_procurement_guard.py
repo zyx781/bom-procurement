@@ -38,8 +38,13 @@ def res_line(no, desc, mpn="MF1/4W-1KΩ±1%T52", qty=3):
 
 
 print("== 1. 名称列是设计值，优先于复用的旧型号 ==")
+# 必须在整表上看：470Ω / 2.2K / 5kΩ / 4K7 四行的 Manufacturer Part 全是
+# MF1/4W-1KΩ±1%T52（复制没改）。单行分析区分不出「型号是这颗料的」还是
+# 「复制错的旧值」，也就说不出该信名称列还是信型号列。
+_reuse_rows = [res_line(no, desc) for no, desc in ((2, "5kΩ"), (14, "470"), (16, "2.2K"), (20, "4K7"))]
+_by_no = {ln["line_no"]: ln for ln in engine.analyze(_reuse_rows)["lines"]}
 for no, desc, want in ((2, "5kΩ", 5000.0), (14, "470", 470.0), (16, "2.2K", 2200.0), (20, "4K7", 4700.0)):
-    b = engine.analyze_line(res_line(no, desc), no)
+    b = _by_no[no]
     got = b["params"].get("resistance_ohm")
     check(f"{desc} → {want:g}Ω", got == want, got)
     check(f"{desc} 冲突写进风险", bool(b.get("value_conflict")), b.get("value_conflict"))
@@ -53,6 +58,28 @@ check("名称为 1K 时仍取 1000Ω", b["params"].get("resistance_ohm") == 1000
 b = engine.analyze_line(dict(line_no=4, mpn="CC1H103ZA1ED3F4D1100", desc="10nF",
                              package="CAP-TH_L5.0-W2.5-P2.50-D0.5", qty=1, refs="C1"), 4)
 check("10nF 容值仍是 10nF", abs(b["params"].get("capacitance_f", 0) - 1e-8) < 1e-12, b["params"])
+
+print("== 1b. 名称列 vs 立创编号对不上、型号又没被复用 → 一行都不许买 ==")
+# 现场来自 2026-11-16 的电源板真 BOM：
+#   #6 名称 5.6Ω，编号 C325562 是 5.6kΩ（差 1000 倍）
+#   #17 名称 22uF，同型号商品 C5137467 是 100nF（差 220 倍）
+# 以前这两行只在风险里写一句「不自动采购」，搜索词照给，照样一路买到购物车。
+_hard_cases = [
+    ("5.6kΩ 编号 vs 5.6Ω 名称",
+     dict(line_no=6, mpn="RMC04025.6K5%N", desc="5.6Ω", package="R0402", qty=2, refs="R5,R10"),
+     {"code": "C325562", "model": "RMC04025.6K5%N", "matched_by": "code", "package": "0402",
+      "params": {"resistance_ohm": 5600.0, "power_w": 0.0625}, "attrs": {"阻值": "5.6kΩ"}}),
+    ("100nF 型号 vs 22uF 名称",
+     dict(line_no=17, mpn="FCC0805B104K500DT", desc="22uF", package="C0805", qty=10, refs="C18"),
+     {"code": "C5137467", "model": "FCC0805B104K500DT", "matched_by": "model", "package": "0805",
+      "params": {"capacitance_f": 100e-9, "voltage_v": 50.0}, "attrs": {"容值": "100nF"}}),
+]
+for name, row, lcsc_info in _hard_cases:
+    h = engine.analyze_line(dict(row, lcsc="", lcsc_info=lcsc_info), row["line_no"])
+    check(f"{name}：不生成搜索词", h["query_plan"] == [], h["query_plan"])
+    check(f"{name}：状态转人工", h["status"] == "needs_user", h["status"])
+    check(f"{name}：blocking 说清冲突", any("对不上" in x or "冲突" in x for x in h["blocking"]), h["blocking"])
+    check(f"{name}：仍留 V01 证据", any(r["code"] == "V01" for r in h["risks"]), h["risks"])
 
 print("== 2. 纯数值解析只对电阻猜裸数字 ==")
 check("470 解析成 470Ω", engine._design_value_from_text("470", "resistor") == {"resistance_ohm": 470.0})

@@ -1083,6 +1083,12 @@ _RE_DIM_ONLY = re.compile(r"^\s*\d+(?:\.\d+)?\s*[x×*]\s*\d+(?:\.\d+)?\s*(?:mm)?
 
 def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> dict:
     row = row or {}
+    options = options or {}
+    # 型号列被多行复用 = 型号列根本没在维护。实测一份 BOM 里 470Ω / 2.2K / 5kΩ
+    # 三行的 Manufacturer Part 全是 MF1/4W-1KΩ±1%T52（复制没改）。这种行的型号
+    # 不能当身份证据：拿它去和名称列比对，等于用「复制错的旧值」否定设计值。
+    _reuse_key = lcsc.normalize_model(str(row.get("mpn") or "").strip())
+    _mpn_reused = bool(_reuse_key) and _reuse_key in (options.get("reused_mpns") or set())
     combined = " ".join(
         str(row.get(k) or "") for k in ("mpn", "desc", "params", "package", "note")
     )
@@ -1290,6 +1296,16 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
         and not str((lcsc_info or {}).get("code") or "").strip()
     )
 
+    # 只有「硬冲突」才挡住采购：名称列 vs 立创编号/同型号商品对不上，而型号列
+    # 本身也没被复用 —— 这时两边都是可信证据，买哪个都是猜，必须人工定。
+    # 型号列被多行复用时不算硬冲突（那份型号不是这颗料的），仍按名称列买。
+    _hard_conflict = bool(value_conflict) and not _mpn_reused
+    if value_conflict and _mpn_reused:
+        value_conflict = (
+            f"名称列写 {desc or '—'}，但型号列的 {str(row.get('mpn') or '').strip()} "
+            f"在本表里被多行复用（不是这颗料的身份），已按名称列的值采购"
+        )
+
     missing, blocking = [], []
     if package == "":
         missing.append("封装")
@@ -1315,6 +1331,14 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
         blocking.append("名称列写 NC / 不贴装：这颗元件不需要采购（料号栏多半是上一版残留）")
     if dim_only:
         blocking.append("只有尺寸、没有型号和编号，淘宝无法定位（结构件或自制件），请人工处理")
+    if value_conflict:
+        if _hard_conflict:
+            # 名称列和立创编号各说各值，谁都可能是对的：买哪个都是猜。
+            # 以前只记一条 V01 风险就照名称列去搜 —— 实测两份真 BOM 里
+            # #6 名称写 5.6Ω、编号是 5.6kΩ（差 1000 倍），#17 名称写 22uF、
+            # 同型号商品是 100nF（差 220 倍），两行都带着 V01 一路搜到加购。
+            # 「不自动采购」写在文案里而执行层不认，等于没写。
+            blocking.append(value_conflict)
 
     status = "needs_user" if blocking else "ready"
 
@@ -1355,7 +1379,12 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
             _cap_kind = "钽"
         elif "ceramic" in _blob or "陶瓷" in _blob or "瓷片" in _blob:
             _cap_kind = "瓷片"
-    if not_fitted or dim_only:
+    # 只有「硬冲突」才挡住采购：名称列 vs 立创编号/同型号商品对不上，而型号列
+    # 本身也没被复用 —— 这时两边都是可信证据，买哪个都是猜，必须人工定。
+    # 型号列被多行复用时不算硬冲突（那份型号不是这颗料的），仍按名称列买。
+    if not_fitted or dim_only or _hard_conflict:
+        # 硬冲突行连搜索词都不给：留着搜索词，页面上的「继续加购」照样会把它跑掉，
+        # 空搜索词才会在执行层被明确跳过并写清原因。
         queries = []
     else:
         queries = _build_queries(
@@ -1987,7 +2016,19 @@ def _build_decision(category, package, p, mpn, desc, qty, critical, gates, queri
 
 
 def analyze(rows, options=None) -> dict:
-    options = options or {}
+    options = dict(options or {})
+    # 先扫一遍「型号列被复用」的料号：同一个型号挂在两个不同设计值上，说明
+    # 型号列是从库里复制过来忘了改。这类行的型号不能当身份证据（否则三条线一起买错），
+    # 但也不该把整行拦住 —— 名称列才是原理图上的设计值。
+    _seen: dict = {}
+    for _row in rows or []:
+        _m = lcsc.normalize_model(str((_row or {}).get("mpn") or "").strip())
+        if not _m:
+            continue
+        _d = str((_row or {}).get("desc") or "").strip()
+        if _d:
+            _seen.setdefault(_m, set()).add(_d)
+    options["reused_mpns"] = {m for m, ds in _seen.items() if len(ds) > 1}
     lines = []
     for i, row in enumerate(rows or []):
         try:

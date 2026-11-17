@@ -155,6 +155,10 @@ conf = [(n, l) for n, l in all_lines if str(l["row"].get("desc") or "").strip() 
 check("5.6Ω 行存在", len(conf) == 1)
 for n, l in conf:
     check(f"{n}#{l['line_no']} 名称 5.6Ω 与编号 5.6kΩ 冲突被标记", l.get("value_conflict"), "未标记")
+    # 名字对不上编号的行，搜索词就是「购买指令」：给了就是让它去买一个猜出来的值。
+    # 实测这一行曾经带着 4 条 5.6Ω 的搜索词一路跑到加购（差 1000 倍）。
+    check(f"{n}#{l['line_no']} 冲突行不给搜索词", not (l.get("query_plan") or []), l.get("query_plan"))
+    check(f"{n}#{l['line_no']} 冲突行转人工", l.get("status") == "needs_user", l.get("status"))
 
 # 任何一行都不该把空串/None 当搜索词
 for n, l in all_lines:

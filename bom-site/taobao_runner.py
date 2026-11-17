@@ -100,6 +100,28 @@ def _progress_archive_file() -> Path:
     return pf.with_name(f"{pf.stem}-prev{pf.suffix}")
 
 
+def _sku_obs_file() -> Path:
+    """真机见过的 SKU 档位流水（JSONL，一行一家店）。
+
+    跟着 PROGRESS_FILE 走，测试/演练不会写进真实 runs/。刻意用 append 追加，
+    每一行自带时间与行号，重复跑同一行只是多几条记录 —— 回放集按「最新一条」
+    取即可，不做去重逻辑，省掉一整类「合并时把好数据覆盖掉」的麻烦。
+    """
+    pf = PROGRESS_FILE
+    return pf.with_name("sku-observations.jsonl")
+
+
+def record_sku_observation(rec: dict) -> None:
+    """把一次开页看到的 SKU 档位追加到流水里（失败不影响主流程）。"""
+    try:
+        path = _sku_obs_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception as exc:  # noqa: BLE001
+        _log(f"[sku] 记录 SKU 档位失败（忽略）：{exc}")
+
+
 def load_archived_progress() -> dict:
     try:
         data = json.loads(_progress_archive_file().read_text(encoding="utf-8"))
@@ -1610,7 +1632,7 @@ class SessionRunner:
         data = resp.get("data") or {}
         item = data.get("item") or {}
         groups = data.get("sku_groups") or []
-        suggestions, unresolved = suggest_sku(line, groups)
+        suggestions, unresolved = suggest_sku(line, groups, item.get("title") or "")
         sku_texts = [s.get("value", "") for s in suggestions]
         pack, pack_src = _pack_from_texts(sku_texts, explicit_only=False, allow_generic=True)
         if not pack:
@@ -2900,6 +2922,9 @@ class SessionRunner:
             attempt["open_ms"] = int((time.monotonic() - _t_open) * 1000)
             if opened is None:
                 continue
+            # SKU 组的全量档位留痕：真机跑一次就把「这家店里到底有没有这一档」记下来，
+            # 后面做候选回放/选型回放时不用再开浏览器（回放最大的盲区就在 SKU 层）。
+            attempt["sku_options"] = condense_sku_groups(opened.get("sku_groups"))
             # 单规格商品没有 SKU 可核对，标题是唯一的规格来源：标题里读不到 BOM 要的
             # 那个值，就不加购。实测 5kΩ 搜出来的整页压敏电阻就是从这个口子进去的。
             if opened.get("no_sku"):
@@ -2938,6 +2963,25 @@ class SessionRunner:
             sels = opened.get("suggestions") or []
             no_sku = bool(opened.get("no_sku"))
             manual = [s for s in sels if not s.get("auto")]
+            # 一次开页就把结论留下来：这家店里到底有没有这一档、系统选了哪个值。
+            # 以后回放/复盘不用再开浏览器（SKU 层是标题闸门唯一的盲区）。
+            record_sku_observation(
+                {
+                    "at": datetime.now().isoformat(timespec="seconds"),
+                    "dry": bool(dry_run),
+                    "line_no": line.get("line_no"),
+                    "headline": line.get("mpn") or (line.get("desc") or "")[:40],
+                    "category": line.get("category"),
+                    "title": cand.get("title"),
+                    "url": cand.get("url"),
+                    "price": cand.get("price"),
+                    "no_sku": no_sku,
+                    "sku_options": attempt.get("sku_options") or [],
+                    "suggestions": sels,
+                    "unresolved": unresolved,
+                    "line": line,
+                }
+            )
 
             # 包规经常藏在 SKU 里（选了「100只」才知道），标题看不出来。
             # 打开后发现超量太狠（只要 1 个却要买 100 个），只要后面还有候选
@@ -3055,6 +3099,7 @@ class SessionRunner:
                     pack_size=opened.get("pack_size"),
                     actual_pcs=_pcs,
                     dry_run=True,
+                    sku_options=attempt.get("sku_options") or [],
                 )
                 return base
             # 加购最多尝试两次：第一次「点了没回执」时，先查购物车——
@@ -3168,6 +3213,7 @@ class SessionRunner:
                 unit_price=added.get("unit_price") or opened.get("unit_price"),
                 bom_qty=opened.get("bom_qty"),
                 sku=sels,
+                sku_options=attempt.get("sku_options") or [],
                 screenshot=added.get("screenshot"),
                 cart_verified_via=added.get("cart_verified_via"),
                 select_ms=added.get("select_ms"),
@@ -3190,7 +3236,7 @@ RUNNER = SessionRunner()
 _PKG_PREFIX = re.compile(r"^\s*(0201|0402|0603|0805|1206|1210|1812|2512)\s*")
 _RISK_WORDS = ("散新", "拆机", "翻新", "打磨", "改字", "白字", "洗板", "二手", "返修")
 # 这些 SKU 值根本不能直接下单（要询价/改价），命中就直接判定该候选不可买
-_UNBUYABLE = ("询价", "联系客服", "拍下改价", "议价")
+_UNBUYABLE = ("询价", "联系客服", "拍下改价", "议价", "备注", "留言型号")
 
 
 # 整包报价的包装数解析统一放在 engine（比价也要用同一套规则），这里只做别名
@@ -3847,6 +3893,12 @@ def _sku_resistance(text: str, allow_bare: bool = False):
     # 真正的 470R 永远读不到，整组 SKU 全被判成「与 BOM 冲突」。
     t = re.sub(r"\d+\s*/\s*\d+\s*[wW]", "", t)
     t = re.sub(r"\d+(?:\.\d+)?\s*[wW](?![a-zA-Z])", "", t)
+    # 容差/精度常写在值前面：「0402 （精度1%）33K 10000个」「±5% 4K7」。
+    # 那个 1 会被 ^[^0-9Rr]+ 的剥离当成值的开头，整组选项就读不出阻值 ——
+    # 实测 #4（200kΩ）在某家店里全组 33K/36K/39K… 一个都没读出来，
+    # 结果按「封装+精度」25 分挑了个 33K，直到值闸门才发现不对。
+    t = re.sub(r"[±+]?\s*\d+(?:\.\d+)?\s*%", "", t)
+    t = re.sub(r"[（(]?\s*精度", "", t)
     # 前面的中文/字母（金属膜、绕线、色环）也不该挡住数值
     t = re.sub(r"^[^0-9Rr]+", "", t)
     if not t:
@@ -4169,6 +4221,18 @@ def _conn_kind(line: dict) -> str | None:
     return engine.connector_series(line.get("package") or "", line.get("desc"), line.get("mpn"))
 
 
+def _pkg_code(text: str) -> str:
+    """从一段文本里读出唯一的封装代号（0402/0603/2010…）。
+
+    只在「这段文字里只出现一个封装」时返回：一个链接常同时挂 0402/0603/0805，
+    那时封装本身不构成判据（由别的闸门管），乱猜会把正常选项全否掉。
+    """
+    got = set(
+        re.findall(r"(?<!\d)(0201|0402|0603|0805|1206|1210|1812|2010|2512)(?!\d)", str(text or ""))
+    )
+    return got.pop() if len(got) == 1 else ""
+
+
 def _sku_veto(line: dict, label: str, text: str) -> str | None:
     """硬属性不一致 → 这个 SKU 值直接出局，不允许靠"总分高"混过。
 
@@ -4182,6 +4246,14 @@ def _sku_veto(line: dict, label: str, text: str) -> str | None:
         return None
     if any(w in t for w in _UNBUYABLE):
         return "要询价/改价，不能直接下单"
+    # 封装：BOM 要 0402，SKU 写 2010 —— 焊盘从 1.0×0.5mm 变成 5.0×2.5mm，装不上。
+    # 标题闸门看不出这个：「贴片电阻 100R 1% 5% 0402/0603/…/2010」标题里 0402 在，
+    # 真机上却选中了「2010贴片电阻 100R ±5%（10只）」。
+    _bom_pkg = _pkg_code(str(line.get("package") or ""))
+    if _bom_pkg:
+        _got_pkg = _pkg_code(t)
+        if _got_pkg and _got_pkg != _bom_pkg:
+            return f"封装 {_got_pkg} ≠ 要求 {_bom_pkg}"
     if "resistance_ohm" in p:
         r = _sku_resistance(t, allow_bare=True)
         if r is not None and not _close(r, p["resistance_ohm"]):
@@ -4492,7 +4564,80 @@ def _tie_pick(line: dict, options: list):
     return min(options, key=key)[1]
 
 
-def suggest_sku(line: dict, groups: list) -> tuple[list, list]:
+def condense_sku_groups(groups: list, max_values: int = 60, max_groups: int = 8) -> list:
+    """把页面抓到的 SKU 组压成能落盘/能回放的轻量副本。
+
+    只留判定真正用到的三样：组名、值文本、是否禁用。一个「颜色分类」组
+    常有上百个值，原样抄进结果 JSON 会让进度文件暴涨；而回放要复现的恰恰是
+    「这一档 SKU 里根本没有 5kΩ」——那只需要值文本就够了。字段名与页面结构
+    保持一致，回放时可以直接喂给 `suggest_sku` / `_material_conflict`。
+    """
+    out = []
+    for g in (groups or [])[:max_groups]:
+        if not isinstance(g, dict):
+            continue
+        vals = []
+        for v in (g.get("values") or [])[:max_values]:
+            if not isinstance(v, dict):
+                continue
+            text = str(v.get("text") or "").strip()
+            if not text:
+                continue
+            vals.append(
+                {
+                    "text": text,
+                    "disabled": bool(v.get("disabled")),
+                    "selected": bool(v.get("selected")),
+                }
+            )
+        label = str(g.get("label") or "").strip()
+        if label or vals:
+            out.append({"label": label, "values": vals})
+    return out
+
+
+def _fmt_need_values(line: dict) -> str:
+    """把 BOM 要的阻值/容值/感值写成人话，用于「这家店没有这一档」的提示。"""
+    p = line.get("params") or {}
+    out = []
+    for key, kind in (
+        ("resistance_ohm", "阻值"),
+        ("capacitance_f", "容值"),
+        ("inductance_h", "感值"),
+    ):
+        if p.get(key) is None:
+            continue
+        try:
+            out.append(f"{kind} {engine._fmt_param_value(key, p[key])}")
+        except Exception:  # noqa: BLE001
+            continue
+    return "、".join(out)
+
+
+def _reads_value(line: dict, text: str) -> bool:
+    """这段文字里有没有读出「BOM 关心的那类数值」（对不对不管）。
+
+    用来区分两种完全不同的商品：
+      · 「在卖阻值，但没有 BOM 要的那一档」→ 该拒，理由写「这家没有 75kΩ」；
+      · 「整页不写阻值」（值在型号里/藏在默认项）→ 不该在这一层判死。
+    """
+    p = line.get("params") or {}
+    t = str(text or "")
+    if not t:
+        return False
+    try:
+        if p.get("resistance_ohm") is not None and _sku_resistance(t, allow_bare=True) is not None:
+            return True
+        if p.get("capacitance_f") is not None and _sku_capacitance(t) is not None:
+            return True
+        if p.get("inductance_h") is not None and _sku_inductance(t) is not None:
+            return True
+    except Exception:  # noqa: BLE001
+        return False
+    return False
+
+
+def suggest_sku(line: dict, groups: list, title: str = "") -> tuple[list, list]:
     suggestions, unresolved = [], []
     # P0-3：精密档（要求 ≤0.5%）最终选中的 SKU 组合里必须能读到容差，
     # 否则不自动买。放在组循环外统一判 —— 容值/容差经常是独立 SKU 组，
@@ -4523,9 +4668,17 @@ def suggest_sku(line: dict, groups: list) -> tuple[list, list]:
             else:
                 keeps.append(v)
         if not keeps:
+            # 只报「第一个被否的选项」会误导：一组里 100PF 是值不对、330PF 是介质不对，
+            # 人看到「容值 100pF ≠ 要求 330pF」会以为这家有 330pF 只是排版问题。
+            # 按「问题类型」去重后列出来，才看得出这家到底缺什么。
+            _kinds: list = []
+            for _v, _why in vetoed:
+                _k = re.split(r"[ ：]", _why, maxsplit=1)[0].strip()[:10]
+                if _k and _k not in _kinds:
+                    _kinds.append(_k)
             reason = "所有选项都与 BOM 冲突"
-            if vetoed:
-                reason += f"（{vetoed[0][1]}）"
+            if _kinds:
+                reason += "（" + "；".join(_kinds[:3]) + "）"
             unresolved.append(
                 {
                     "label": label,
@@ -4580,10 +4733,18 @@ def suggest_sku(line: dict, groups: list) -> tuple[list, list]:
             auto = True
             note = "该组只区分包装数量，取最小包装"
         elif best_score <= -50:
+            _reasonable = "所有选项都与 BOM 冲突"
+            _need = _fmt_need_values(line)
+            if _need and not _title_value_kinds(line, " ".join(v.get("text", "") for v in enabled_ok)):
+                # 整组都是数值、却没有一个是 BOM 要的那一档 —— 这是「这家店不卖这个值」，
+                # 不是「BOM 有问题」。报「与 BOM 冲突」会把人引去改 BOM。
+                _sample = "、".join(str(v.get("text") or "")[:14] for v in enabled_ok[:5])
+                _reasonable = f"该店没有 BOM 要的 {_need}（只有 {_sample} 等），换下一家"
+                _log(f"[sku] {_reasonable}")
             unresolved.append(
                 {
                     "label": label,
-                    "reason": "所有选项都与 BOM 冲突",
+                    "reason": _reasonable,
                     "values": [v.get("text") for v in enabled[:20]],
                 }
             )
@@ -4638,6 +4799,35 @@ def suggest_sku(line: dict, groups: list) -> tuple[list, list]:
                 }
             )
             return [], unresolved
+    # 最后一道：把标题和选中的值拼起来，BOM 要的那个值到底读不读得到。
+    # 前面每组各管各的，很容易出现「封装组选了 0402、包装组选了 100只」，
+    # 却没有一组真正携带阻值 —— 真机上 #5（75kΩ）就这样选出了一家只卖
+    # 0.15R/0.68R 的店，靠 `_add_line_to_cart` 里的事后闸门才拦住。
+    # 这里提前判掉，退回的失败原因才写得准（「这家没有 75kΩ」而不是「核实不到阻值」）。
+    _need_kinds = _required_value_kinds(line)
+    if _need_kinds and suggestions and not unresolved:
+        _texts = [str(title or "")] + [
+            str(v.get("text") or "") for g in (groups or []) for v in (g.get("values") or [])
+        ]
+        # 只有当这件商品**自己提到过这类值**时才有资格判「没有这一档」：
+        # 有些链接整页不写阻值（值只在标题的型号里，或靠默认项），那种情况不该
+        # 在这里判死，交给执行层的事后闸门（它拿标题一起核）。这条只负责
+        # 「明明在卖阻值，却没有 BOM 要的那个」——真机上 75kΩ 选中只卖 0.15R 的店。
+        if any(_reads_value(line, t) for t in _texts):
+            _prove = " ".join([str(title or "")] + [s.get("value", "") for s in suggestions])
+            _miss = _need_kinds - _title_value_kinds(line, _prove)
+            if _miss:
+                unresolved.append(
+                    {
+                        "label": "整页",
+                        "reason": (
+                            f"标题和选中的 SKU 都读不到 BOM 要的 {_fmt_need_values(line)}，"
+                            "这家没有这一档，换下一家"
+                        ),
+                        "values": [],
+                    }
+                )
+                return [], unresolved
     return suggestions, unresolved
 
 

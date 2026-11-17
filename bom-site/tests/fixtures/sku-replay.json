@@ -1,0 +1,2954 @@
+[
+ {
+  "id": "power-01-5k1-single",
+  "source": "real",
+  "note": "标题写明 5.1kΩ，SKU 只有包装",
+  "line_no": 1,
+  "title": "RMC04025.1K1%N 5.1kΩ 0402 ±1% 62.5mW 贴片电阻",
+  "line": {
+   "line_no": 1,
+   "row": {
+    "line_no": 1,
+    "mpn": "RMC04025.1K1%N",
+    "desc": "5.1kΩ",
+    "package": "R0402",
+    "params": "",
+    "qty": 2,
+    "refs": "R1,R6",
+    "critical": "",
+    "brand": "Tyohm(幸亚电阻)",
+    "substitute": "",
+    "note": "",
+    "lcsc": "C325521",
+    "supplier": "LCSC",
+    "raw": {
+     "ID": "1",
+     "Name": "5.1kΩ",
+     "Designator": "R1,R6",
+     "Footprint": "R0402",
+     "Quantity": "2",
+     "Manufacturer Part": "RMC04025.1K1%N",
+     "Manufacturer": "Tyohm(幸亚电阻)",
+     "Supplier": "LCSC",
+     "Supplier Part": "C325521"
+    },
+    "lcsc_info": {
+     "code": "C325521",
+     "model": "RMC04025.1K1%N",
+     "brand": "TyoHM",
+     "package": "0402",
+     "desc": "5.1kΩ ±1% 62.5mW 0402 Thick Film Resistor",
+     "catalog": "Chip Resistor - Surface Mount",
+     "catalog_path": [
+      "Passives",
+      "Resistors"
+     ],
+     "attrs": {
+      "阻值": "5.1kΩ",
+      "功率": "62.5mW",
+      "最大工作电压": "50V",
+      "电阻类型": "厚膜电阻",
+      "温度系数": "±100ppm/℃",
+      "精度": "±1%",
+      "工作温度": "-55℃~+155℃"
+     },
+     "params": {
+      "resistance_ohm": 5100.0,
+      "power_w": 0.0625,
+      "voltage_v": 50.0,
+      "tolerance_pct": 1.0
+     },
+     "mount": "",
+     "stock": 23900,
+     "unit": "Piece",
+     "packet": "Reel",
+     "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/3bb3f9b94f3bcc877b2aad8b4e0eb075.pdf?productCode=C325521",
+     "fetched_at": "2026-11-16T20:47:36",
+     "source": "lcsc",
+     "matched_by": "code"
+    }
+   },
+   "mpn": "RMC04025.1K1%N",
+   "desc": "5.1kΩ",
+   "brand": "Tyohm(幸亚电阻)",
+   "package": "0402 (1005)",
+   "category": "passive",
+   "category_label": "被动件",
+   "subtype": "resistor",
+   "params": {
+    "tolerance_pct": 1.0,
+    "resistance_ohm": 5100.0,
+    "power_w": 0.0625,
+    "voltage_v": 50.0
+   },
+   "params_text": "5.1kΩ ±1% 0.0625W 50V",
+   "design_value": {
+    "resistance_ohm": 5100.0
+   },
+   "value_conflict": null,
+   "lcsc": {
+    "code": "C325521",
+    "model": "RMC04025.1K1%N",
+    "brand": "TyoHM",
+    "package": "0402",
+    "desc": "5.1kΩ ±1% 62.5mW 0402 Thick Film Resistor",
+    "stock": 23900,
+    "packet": "Reel",
+    "unit": "Piece",
+    "attrs": {
+     "阻值": "5.1kΩ",
+     "功率": "62.5mW",
+     "最大工作电压": "50V",
+     "电阻类型": "厚膜电阻",
+     "温度系数": "±100ppm/℃",
+     "精度": "±1%",
+     "工作温度": "-55℃~+155℃"
+    },
+    "catalog": "Chip Resistor - Surface Mount",
+    "catalog_path": [
+     "Passives",
+     "Resistors"
+    ],
+    "params": {
+     "resistance_ohm": 5100.0,
+     "power_w": 0.0625,
+     "voltage_v": 50.0,
+     "tolerance_pct": 1.0
+    },
+    "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/3bb3f9b94f3bcc877b2aad8b4e0eb075.pdf?productCode=C325521",
+    "matched_by": "code"
+   },
+   "qty": 2,
+   "refs": "R1,R6",
+   "criticality": "normal",
+   "substitution_allowed": false,
+   "status": "ready",
+   "missing": [],
+   "blocking": [],
+   "hard_gates": [
+    "封装 = 0402 (1005)",
+    "阻值 = 5.1kΩ",
+    "精度 不限（BOM ±1%，按 ≤±20% 放宽）",
+    "功率 ≥ 0.0625W",
+    "耐压 ≥ 50V",
+    "数量按 BOM 用量，不静默放大"
+   ],
+   "query_plan": [
+    "RMC04025.1K1%N 电阻",
+    "0402 5.1kΩ 0.0625W 厚膜 电阻",
+    "0402 5.1kΩ 电阻",
+    "0402 5.1kΩ 贴片电阻"
+   ],
+   "risks": [
+    {
+     "code": "H04",
+     "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+    },
+    {
+     "code": "H05",
+     "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+    },
+    {
+     "code": "S01",
+     "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+    }
+   ],
+   "decision": {
+    "headline": "0402 5.1kΩ ±1% 贴片电阻 ×2",
+    "buy_spec": [
+     "封装 = 0402 (1005)",
+     "阻值 = 5.1kΩ",
+     "精度 不限（BOM ±1%，按 ≤±20% 放宽）",
+     "功率 ≥ 0.0625W",
+     "耐压 ≥ 50V",
+     "数量按 BOM 用量，不静默放大"
+    ],
+    "search_queries": [
+     "RMC04025.1K1%N 电阻",
+     "0402 5.1kΩ 0.0625W 厚膜 电阻",
+     "0402 5.1kΩ 电阻",
+     "0402 5.1kΩ 贴片电阻"
+    ],
+    "must_verify": [
+     "封装/引脚数/间距与 BOM 完全一致（H01）",
+     "型号含后缀，未授权不改型号（H02）",
+     "关键参数不低于 BOM，无法确认按缺失处理（H03）",
+     "无翻新/散新/拆机/打磨信号（H04）",
+     "价格不低于同规格中位价 P10（H05）"
+    ],
+    "risk_notes": [
+     {
+      "code": "H04",
+      "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+     },
+     {
+      "code": "H05",
+      "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+     },
+     {
+      "code": "S01",
+      "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+     }
+    ],
+    "gate": "G1 解析确认 → G3 候选确认",
+    "manual_approval_required": true,
+    "next_action": "把候选标题/价格/店铺信息粘贴到下方评分区；本页不访问淘宝，不生成商品链接。"
+   },
+   "source": "规则引擎 v0.1.0"
+  },
+  "sku_options": [
+   {
+    "label": "颜色分类",
+    "values": [
+     {
+      "text": "100个",
+      "disabled": false,
+      "selected": true
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "pick": {
+    "颜色分类": "100个"
+   },
+   "reason_contains": null
+  }
+ },
+ {
+  "id": "power-02-33k-default",
+  "source": "real",
+  "note": "默认项 + 标题 33Kohms",
+  "line_no": 2,
+  "title": "AC0402FR-0733KL |国巨车载贴片电阻0402 33Kohms 1% 0.063W",
+  "line": {
+   "line_no": 2,
+   "row": {
+    "line_no": 2,
+    "mpn": "AC0402FR-0733KL",
+    "desc": "33kΩ",
+    "package": "R0402",
+    "params": "",
+    "qty": 2,
+    "refs": "R2,R7",
+    "critical": "",
+    "brand": "YAGEO(国巨)",
+    "substitute": "",
+    "note": "",
+    "lcsc": "C138291",
+    "supplier": "LCSC",
+    "raw": {
+     "ID": "2",
+     "Name": "33kΩ",
+     "Designator": "R2,R7",
+     "Footprint": "R0402",
+     "Quantity": "2",
+     "Manufacturer Part": "AC0402FR-0733KL",
+     "Manufacturer": "YAGEO(国巨)",
+     "Supplier": "LCSC",
+     "Supplier Part": "C138291"
+    },
+    "lcsc_info": {
+     "code": "C138291",
+     "model": "AC0402FR-0733KL",
+     "brand": "YAGEO",
+     "package": "0402",
+     "desc": "62.5mW 33kΩ 50V Thick Film Resistor ±100ppm/℃ ±1% 0402 Chip Resistor - Surface Mount RoHS",
+     "catalog": "Chip Resistor - Surface Mount",
+     "catalog_path": [
+      "Passives",
+      "Resistors"
+     ],
+     "attrs": {
+      "功率": "62.5mW",
+      "阻值": "33kΩ",
+      "最大工作电压": "50V",
+      "电阻类型": "厚膜电阻",
+      "温度系数": "±100ppm/℃",
+      "精度": "±1%",
+      "工作温度": "-55℃~+155℃"
+     },
+     "params": {
+      "power_w": 0.0625,
+      "resistance_ohm": 33000.0,
+      "voltage_v": 50.0,
+      "tolerance_pct": 1.0
+     },
+     "mount": "",
+     "stock": 46700,
+     "unit": "Piece",
+     "packet": "Reel",
+     "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/3511efb0564cb1711d9237ab09d6e97b.pdf?productCode=C138291",
+     "fetched_at": "2026-11-16T20:47:55",
+     "source": "lcsc",
+     "matched_by": "code"
+    }
+   },
+   "mpn": "AC0402FR-0733KL",
+   "desc": "33kΩ",
+   "brand": "YAGEO(国巨)",
+   "package": "0402 (1005)",
+   "category": "passive",
+   "category_label": "被动件",
+   "subtype": "resistor",
+   "params": {
+    "resistance_ohm": 33000.0,
+    "power_w": 0.0625,
+    "voltage_v": 50.0,
+    "tolerance_pct": 1.0
+   },
+   "params_text": "33kΩ ±1% 0.0625W 50V",
+   "design_value": {
+    "resistance_ohm": 33000.0
+   },
+   "value_conflict": null,
+   "lcsc": {
+    "code": "C138291",
+    "model": "AC0402FR-0733KL",
+    "brand": "YAGEO",
+    "package": "0402",
+    "desc": "62.5mW 33kΩ 50V Thick Film Resistor ±100ppm/℃ ±1% 0402 Chip Resistor - Surface Mount RoHS",
+    "stock": 46700,
+    "packet": "Reel",
+    "unit": "Piece",
+    "attrs": {
+     "功率": "62.5mW",
+     "阻值": "33kΩ",
+     "最大工作电压": "50V",
+     "电阻类型": "厚膜电阻",
+     "温度系数": "±100ppm/℃",
+     "精度": "±1%",
+     "工作温度": "-55℃~+155℃"
+    },
+    "catalog": "Chip Resistor - Surface Mount",
+    "catalog_path": [
+     "Passives",
+     "Resistors"
+    ],
+    "params": {
+     "power_w": 0.0625,
+     "resistance_ohm": 33000.0,
+     "voltage_v": 50.0,
+     "tolerance_pct": 1.0
+    },
+    "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/3511efb0564cb1711d9237ab09d6e97b.pdf?productCode=C138291",
+    "matched_by": "code"
+   },
+   "qty": 2,
+   "refs": "R2,R7",
+   "criticality": "normal",
+   "substitution_allowed": false,
+   "status": "ready",
+   "missing": [],
+   "blocking": [],
+   "hard_gates": [
+    "封装 = 0402 (1005)",
+    "阻值 = 33kΩ",
+    "精度 不限（BOM ±1%，按 ≤±20% 放宽）",
+    "功率 ≥ 0.0625W",
+    "耐压 ≥ 50V",
+    "数量按 BOM 用量，不静默放大"
+   ],
+   "query_plan": [
+    "AC0402FR-0733KL 电阻",
+    "0402 33kΩ 0.0625W 厚膜 电阻",
+    "0402 33kΩ 电阻",
+    "0402 33kΩ 贴片电阻"
+   ],
+   "risks": [
+    {
+     "code": "H04",
+     "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+    },
+    {
+     "code": "H05",
+     "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+    },
+    {
+     "code": "S01",
+     "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+    }
+   ],
+   "decision": {
+    "headline": "0402 33kΩ ±1% 贴片电阻 ×2",
+    "buy_spec": [
+     "封装 = 0402 (1005)",
+     "阻值 = 33kΩ",
+     "精度 不限（BOM ±1%，按 ≤±20% 放宽）",
+     "功率 ≥ 0.0625W",
+     "耐压 ≥ 50V",
+     "数量按 BOM 用量，不静默放大"
+    ],
+    "search_queries": [
+     "AC0402FR-0733KL 电阻",
+     "0402 33kΩ 0.0625W 厚膜 电阻",
+     "0402 33kΩ 电阻",
+     "0402 33kΩ 贴片电阻"
+    ],
+    "must_verify": [
+     "封装/引脚数/间距与 BOM 完全一致（H01）",
+     "型号含后缀，未授权不改型号（H02）",
+     "关键参数不低于 BOM，无法确认按缺失处理（H03）",
+     "无翻新/散新/拆机/打磨信号（H04）",
+     "价格不低于同规格中位价 P10（H05）"
+    ],
+    "risk_notes": [
+     {
+      "code": "H04",
+      "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+     },
+     {
+      "code": "H05",
+      "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+     },
+     {
+      "code": "S01",
+      "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+     }
+    ],
+    "gate": "G1 解析确认 → G3 候选确认",
+    "manual_approval_required": true,
+    "next_action": "把候选标题/价格/店铺信息粘贴到下方评分区；本页不访问淘宝，不生成商品链接。"
+   },
+   "source": "规则引擎 v0.1.0"
+  },
+  "sku_options": [
+   {
+    "label": "阻值",
+    "values": [
+     {
+      "text": "默认项",
+      "disabled": false,
+      "selected": true
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "pick": {
+    "阻值": "默认项"
+   },
+   "reason_contains": null
+  }
+ },
+ {
+  "id": "power-03-22p",
+  "source": "real",
+  "note": "容值组正好有 22PF",
+  "line_no": 3,
+  "title": "0402 22PF 220J 50V ±2%/±5% COG NPO材质 1005贴片陶瓷电容器",
+  "line": {
+   "line_no": 3,
+   "row": {
+    "line_no": 3,
+    "mpn": "22pF/6.3V(10%)-0402",
+    "desc": "22pF/6.3V(10%)-0402",
+    "package": "C0402",
+    "params": "",
+    "qty": 2,
+    "refs": "C1,C5",
+    "critical": "",
+    "brand": "",
+    "substitute": "",
+    "note": "",
+    "lcsc": "",
+    "supplier": "LCSC",
+    "raw": {
+     "ID": "3",
+     "Name": "22pF/6.3V(10%)-0402",
+     "Designator": "C1,C5",
+     "Footprint": "C0402",
+     "Quantity": "2",
+     "Manufacturer Part": "22pF/6.3V(10%)-0402",
+     "Manufacturer": "",
+     "Supplier": "LCSC",
+     "Supplier Part": "C9900004403"
+    }
+   },
+   "mpn": "22pF/6.3V(10%)-0402",
+   "desc": "22pF/6.3V(10%)-0402",
+   "brand": "",
+   "package": "0402 (1005)",
+   "category": "passive",
+   "category_label": "被动件",
+   "subtype": "capacitor",
+   "params": {
+    "tolerance_pct": 10.0,
+    "capacitance_f": 2.1999999999999998e-11,
+    "voltage_v": 6.3
+   },
+   "params_text": "22pF ±10% 6.3V",
+   "design_value": null,
+   "value_conflict": null,
+   "lcsc": null,
+   "qty": 2,
+   "refs": "C1,C5",
+   "criticality": "normal",
+   "substitution_allowed": false,
+   "status": "ready",
+   "missing": [],
+   "blocking": [],
+   "hard_gates": [
+    "封装 = 0402 (1005)",
+    "容值 = 22pF",
+    "精度 不限（BOM ±10%，按 ≤±20% 放宽）",
+    "耐压 ≥ 6.3V",
+    "数量按 BOM 用量，不静默放大"
+   ],
+   "query_plan": [
+    "0402 22pF 电容",
+    "0402 22pF 6.3V 电容",
+    "0402 22pF 贴片电容",
+    "1005 22pF 电容"
+   ],
+   "risks": [
+    {
+     "code": "H04",
+     "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+    },
+    {
+     "code": "H05",
+     "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+    },
+    {
+     "code": "S01",
+     "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+    }
+   ],
+   "decision": {
+    "headline": "0402 22pF ±10% 贴片电容 ×2",
+    "buy_spec": [
+     "封装 = 0402 (1005)",
+     "容值 = 22pF",
+     "精度 不限（BOM ±10%，按 ≤±20% 放宽）",
+     "耐压 ≥ 6.3V",
+     "数量按 BOM 用量，不静默放大"
+    ],
+    "search_queries": [
+     "0402 22pF 电容",
+     "0402 22pF 6.3V 电容",
+     "0402 22pF 贴片电容",
+     "1005 22pF 电容"
+    ],
+    "must_verify": [
+     "封装/引脚数/间距与 BOM 完全一致（H01）",
+     "型号含后缀，未授权不改型号（H02）",
+     "关键参数不低于 BOM，无法确认按缺失处理（H03）",
+     "无翻新/散新/拆机/打磨信号（H04）",
+     "价格不低于同规格中位价 P10（H05）"
+    ],
+    "risk_notes": [
+     {
+      "code": "H04",
+      "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+     },
+     {
+      "code": "H05",
+      "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+     },
+     {
+      "code": "S01",
+      "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+     }
+    ],
+    "gate": "G1 解析确认 → G3 候选确认",
+    "manual_approval_required": true,
+    "next_action": "把候选标题/价格/店铺信息粘贴到下方评分区；本页不访问淘宝，不生成商品链接。"
+   },
+   "source": "规则引擎 v0.1.0"
+  },
+  "sku_options": [
+   {
+    "label": "容值",
+    "values": [
+     {
+      "text": "22PF（220J）NPO",
+      "disabled": false,
+      "selected": true
+     }
+    ]
+   },
+   {
+    "label": "电压",
+    "values": [
+     {
+      "text": "±2% 50V（50个）",
+      "disabled": false,
+      "selected": true
+     },
+     {
+      "text": "±5% 50V（100个）",
+      "disabled": false,
+      "selected": false
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "pick": {
+    "容值": "22PF（220J）NPO",
+    "电压": "±2% 50V（50个）"
+   },
+   "reason_contains": null
+  }
+ },
+ {
+  "id": "power-04-200k-not-sold",
+  "source": "real",
+  "note": "整组没有 200kΩ",
+  "line_no": 4,
+  "title": "贴片电阻0402 0603 0805 1206 60/600R 6K/60/600K 0.1% 25ppm",
+  "line": {
+   "line_no": 4,
+   "row": {
+    "line_no": 4,
+    "mpn": "RC0402DR-07200KL",
+    "desc": "200kΩ",
+    "package": "R0402",
+    "params": "",
+    "qty": 2,
+    "refs": "R3,R8",
+    "critical": "",
+    "brand": "YAGEO(国巨)",
+    "substitute": "",
+    "note": "",
+    "lcsc": "C138077",
+    "supplier": "LCSC",
+    "raw": {
+     "ID": "4",
+     "Name": "200kΩ",
+     "Designator": "R3,R8",
+     "Footprint": "R0402",
+     "Quantity": "2",
+     "Manufacturer Part": "RC0402DR-07200KL",
+     "Manufacturer": "YAGEO(国巨)",
+     "Supplier": "LCSC",
+     "Supplier Part": "C138077"
+    },
+    "lcsc_info": {
+     "code": "C138077",
+     "model": "RC0402DR-07200KL",
+     "brand": "YAGEO",
+     "package": "0402",
+     "desc": "200kΩ ±0.5% 62.5mW 0402 Thick Film Resistor",
+     "catalog": "Chip Resistor - Surface Mount",
+     "catalog_path": [
+      "Passives",
+      "Resistors"
+     ],
+     "attrs": {
+      "功率": "62.5mW",
+      "阻值": "200kΩ",
+      "最大工作电压": "50V",
+      "电阻类型": "厚膜电阻",
+      "温度系数": "±100ppm/℃",
+      "精度": "±0.5%",
+      "工作温度": "-55℃~+155℃"
+     },
+     "params": {
+      "power_w": 0.0625,
+      "resistance_ohm": 200000.0,
+      "voltage_v": 50.0,
+      "tolerance_pct": 0.5
+     },
+     "mount": "",
+     "stock": 0,
+     "unit": "Piece",
+     "packet": "Reel",
+     "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/b426be3ce22c6de3e0c3a2248e49159e.pdf?productCode=C138077",
+     "fetched_at": "2026-11-16T20:47:55",
+     "source": "lcsc",
+     "matched_by": "code"
+    }
+   },
+   "mpn": "RC0402DR-07200KL",
+   "desc": "200kΩ",
+   "brand": "YAGEO(国巨)",
+   "package": "0402 (1005)",
+   "category": "passive",
+   "category_label": "被动件",
+   "subtype": "resistor",
+   "params": {
+    "resistance_ohm": 200000.0,
+    "power_w": 0.0625,
+    "voltage_v": 50.0,
+    "tolerance_pct": 0.5
+   },
+   "params_text": "200kΩ ±0.5% 0.0625W 50V",
+   "design_value": {
+    "resistance_ohm": 200000.0
+   },
+   "value_conflict": null,
+   "lcsc": {
+    "code": "C138077",
+    "model": "RC0402DR-07200KL",
+    "brand": "YAGEO",
+    "package": "0402",
+    "desc": "200kΩ ±0.5% 62.5mW 0402 Thick Film Resistor",
+    "stock": 0,
+    "packet": "Reel",
+    "unit": "Piece",
+    "attrs": {
+     "功率": "62.5mW",
+     "阻值": "200kΩ",
+     "最大工作电压": "50V",
+     "电阻类型": "厚膜电阻",
+     "温度系数": "±100ppm/℃",
+     "精度": "±0.5%",
+     "工作温度": "-55℃~+155℃"
+    },
+    "catalog": "Chip Resistor - Surface Mount",
+    "catalog_path": [
+     "Passives",
+     "Resistors"
+    ],
+    "params": {
+     "power_w": 0.0625,
+     "resistance_ohm": 200000.0,
+     "voltage_v": 50.0,
+     "tolerance_pct": 0.5
+    },
+    "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/b426be3ce22c6de3e0c3a2248e49159e.pdf?productCode=C138077",
+    "matched_by": "code"
+   },
+   "qty": 2,
+   "refs": "R3,R8",
+   "criticality": "normal",
+   "substitution_allowed": false,
+   "status": "ready",
+   "missing": [],
+   "blocking": [],
+   "hard_gates": [
+    "封装 = 0402 (1005)",
+    "阻值 = 200kΩ",
+    "精度 不限（BOM ±0.5%，按 ≤±20% 放宽）",
+    "功率 ≥ 0.0625W",
+    "耐压 ≥ 50V",
+    "数量按 BOM 用量，不静默放大"
+   ],
+   "query_plan": [
+    "RC0402DR-07200KL 电阻",
+    "0402 200kΩ 0.0625W 厚膜 电阻",
+    "0402 200kΩ 电阻",
+    "0402 200kΩ 贴片电阻"
+   ],
+   "risks": [
+    {
+     "code": "H04",
+     "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+    },
+    {
+     "code": "H05",
+     "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+    },
+    {
+     "code": "S01",
+     "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+    }
+   ],
+   "decision": {
+    "headline": "0402 200kΩ ±0.5% 贴片电阻 ×2",
+    "buy_spec": [
+     "封装 = 0402 (1005)",
+     "阻值 = 200kΩ",
+     "精度 不限（BOM ±0.5%，按 ≤±20% 放宽）",
+     "功率 ≥ 0.0625W",
+     "耐压 ≥ 50V",
+     "数量按 BOM 用量，不静默放大"
+    ],
+    "search_queries": [
+     "RC0402DR-07200KL 电阻",
+     "0402 200kΩ 0.0625W 厚膜 电阻",
+     "0402 200kΩ 电阻",
+     "0402 200kΩ 贴片电阻"
+    ],
+    "must_verify": [
+     "封装/引脚数/间距与 BOM 完全一致（H01）",
+     "型号含后缀，未授权不改型号（H02）",
+     "关键参数不低于 BOM，无法确认按缺失处理（H03）",
+     "无翻新/散新/拆机/打磨信号（H04）",
+     "价格不低于同规格中位价 P10（H05）"
+    ],
+    "risk_notes": [
+     {
+      "code": "H04",
+      "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+     },
+     {
+      "code": "H05",
+      "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+     },
+     {
+      "code": "S01",
+      "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+     }
+    ],
+    "gate": "G1 解析确认 → G3 候选确认",
+    "manual_approval_required": true,
+    "next_action": "把候选标题/价格/店铺信息粘贴到下方评分区；本页不访问淘宝，不生成商品链接。"
+   },
+   "source": "规则引擎 v0.1.0"
+  },
+  "sku_options": [
+   {
+    "label": "颜色分类",
+    "values": [
+     {
+      "text": "0402 60R ±0.1% 25ppm",
+      "disabled": false,
+      "selected": true
+     },
+     {
+      "text": "0402 600R ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 6K ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 60K ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603 60R ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603 600R ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603 6K ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603 60K ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603 600K ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805 60R ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805 600R ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805 6K ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805 60K ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805 600K ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1206 60R ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1206 600R ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1206 6K ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1206 60K ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1206 600K ±0.1% 25ppm",
+      "disabled": false,
+      "selected": false
+     }
+    ]
+   },
+   {
+    "label": "销售规格",
+    "values": [
+     {
+      "text": "50只",
+      "disabled": false,
+      "selected": true
+     },
+     {
+      "text": "100只",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "500只",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1000只",
+      "disabled": false,
+      "selected": false
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "pick": null,
+   "reason_contains": "阻值"
+  }
+ },
+ {
+  "id": "power-04-200k-wrong-store",
+  "source": "real",
+  "note": "标题和 SKU 都读不到 200kΩ",
+  "line_no": 4,
+  "title": "0.68R欧 贴片电阻 精度1%(丝印:R680) 0402 0603 0805 1206 2512",
+  "line": {
+   "line_no": 4,
+   "row": {
+    "line_no": 4,
+    "mpn": "RC0402DR-07200KL",
+    "desc": "200kΩ",
+    "package": "R0402",
+    "params": "",
+    "qty": 2,
+    "refs": "R3,R8",
+    "critical": "",
+    "brand": "YAGEO(国巨)",
+    "substitute": "",
+    "note": "",
+    "lcsc": "C138077",
+    "supplier": "LCSC",
+    "raw": {
+     "ID": "4",
+     "Name": "200kΩ",
+     "Designator": "R3,R8",
+     "Footprint": "R0402",
+     "Quantity": "2",
+     "Manufacturer Part": "RC0402DR-07200KL",
+     "Manufacturer": "YAGEO(国巨)",
+     "Supplier": "LCSC",
+     "Supplier Part": "C138077"
+    },
+    "lcsc_info": {
+     "code": "C138077",
+     "model": "RC0402DR-07200KL",
+     "brand": "YAGEO",
+     "package": "0402",
+     "desc": "200kΩ ±0.5% 62.5mW 0402 Thick Film Resistor",
+     "catalog": "Chip Resistor - Surface Mount",
+     "catalog_path": [
+      "Passives",
+      "Resistors"
+     ],
+     "attrs": {
+      "功率": "62.5mW",
+      "阻值": "200kΩ",
+      "最大工作电压": "50V",
+      "电阻类型": "厚膜电阻",
+      "温度系数": "±100ppm/℃",
+      "精度": "±0.5%",
+      "工作温度": "-55℃~+155℃"
+     },
+     "params": {
+      "power_w": 0.0625,
+      "resistance_ohm": 200000.0,
+      "voltage_v": 50.0,
+      "tolerance_pct": 0.5
+     },
+     "mount": "",
+     "stock": 0,
+     "unit": "Piece",
+     "packet": "Reel",
+     "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/b426be3ce22c6de3e0c3a2248e49159e.pdf?productCode=C138077",
+     "fetched_at": "2026-11-16T20:47:55",
+     "source": "lcsc",
+     "matched_by": "code"
+    }
+   },
+   "mpn": "RC0402DR-07200KL",
+   "desc": "200kΩ",
+   "brand": "YAGEO(国巨)",
+   "package": "0402 (1005)",
+   "category": "passive",
+   "category_label": "被动件",
+   "subtype": "resistor",
+   "params": {
+    "resistance_ohm": 200000.0,
+    "power_w": 0.0625,
+    "voltage_v": 50.0,
+    "tolerance_pct": 0.5
+   },
+   "params_text": "200kΩ ±0.5% 0.0625W 50V",
+   "design_value": {
+    "resistance_ohm": 200000.0
+   },
+   "value_conflict": null,
+   "lcsc": {
+    "code": "C138077",
+    "model": "RC0402DR-07200KL",
+    "brand": "YAGEO",
+    "package": "0402",
+    "desc": "200kΩ ±0.5% 62.5mW 0402 Thick Film Resistor",
+    "stock": 0,
+    "packet": "Reel",
+    "unit": "Piece",
+    "attrs": {
+     "功率": "62.5mW",
+     "阻值": "200kΩ",
+     "最大工作电压": "50V",
+     "电阻类型": "厚膜电阻",
+     "温度系数": "±100ppm/℃",
+     "精度": "±0.5%",
+     "工作温度": "-55℃~+155℃"
+    },
+    "catalog": "Chip Resistor - Surface Mount",
+    "catalog_path": [
+     "Passives",
+     "Resistors"
+    ],
+    "params": {
+     "power_w": 0.0625,
+     "resistance_ohm": 200000.0,
+     "voltage_v": 50.0,
+     "tolerance_pct": 0.5
+    },
+    "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/b426be3ce22c6de3e0c3a2248e49159e.pdf?productCode=C138077",
+    "matched_by": "code"
+   },
+   "qty": 2,
+   "refs": "R3,R8",
+   "criticality": "normal",
+   "substitution_allowed": false,
+   "status": "ready",
+   "missing": [],
+   "blocking": [],
+   "hard_gates": [
+    "封装 = 0402 (1005)",
+    "阻值 = 200kΩ",
+    "精度 不限（BOM ±0.5%，按 ≤±20% 放宽）",
+    "功率 ≥ 0.0625W",
+    "耐压 ≥ 50V",
+    "数量按 BOM 用量，不静默放大"
+   ],
+   "query_plan": [
+    "RC0402DR-07200KL 电阻",
+    "0402 200kΩ 0.0625W 厚膜 电阻",
+    "0402 200kΩ 电阻",
+    "0402 200kΩ 贴片电阻"
+   ],
+   "risks": [
+    {
+     "code": "H04",
+     "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+    },
+    {
+     "code": "H05",
+     "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+    },
+    {
+     "code": "S01",
+     "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+    }
+   ],
+   "decision": {
+    "headline": "0402 200kΩ ±0.5% 贴片电阻 ×2",
+    "buy_spec": [
+     "封装 = 0402 (1005)",
+     "阻值 = 200kΩ",
+     "精度 不限（BOM ±0.5%，按 ≤±20% 放宽）",
+     "功率 ≥ 0.0625W",
+     "耐压 ≥ 50V",
+     "数量按 BOM 用量，不静默放大"
+    ],
+    "search_queries": [
+     "RC0402DR-07200KL 电阻",
+     "0402 200kΩ 0.0625W 厚膜 电阻",
+     "0402 200kΩ 电阻",
+     "0402 200kΩ 贴片电阻"
+    ],
+    "must_verify": [
+     "封装/引脚数/间距与 BOM 完全一致（H01）",
+     "型号含后缀，未授权不改型号（H02）",
+     "关键参数不低于 BOM，无法确认按缺失处理（H03）",
+     "无翻新/散新/拆机/打磨信号（H04）",
+     "价格不低于同规格中位价 P10（H05）"
+    ],
+    "risk_notes": [
+     {
+      "code": "H04",
+      "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+     },
+     {
+      "code": "H05",
+      "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+     },
+     {
+      "code": "S01",
+      "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+     }
+    ],
+    "gate": "G1 解析确认 → G3 候选确认",
+    "manual_approval_required": true,
+    "next_action": "把候选标题/价格/店铺信息粘贴到下方评分区；本页不访问淘宝，不生成商品链接。"
+   },
+   "source": "规则引擎 v0.1.0"
+  },
+  "sku_options": [
+   {
+    "label": "封装规格",
+    "values": [
+     {
+      "text": "0402（100只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603（100只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805（100只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1206（100只）\n推荐",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1210（20只）",
+      "disabled": false,
+      "selected": true
+     },
+     {
+      "text": "2010（20只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "2512（20只）",
+      "disabled": false,
+      "selected": false
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "pick": null,
+   "reason_contains": "容差"
+  }
+ },
+ {
+  "id": "power-04-200k-near-miss",
+  "source": "real",
+  "note": "只有 33K~62K，另有「下单备注型号」不能买",
+  "line_no": 4,
+  "title": "贴片电阻 5% 1% 0402 30K 33K 36K 39K 43K 47K 51K 56K 62K J F",
+  "line": {
+   "line_no": 4,
+   "row": {
+    "line_no": 4,
+    "mpn": "RC0402DR-07200KL",
+    "desc": "200kΩ",
+    "package": "R0402",
+    "params": "",
+    "qty": 2,
+    "refs": "R3,R8",
+    "critical": "",
+    "brand": "YAGEO(国巨)",
+    "substitute": "",
+    "note": "",
+    "lcsc": "C138077",
+    "supplier": "LCSC",
+    "raw": {
+     "ID": "4",
+     "Name": "200kΩ",
+     "Designator": "R3,R8",
+     "Footprint": "R0402",
+     "Quantity": "2",
+     "Manufacturer Part": "RC0402DR-07200KL",
+     "Manufacturer": "YAGEO(国巨)",
+     "Supplier": "LCSC",
+     "Supplier Part": "C138077"
+    },
+    "lcsc_info": {
+     "code": "C138077",
+     "model": "RC0402DR-07200KL",
+     "brand": "YAGEO",
+     "package": "0402",
+     "desc": "200kΩ ±0.5% 62.5mW 0402 Thick Film Resistor",
+     "catalog": "Chip Resistor - Surface Mount",
+     "catalog_path": [
+      "Passives",
+      "Resistors"
+     ],
+     "attrs": {
+      "功率": "62.5mW",
+      "阻值": "200kΩ",
+      "最大工作电压": "50V",
+      "电阻类型": "厚膜电阻",
+      "温度系数": "±100ppm/℃",
+      "精度": "±0.5%",
+      "工作温度": "-55℃~+155℃"
+     },
+     "params": {
+      "power_w": 0.0625,
+      "resistance_ohm": 200000.0,
+      "voltage_v": 50.0,
+      "tolerance_pct": 0.5
+     },
+     "mount": "",
+     "stock": 0,
+     "unit": "Piece",
+     "packet": "Reel",
+     "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/b426be3ce22c6de3e0c3a2248e49159e.pdf?productCode=C138077",
+     "fetched_at": "2026-11-16T20:47:55",
+     "source": "lcsc",
+     "matched_by": "code"
+    }
+   },
+   "mpn": "RC0402DR-07200KL",
+   "desc": "200kΩ",
+   "brand": "YAGEO(国巨)",
+   "package": "0402 (1005)",
+   "category": "passive",
+   "category_label": "被动件",
+   "subtype": "resistor",
+   "params": {
+    "resistance_ohm": 200000.0,
+    "power_w": 0.0625,
+    "voltage_v": 50.0,
+    "tolerance_pct": 0.5
+   },
+   "params_text": "200kΩ ±0.5% 0.0625W 50V",
+   "design_value": {
+    "resistance_ohm": 200000.0
+   },
+   "value_conflict": null,
+   "lcsc": {
+    "code": "C138077",
+    "model": "RC0402DR-07200KL",
+    "brand": "YAGEO",
+    "package": "0402",
+    "desc": "200kΩ ±0.5% 62.5mW 0402 Thick Film Resistor",
+    "stock": 0,
+    "packet": "Reel",
+    "unit": "Piece",
+    "attrs": {
+     "功率": "62.5mW",
+     "阻值": "200kΩ",
+     "最大工作电压": "50V",
+     "电阻类型": "厚膜电阻",
+     "温度系数": "±100ppm/℃",
+     "精度": "±0.5%",
+     "工作温度": "-55℃~+155℃"
+    },
+    "catalog": "Chip Resistor - Surface Mount",
+    "catalog_path": [
+     "Passives",
+     "Resistors"
+    ],
+    "params": {
+     "power_w": 0.0625,
+     "resistance_ohm": 200000.0,
+     "voltage_v": 50.0,
+     "tolerance_pct": 0.5
+    },
+    "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/b426be3ce22c6de3e0c3a2248e49159e.pdf?productCode=C138077",
+    "matched_by": "code"
+   },
+   "qty": 2,
+   "refs": "R3,R8",
+   "criticality": "normal",
+   "substitution_allowed": false,
+   "status": "ready",
+   "missing": [],
+   "blocking": [],
+   "hard_gates": [
+    "封装 = 0402 (1005)",
+    "阻值 = 200kΩ",
+    "精度 不限（BOM ±0.5%，按 ≤±20% 放宽）",
+    "功率 ≥ 0.0625W",
+    "耐压 ≥ 50V",
+    "数量按 BOM 用量，不静默放大"
+   ],
+   "query_plan": [
+    "RC0402DR-07200KL 电阻",
+    "0402 200kΩ 0.0625W 厚膜 电阻",
+    "0402 200kΩ 电阻",
+    "0402 200kΩ 贴片电阻"
+   ],
+   "risks": [
+    {
+     "code": "H04",
+     "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+    },
+    {
+     "code": "H05",
+     "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+    },
+    {
+     "code": "S01",
+     "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+    }
+   ],
+   "decision": {
+    "headline": "0402 200kΩ ±0.5% 贴片电阻 ×2",
+    "buy_spec": [
+     "封装 = 0402 (1005)",
+     "阻值 = 200kΩ",
+     "精度 不限（BOM ±0.5%，按 ≤±20% 放宽）",
+     "功率 ≥ 0.0625W",
+     "耐压 ≥ 50V",
+     "数量按 BOM 用量，不静默放大"
+    ],
+    "search_queries": [
+     "RC0402DR-07200KL 电阻",
+     "0402 200kΩ 0.0625W 厚膜 电阻",
+     "0402 200kΩ 电阻",
+     "0402 200kΩ 贴片电阻"
+    ],
+    "must_verify": [
+     "封装/引脚数/间距与 BOM 完全一致（H01）",
+     "型号含后缀，未授权不改型号（H02）",
+     "关键参数不低于 BOM，无法确认按缺失处理（H03）",
+     "无翻新/散新/拆机/打磨信号（H04）",
+     "价格不低于同规格中位价 P10（H05）"
+    ],
+    "risk_notes": [
+     {
+      "code": "H04",
+      "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+     },
+     {
+      "code": "H05",
+      "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+     },
+     {
+      "code": "S01",
+      "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+     }
+    ],
+    "gate": "G1 解析确认 → G3 候选确认",
+    "manual_approval_required": true,
+    "next_action": "把候选标题/价格/店铺信息粘贴到下方评分区；本页不访问淘宝，不生成商品链接。"
+   },
+   "source": "规则引擎 v0.1.0"
+  },
+  "sku_options": [
+   {
+    "label": "颜色分类",
+    "values": [
+     {
+      "text": "0402 （精度5%）33K 10000个",
+      "disabled": false,
+      "selected": true
+     },
+     {
+      "text": "0402 （精度5%）36K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度5%）39K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度5%）43K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度5%）47K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度5%）51K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度5%）56K 10000个\n推荐",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度5%）62K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度1%）33K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度1%）36K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度1%）39K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度1%）43K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度1%）47K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度1%）51K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度1%）56K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 （精度1%）62K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 (精度5%) 30K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 (精度1% ) 30K 10000个",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "精度5% 100个（下单备注型号）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "精度1% 100个（下单备注型号）",
+      "disabled": false,
+      "selected": false
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "pick": null,
+   "reason_contains": "阻值"
+  }
+ },
+ {
+  "id": "power-05-75k-wrong-store",
+  "source": "real",
+  "note": "只卖低阻值，挑选集齐全也不行",
+  "line_no": 5,
+  "title": "0.15R欧 贴片电阻 精度1%(丝印:R150) 0402 0603 0805 1206 2512",
+  "line": {
+   "line_no": 5,
+   "row": {
+    "line_no": 5,
+    "mpn": "AC0402JR-0775KL",
+    "desc": "75kΩ",
+    "package": "R0402",
+    "params": "",
+    "qty": 2,
+    "refs": "R4,R9",
+    "critical": "",
+    "brand": "YAGEO(国巨)",
+    "substitute": "",
+    "note": "",
+    "lcsc": "C227416",
+    "supplier": "LCSC",
+    "raw": {
+     "ID": "5",
+     "Name": "75kΩ",
+     "Designator": "R4,R9",
+     "Footprint": "R0402",
+     "Quantity": "2",
+     "Manufacturer Part": "AC0402JR-0775KL",
+     "Manufacturer": "YAGEO(国巨)",
+     "Supplier": "LCSC",
+     "Supplier Part": "C227416"
+    },
+    "lcsc_info": {
+     "code": "C227416",
+     "model": "AC0402JR-0775KL",
+     "brand": "YAGEO",
+     "package": "0402",
+     "desc": "62.5mW 75kΩ 50V Thick Film Resistor ±100ppm/℃ ±5% 0402 Chip Resistor - Surface Mount RoHS",
+     "catalog": "Chip Resistor - Surface Mount",
+     "catalog_path": [
+      "Passives",
+      "Resistors"
+     ],
+     "attrs": {
+      "功率": "62.5mW",
+      "阻值": "75kΩ",
+      "最大工作电压": "50V",
+      "电阻类型": "厚膜电阻",
+      "温度系数": "±100ppm/℃",
+      "精度": "±5%",
+      "工作温度": "-55℃~+155℃"
+     },
+     "params": {
+      "power_w": 0.0625,
+      "resistance_ohm": 75000.0,
+      "voltage_v": 50.0,
+      "tolerance_pct": 5.0
+     },
+     "mount": "",
+     "stock": 0,
+     "unit": "Piece",
+     "packet": "Reel",
+     "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/3511efb0564cb1711d9237ab09d6e97b.pdf?productCode=C227416",
+     "fetched_at": "2026-11-16T20:47:55",
+     "source": "lcsc",
+     "matched_by": "code"
+    }
+   },
+   "mpn": "AC0402JR-0775KL",
+   "desc": "75kΩ",
+   "brand": "YAGEO(国巨)",
+   "package": "0402 (1005)",
+   "category": "passive",
+   "category_label": "被动件",
+   "subtype": "resistor",
+   "params": {
+    "resistance_ohm": 75000.0,
+    "power_w": 0.0625,
+    "voltage_v": 50.0,
+    "tolerance_pct": 5.0
+   },
+   "params_text": "75kΩ ±5% 0.0625W 50V",
+   "design_value": {
+    "resistance_ohm": 75000.0
+   },
+   "value_conflict": null,
+   "lcsc": {
+    "code": "C227416",
+    "model": "AC0402JR-0775KL",
+    "brand": "YAGEO",
+    "package": "0402",
+    "desc": "62.5mW 75kΩ 50V Thick Film Resistor ±100ppm/℃ ±5% 0402 Chip Resistor - Surface Mount RoHS",
+    "stock": 0,
+    "packet": "Reel",
+    "unit": "Piece",
+    "attrs": {
+     "功率": "62.5mW",
+     "阻值": "75kΩ",
+     "最大工作电压": "50V",
+     "电阻类型": "厚膜电阻",
+     "温度系数": "±100ppm/℃",
+     "精度": "±5%",
+     "工作温度": "-55℃~+155℃"
+    },
+    "catalog": "Chip Resistor - Surface Mount",
+    "catalog_path": [
+     "Passives",
+     "Resistors"
+    ],
+    "params": {
+     "power_w": 0.0625,
+     "resistance_ohm": 75000.0,
+     "voltage_v": 50.0,
+     "tolerance_pct": 5.0
+    },
+    "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/3511efb0564cb1711d9237ab09d6e97b.pdf?productCode=C227416",
+    "matched_by": "code"
+   },
+   "qty": 2,
+   "refs": "R4,R9",
+   "criticality": "normal",
+   "substitution_allowed": false,
+   "status": "ready",
+   "missing": [],
+   "blocking": [],
+   "hard_gates": [
+    "封装 = 0402 (1005)",
+    "阻值 = 75kΩ",
+    "精度 不限（BOM ±5%，按 ≤±20% 放宽）",
+    "功率 ≥ 0.0625W",
+    "耐压 ≥ 50V",
+    "数量按 BOM 用量，不静默放大"
+   ],
+   "query_plan": [
+    "AC0402JR-0775KL 电阻",
+    "0402 75kΩ 0.0625W 厚膜 电阻",
+    "0402 75kΩ 电阻",
+    "0402 75kΩ 贴片电阻"
+   ],
+   "risks": [
+    {
+     "code": "H04",
+     "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+    },
+    {
+     "code": "H05",
+     "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+    },
+    {
+     "code": "S01",
+     "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+    }
+   ],
+   "decision": {
+    "headline": "0402 75kΩ ±5% 贴片电阻 ×2",
+    "buy_spec": [
+     "封装 = 0402 (1005)",
+     "阻值 = 75kΩ",
+     "精度 不限（BOM ±5%，按 ≤±20% 放宽）",
+     "功率 ≥ 0.0625W",
+     "耐压 ≥ 50V",
+     "数量按 BOM 用量，不静默放大"
+    ],
+    "search_queries": [
+     "AC0402JR-0775KL 电阻",
+     "0402 75kΩ 0.0625W 厚膜 电阻",
+     "0402 75kΩ 电阻",
+     "0402 75kΩ 贴片电阻"
+    ],
+    "must_verify": [
+     "封装/引脚数/间距与 BOM 完全一致（H01）",
+     "型号含后缀，未授权不改型号（H02）",
+     "关键参数不低于 BOM，无法确认按缺失处理（H03）",
+     "无翻新/散新/拆机/打磨信号（H04）",
+     "价格不低于同规格中位价 P10（H05）"
+    ],
+    "risk_notes": [
+     {
+      "code": "H04",
+      "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+     },
+     {
+      "code": "H05",
+      "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+     },
+     {
+      "code": "S01",
+      "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+     }
+    ],
+    "gate": "G1 解析确认 → G3 候选确认",
+    "manual_approval_required": true,
+    "next_action": "把候选标题/价格/店铺信息粘贴到下方评分区；本页不访问淘宝，不生成商品链接。"
+   },
+   "source": "规则引擎 v0.1.0"
+  },
+  "sku_options": [
+   {
+    "label": "封装规格",
+    "values": [
+     {
+      "text": "0402（100只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603（100只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805（100只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1206（100只）\n推荐",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1210（20只）",
+      "disabled": false,
+      "selected": true
+     },
+     {
+      "text": "1812（20只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "2010（20只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "2512（20只）",
+      "disabled": false,
+      "selected": false
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "pick": null,
+   "reason_contains": "没有这一档"
+  }
+ },
+ {
+  "id": "power-07-330p-npo-only",
+  "source": "real",
+  "note": "介质等级不能互顶",
+  "line_no": 7,
+  "title": "0402贴片电容 ±5% 100P120P150P180P200P220P240P270P300P330PF",
+  "line": {
+   "line_no": 7,
+   "row": {
+    "line_no": 7,
+    "mpn": "C0402X7R331K500NTB",
+    "desc": "330pF",
+    "package": "C0402",
+    "params": "",
+    "qty": 2,
+    "refs": "C2,C6",
+    "critical": "",
+    "brand": "EYANG(宇阳科技)",
+    "substitute": "",
+    "note": "",
+    "lcsc": "C115681",
+    "supplier": "LCSC",
+    "raw": {
+     "ID": "7",
+     "Name": "330pF",
+     "Designator": "C2,C6",
+     "Footprint": "C0402",
+     "Quantity": "2",
+     "Manufacturer Part": "C0402X7R331K500NTB",
+     "Manufacturer": "EYANG(宇阳科技)",
+     "Supplier": "LCSC",
+     "Supplier Part": "C115681"
+    }
+   },
+   "mpn": "C0402X7R331K500NTB",
+   "desc": "330pF",
+   "brand": "EYANG(宇阳科技)",
+   "package": "0402 (1005)",
+   "category": "passive",
+   "category_label": "被动件",
+   "subtype": "capacitor",
+   "params": {
+    "dielectric": "X7R",
+    "capacitance_f": 3.3e-10
+   },
+   "params_text": "330pF",
+   "design_value": {
+    "capacitance_f": 3.3e-10
+   },
+   "value_conflict": null,
+   "lcsc": null,
+   "qty": 2,
+   "refs": "C2,C6",
+   "criticality": "normal",
+   "substitution_allowed": false,
+   "status": "ready",
+   "missing": [],
+   "blocking": [],
+   "hard_gates": [
+    "封装 = 0402 (1005)",
+    "容值 = 330pF",
+    "数量按 BOM 用量，不静默放大"
+   ],
+   "query_plan": [
+    "0402 330pF 电容",
+    "0402 330pF 贴片电容",
+    "1005 330pF 电容",
+    "EYANG(宇阳科技) 330pF 电容"
+   ],
+   "risks": [
+    {
+     "code": "H04",
+     "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+    },
+    {
+     "code": "H05",
+     "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+    },
+    {
+     "code": "S01",
+     "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+    }
+   ],
+   "decision": {
+    "headline": "0402 330pF 贴片电容 ×2",
+    "buy_spec": [
+     "封装 = 0402 (1005)",
+     "容值 = 330pF",
+     "数量按 BOM 用量，不静默放大"
+    ],
+    "search_queries": [
+     "0402 330pF 电容",
+     "0402 330pF 贴片电容",
+     "1005 330pF 电容",
+     "EYANG(宇阳科技) 330pF 电容"
+    ],
+    "must_verify": [
+     "封装/引脚数/间距与 BOM 完全一致（H01）",
+     "型号含后缀，未授权不改型号（H02）",
+     "关键参数不低于 BOM，无法确认按缺失处理（H03）",
+     "无翻新/散新/拆机/打磨信号（H04）",
+     "价格不低于同规格中位价 P10（H05）"
+    ],
+    "risk_notes": [
+     {
+      "code": "H04",
+      "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+     },
+     {
+      "code": "H05",
+      "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+     },
+     {
+      "code": "S01",
+      "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+     }
+    ],
+    "gate": "G1 解析确认 → G3 候选确认",
+    "manual_approval_required": true,
+    "next_action": "把候选标题/价格/店铺信息粘贴到下方评分区；本页不访问淘宝，不生成商品链接。"
+   },
+   "source": "规则引擎 v0.1.0"
+  },
+  "sku_options": [
+   {
+    "label": "颜色分类",
+    "values": [
+     {
+      "text": "100个",
+      "disabled": false,
+      "selected": true
+     },
+     {
+      "text": "1盘10000个",
+      "disabled": false,
+      "selected": false
+     }
+    ]
+   },
+   {
+    "label": "电压",
+    "values": [
+     {
+      "text": "50V",
+      "disabled": false,
+      "selected": true
+     }
+    ]
+   },
+   {
+    "label": "封装规格",
+    "values": [
+     {
+      "text": "0402",
+      "disabled": false,
+      "selected": true
+     }
+    ]
+   },
+   {
+    "label": "容值",
+    "values": [
+     {
+      "text": "100PF ±5% NPO/COG",
+      "disabled": false,
+      "selected": true
+     },
+     {
+      "text": "120PF ±5% NPO/COG",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "150PF ±5% NPO/COG",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "180PF ±5% NPO/COG",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "200PF ±5% NPO/COG",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "220PF ±5% NPO/COG",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "240PF ±5% NPO/COG",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "270PF ±5% NPO/COG",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "300PF ±5% NPO/COG",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "330PF ±5% NPO/COG",
+      "disabled": false,
+      "selected": false
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "pick": null,
+   "reason_contains": "介质"
+  }
+ },
+ {
+  "id": "power-07-330p-ok",
+  "source": "real",
+  "note": "值/封装/耐压都在",
+  "line_no": 7,
+  "title": "0805 0603 0402 1206贴片电容120/150/180/200/220/270/300/330PF",
+  "line": {
+   "line_no": 7,
+   "row": {
+    "line_no": 7,
+    "mpn": "C0402X7R331K500NTB",
+    "desc": "330pF",
+    "package": "C0402",
+    "params": "",
+    "qty": 2,
+    "refs": "C2,C6",
+    "critical": "",
+    "brand": "EYANG(宇阳科技)",
+    "substitute": "",
+    "note": "",
+    "lcsc": "C115681",
+    "supplier": "LCSC",
+    "raw": {
+     "ID": "7",
+     "Name": "330pF",
+     "Designator": "C2,C6",
+     "Footprint": "C0402",
+     "Quantity": "2",
+     "Manufacturer Part": "C0402X7R331K500NTB",
+     "Manufacturer": "EYANG(宇阳科技)",
+     "Supplier": "LCSC",
+     "Supplier Part": "C115681"
+    }
+   },
+   "mpn": "C0402X7R331K500NTB",
+   "desc": "330pF",
+   "brand": "EYANG(宇阳科技)",
+   "package": "0402 (1005)",
+   "category": "passive",
+   "category_label": "被动件",
+   "subtype": "capacitor",
+   "params": {
+    "dielectric": "X7R",
+    "capacitance_f": 3.3e-10
+   },
+   "params_text": "330pF",
+   "design_value": {
+    "capacitance_f": 3.3e-10
+   },
+   "value_conflict": null,
+   "lcsc": null,
+   "qty": 2,
+   "refs": "C2,C6",
+   "criticality": "normal",
+   "substitution_allowed": false,
+   "status": "ready",
+   "missing": [],
+   "blocking": [],
+   "hard_gates": [
+    "封装 = 0402 (1005)",
+    "容值 = 330pF",
+    "数量按 BOM 用量，不静默放大"
+   ],
+   "query_plan": [
+    "0402 330pF 电容",
+    "0402 330pF 贴片电容",
+    "1005 330pF 电容",
+    "EYANG(宇阳科技) 330pF 电容"
+   ],
+   "risks": [
+    {
+     "code": "H04",
+     "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+    },
+    {
+     "code": "H05",
+     "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+    },
+    {
+     "code": "S01",
+     "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+    }
+   ],
+   "decision": {
+    "headline": "0402 330pF 贴片电容 ×2",
+    "buy_spec": [
+     "封装 = 0402 (1005)",
+     "容值 = 330pF",
+     "数量按 BOM 用量，不静默放大"
+    ],
+    "search_queries": [
+     "0402 330pF 电容",
+     "0402 330pF 贴片电容",
+     "1005 330pF 电容",
+     "EYANG(宇阳科技) 330pF 电容"
+    ],
+    "must_verify": [
+     "封装/引脚数/间距与 BOM 完全一致（H01）",
+     "型号含后缀，未授权不改型号（H02）",
+     "关键参数不低于 BOM，无法确认按缺失处理（H03）",
+     "无翻新/散新/拆机/打磨信号（H04）",
+     "价格不低于同规格中位价 P10（H05）"
+    ],
+    "risk_notes": [
+     {
+      "code": "H04",
+      "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+     },
+     {
+      "code": "H05",
+      "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+     },
+     {
+      "code": "S01",
+      "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+     }
+    ],
+    "gate": "G1 解析确认 → G3 候选确认",
+    "manual_approval_required": true,
+    "next_action": "把候选标题/价格/店铺信息粘贴到下方评分区；本页不访问淘宝，不生成商品链接。"
+   },
+   "source": "规则引擎 v0.1.0"
+  },
+  "sku_options": [
+   {
+    "label": "颜色分类",
+    "values": [
+     {
+      "text": "0402 150PF ±10% 50V（100只）",
+      "disabled": false,
+      "selected": true
+     },
+     {
+      "text": "0402 180PF ±10% 50V（100只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 200PF ±10% 50V（100只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402 220PF ±10% 50V（100只）",
+      "disabled": true,
+      "selected": false
+     },
+     {
+      "text": "0402 330PF ±10% 50V（100只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603 24PF ±5% 50V（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603 25PF ±5% 50V（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603 120PF ±10% 50V（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603 150PF ±5% 50V（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603 180PF ±10% 50V（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603 220PF ±5% 50V（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603 330PF ±5% 50V（50只）\n推荐",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805 150PF ±5% 50V（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805 200PF ±10% 50V（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805 220PF ±10% 50V（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805 270PF ±10% 50V（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805 300PF ±5% 50V（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805 330PF ±10% 50V（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1206 100PF ±5% 50V（10只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1206 100PF ±5%高压1000V（10只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1206 220PF ±10%高压1000V（10只）",
+      "disabled": false,
+      "selected": false
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "pick": {
+    "颜色分类": "0402 330PF ±10% 50V（100只）"
+   },
+   "reason_contains": null
+  }
+ },
+ {
+  "id": "power-09-1u-inquiry",
+  "source": "real",
+  "note": "询价型 SKU 不能下单",
+  "line_no": 9,
+  "title": "汽车级 高Q值射频 高精密 贴片电容 GJM155/0402 GJM033/0201 B档",
+  "line": {
+   "line_no": 9,
+   "row": {
+    "line_no": 9,
+    "mpn": "0402F105M160NT",
+    "desc": "1uF",
+    "package": "C0402",
+    "params": "",
+    "qty": 2,
+    "refs": "C9,C11",
+    "critical": "",
+    "brand": "FH(风华)",
+    "substitute": "",
+    "note": "",
+    "lcsc": "C1582",
+    "supplier": "LCSC",
+    "raw": {
+     "ID": "9",
+     "Name": "1uF",
+     "Designator": "C9,C11",
+     "Footprint": "C0402",
+     "Quantity": "2",
+     "Manufacturer Part": "0402F105M160NT",
+     "Manufacturer": "FH(风华)",
+     "Supplier": "LCSC",
+     "Supplier Part": "C1582"
+    },
+    "lcsc_info": {
+     "code": "C1582",
+     "model": "0402F105M160NT",
+     "brand": "FH",
+     "package": "0402",
+     "desc": "1uF Y5V ±20% 16V 0402 Ceramic Capacitors",
+     "catalog": "Ceramic Capacitors",
+     "catalog_path": [
+      "Passives",
+      "Capacitors"
+     ],
+     "attrs": {
+      "容值": "1uF",
+      "温度系数": "Y5V",
+      "精度": "±20%",
+      "额定电压": "16V"
+     },
+     "params": {
+      "capacitance_f": 1e-06,
+      "tolerance_pct": 20.0,
+      "voltage_v": 16.0
+     },
+     "mount": "",
+     "stock": 0,
+     "unit": "Piece",
+     "packet": "Reel",
+     "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/09fe2daf22580a99fa7fea93ccb20fb7.pdf?productCode=C1582",
+     "fetched_at": "2026-11-16T20:47:55",
+     "source": "lcsc",
+     "matched_by": "code"
+    }
+   },
+   "mpn": "0402F105M160NT",
+   "desc": "1uF",
+   "brand": "FH(风华)",
+   "package": "0402 (1005)",
+   "category": "passive",
+   "category_label": "被动件",
+   "subtype": "capacitor",
+   "params": {
+    "capacitance_f": 1e-06,
+    "tolerance_pct": 20.0,
+    "voltage_v": 16.0
+   },
+   "params_text": "1µF ±20% 16V",
+   "design_value": {
+    "capacitance_f": 1e-06
+   },
+   "value_conflict": null,
+   "lcsc": {
+    "code": "C1582",
+    "model": "0402F105M160NT",
+    "brand": "FH",
+    "package": "0402",
+    "desc": "1uF Y5V ±20% 16V 0402 Ceramic Capacitors",
+    "stock": 0,
+    "packet": "Reel",
+    "unit": "Piece",
+    "attrs": {
+     "容值": "1uF",
+     "温度系数": "Y5V",
+     "精度": "±20%",
+     "额定电压": "16V"
+    },
+    "catalog": "Ceramic Capacitors",
+    "catalog_path": [
+     "Passives",
+     "Capacitors"
+    ],
+    "params": {
+     "capacitance_f": 1e-06,
+     "tolerance_pct": 20.0,
+     "voltage_v": 16.0
+    },
+    "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/09fe2daf22580a99fa7fea93ccb20fb7.pdf?productCode=C1582",
+    "matched_by": "code"
+   },
+   "qty": 2,
+   "refs": "C9,C11",
+   "criticality": "normal",
+   "substitution_allowed": false,
+   "status": "ready",
+   "missing": [],
+   "blocking": [],
+   "hard_gates": [
+    "封装 = 0402 (1005)",
+    "容值 = 1µF",
+    "精度 不限（BOM ±20%，按 ≤±20% 放宽）",
+    "耐压 ≥ 16V",
+    "数量按 BOM 用量，不静默放大"
+   ],
+   "query_plan": [
+    "0402F105M160NT 瓷片电容",
+    "0402 1uF 16V 瓷片 电容",
+    "0402 1uF 电容",
+    "0402 1uF 16V 电容"
+   ],
+   "risks": [
+    {
+     "code": "H04",
+     "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+    },
+    {
+     "code": "H05",
+     "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+    },
+    {
+     "code": "S01",
+     "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+    }
+   ],
+   "decision": {
+    "headline": "0402 1µF ±20% 贴片电容 ×2",
+    "buy_spec": [
+     "封装 = 0402 (1005)",
+     "容值 = 1µF",
+     "精度 不限（BOM ±20%，按 ≤±20% 放宽）",
+     "耐压 ≥ 16V",
+     "数量按 BOM 用量，不静默放大"
+    ],
+    "search_queries": [
+     "0402F105M160NT 瓷片电容",
+     "0402 1uF 16V 瓷片 电容",
+     "0402 1uF 电容",
+     "0402 1uF 16V 电容"
+    ],
+    "must_verify": [
+     "封装/引脚数/间距与 BOM 完全一致（H01）",
+     "型号含后缀，未授权不改型号（H02）",
+     "关键参数不低于 BOM，无法确认按缺失处理（H03）",
+     "无翻新/散新/拆机/打磨信号（H04）",
+     "价格不低于同规格中位价 P10（H05）"
+    ],
+    "risk_notes": [
+     {
+      "code": "H04",
+      "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+     },
+     {
+      "code": "H05",
+      "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+     },
+     {
+      "code": "S01",
+      "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+     }
+    ],
+    "gate": "G1 解析确认 → G3 候选确认",
+    "manual_approval_required": true,
+    "next_action": "把候选标题/价格/店铺信息粘贴到下方评分区；本页不访问淘宝，不生成商品链接。"
+   },
+   "source": "规则引擎 v0.1.0"
+  },
+  "sku_options": [
+   {
+    "label": "颜色分类",
+    "values": [
+     {
+      "text": "GJM155-0402-1005",
+      "disabled": false,
+      "selected": true
+     },
+     {
+      "text": "GJM033-0201-01005",
+      "disabled": false,
+      "selected": false
+     }
+    ]
+   },
+   {
+    "label": "品牌",
+    "values": [
+     {
+      "text": "村田MURATA",
+      "disabled": false,
+      "selected": true
+     }
+    ]
+   },
+   {
+    "label": "产品现货",
+    "values": [
+     {
+      "text": "联系客服",
+      "disabled": false,
+      "selected": true
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "pick": null,
+   "reason_contains": "询价"
+  }
+ },
+ {
+  "id": "power-11-39k-2010",
+  "source": "real",
+  "note": "2010 100R 顶 0402 39kΩ",
+  "line_no": 11,
+  "title": "贴片电阻 100R 1% 5% 0402/0603/0805/1206/1210/1812/2010/2512",
+  "line": {
+   "line_no": 11,
+   "row": {
+    "line_no": 11,
+    "mpn": "RT0402FRE0739KL",
+    "desc": "39kΩ",
+    "package": "R0402",
+    "params": "",
+    "qty": 1,
+    "refs": "R12",
+    "critical": "",
+    "brand": "YAGEO(国巨)",
+    "substitute": "",
+    "note": "",
+    "lcsc": "C705069",
+    "supplier": "LCSC",
+    "raw": {
+     "ID": "11",
+     "Name": "39kΩ",
+     "Designator": "R12",
+     "Footprint": "R0402",
+     "Quantity": "1",
+     "Manufacturer Part": "RT0402FRE0739KL",
+     "Manufacturer": "YAGEO(国巨)",
+     "Supplier": "LCSC",
+     "Supplier Part": "C705069"
+    },
+    "lcsc_info": {
+     "code": "C705069",
+     "model": "RT0402FRE0739KL",
+     "brand": "YAGEO",
+     "package": "0402",
+     "desc": "39kΩ 62.5mW 50V Thin Film Resistor ±50ppm/℃ ±1% 0402 Chip Resistor - Surface Mount RoHS",
+     "catalog": "Chip Resistor - Surface Mount",
+     "catalog_path": [
+      "Passives",
+      "Resistors"
+     ],
+     "attrs": {
+      "阻值": "39kΩ",
+      "功率": "62.5mW",
+      "最大工作电压": "50V",
+      "电阻类型": "薄膜电阻",
+      "温度系数": "±50ppm/℃",
+      "精度": "±1%",
+      "工作温度": "-55℃~+155℃"
+     },
+     "params": {
+      "resistance_ohm": 39000.0,
+      "power_w": 0.0625,
+      "voltage_v": 50.0,
+      "tolerance_pct": 1.0
+     },
+     "mount": "",
+     "stock": 7450,
+     "unit": "Piece",
+     "packet": "Reel",
+     "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/46d7760c582640714d605308a25a220a.pdf?productCode=C705069",
+     "fetched_at": "2026-11-16T20:47:56",
+     "source": "lcsc",
+     "matched_by": "code"
+    }
+   },
+   "mpn": "RT0402FRE0739KL",
+   "desc": "39kΩ",
+   "brand": "YAGEO(国巨)",
+   "package": "0402 (1005)",
+   "category": "passive",
+   "category_label": "被动件",
+   "subtype": "resistor",
+   "params": {
+    "resistance_ohm": 39000.0,
+    "power_w": 0.0625,
+    "voltage_v": 50.0,
+    "tolerance_pct": 1.0
+   },
+   "params_text": "39kΩ ±1% 0.0625W 50V",
+   "design_value": {
+    "resistance_ohm": 39000.0
+   },
+   "value_conflict": null,
+   "lcsc": {
+    "code": "C705069",
+    "model": "RT0402FRE0739KL",
+    "brand": "YAGEO",
+    "package": "0402",
+    "desc": "39kΩ 62.5mW 50V Thin Film Resistor ±50ppm/℃ ±1% 0402 Chip Resistor - Surface Mount RoHS",
+    "stock": 7450,
+    "packet": "Reel",
+    "unit": "Piece",
+    "attrs": {
+     "阻值": "39kΩ",
+     "功率": "62.5mW",
+     "最大工作电压": "50V",
+     "电阻类型": "薄膜电阻",
+     "温度系数": "±50ppm/℃",
+     "精度": "±1%",
+     "工作温度": "-55℃~+155℃"
+    },
+    "catalog": "Chip Resistor - Surface Mount",
+    "catalog_path": [
+     "Passives",
+     "Resistors"
+    ],
+    "params": {
+     "resistance_ohm": 39000.0,
+     "power_w": 0.0625,
+     "voltage_v": 50.0,
+     "tolerance_pct": 1.0
+    },
+    "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/46d7760c582640714d605308a25a220a.pdf?productCode=C705069",
+    "matched_by": "code"
+   },
+   "qty": 1,
+   "refs": "R12",
+   "criticality": "normal",
+   "substitution_allowed": false,
+   "status": "ready",
+   "missing": [],
+   "blocking": [],
+   "hard_gates": [
+    "封装 = 0402 (1005)",
+    "阻值 = 39kΩ",
+    "精度 不限（BOM ±1%，按 ≤±20% 放宽）",
+    "功率 ≥ 0.0625W",
+    "耐压 ≥ 50V",
+    "数量按 BOM 用量，不静默放大"
+   ],
+   "query_plan": [
+    "RT0402FRE0739KL 电阻",
+    "0402 39kΩ 0.0625W 薄膜 电阻",
+    "0402 39kΩ 电阻",
+    "0402 39kΩ 贴片电阻"
+   ],
+   "risks": [
+    {
+     "code": "H04",
+     "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+    },
+    {
+     "code": "H05",
+     "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+    },
+    {
+     "code": "S01",
+     "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+    }
+   ],
+   "decision": {
+    "headline": "0402 39kΩ ±1% 贴片电阻 ×1",
+    "buy_spec": [
+     "封装 = 0402 (1005)",
+     "阻值 = 39kΩ",
+     "精度 不限（BOM ±1%，按 ≤±20% 放宽）",
+     "功率 ≥ 0.0625W",
+     "耐压 ≥ 50V",
+     "数量按 BOM 用量，不静默放大"
+    ],
+    "search_queries": [
+     "RT0402FRE0739KL 电阻",
+     "0402 39kΩ 0.0625W 薄膜 电阻",
+     "0402 39kΩ 电阻",
+     "0402 39kΩ 贴片电阻"
+    ],
+    "must_verify": [
+     "封装/引脚数/间距与 BOM 完全一致（H01）",
+     "型号含后缀，未授权不改型号（H02）",
+     "关键参数不低于 BOM，无法确认按缺失处理（H03）",
+     "无翻新/散新/拆机/打磨信号（H04）",
+     "价格不低于同规格中位价 P10（H05）"
+    ],
+    "risk_notes": [
+     {
+      "code": "H04",
+      "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+     },
+     {
+      "code": "H05",
+      "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+     },
+     {
+      "code": "S01",
+      "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+     }
+    ],
+    "gate": "G1 解析确认 → G3 候选确认",
+    "manual_approval_required": true,
+    "next_action": "把候选标题/价格/店铺信息粘贴到下方评分区；本页不访问淘宝，不生成商品链接。"
+   },
+   "source": "规则引擎 v0.1.0"
+  },
+  "sku_options": [
+   {
+    "label": "颜色分类",
+    "values": [
+     {
+      "text": "0402贴片电阻 100R ±5%（100只",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0402贴片电阻 100R ±1%（50只）",
+      "disabled": false,
+      "selected": true
+     },
+     {
+      "text": "0603贴片电阻 100R ±5%（200只",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0603贴片电阻 100R ±1%（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805贴片电阻 100R ±5%（100只",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "0805贴片电阻 100R ±1%（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1206贴片电阻 100R ±5%（100只",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1206贴片电阻 100R ±1%（50只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1210贴片电阻 100R ±5%（20只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "1812贴片电阻 100R ±5%（10只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "2010贴片电阻 100R ±5%（10只）",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "2512贴片电阻 100R ±5%（10只）",
+      "disabled": false,
+      "selected": false
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "pick": null,
+   "reason_contains": "阻值"
+  }
+ },
+ {
+  "id": "power-11-39k-not-sold",
+  "source": "real",
+  "note": "只卖小阻值",
+  "line_no": 11,
+  "title": "0402 7.5R8.2R9.1R10R11R12R13R15R16R18R20R22R 1% 100个1元电阻",
+  "line": {
+   "line_no": 11,
+   "row": {
+    "line_no": 11,
+    "mpn": "RT0402FRE0739KL",
+    "desc": "39kΩ",
+    "package": "R0402",
+    "params": "",
+    "qty": 1,
+    "refs": "R12",
+    "critical": "",
+    "brand": "YAGEO(国巨)",
+    "substitute": "",
+    "note": "",
+    "lcsc": "C705069",
+    "supplier": "LCSC",
+    "raw": {
+     "ID": "11",
+     "Name": "39kΩ",
+     "Designator": "R12",
+     "Footprint": "R0402",
+     "Quantity": "1",
+     "Manufacturer Part": "RT0402FRE0739KL",
+     "Manufacturer": "YAGEO(国巨)",
+     "Supplier": "LCSC",
+     "Supplier Part": "C705069"
+    },
+    "lcsc_info": {
+     "code": "C705069",
+     "model": "RT0402FRE0739KL",
+     "brand": "YAGEO",
+     "package": "0402",
+     "desc": "39kΩ 62.5mW 50V Thin Film Resistor ±50ppm/℃ ±1% 0402 Chip Resistor - Surface Mount RoHS",
+     "catalog": "Chip Resistor - Surface Mount",
+     "catalog_path": [
+      "Passives",
+      "Resistors"
+     ],
+     "attrs": {
+      "阻值": "39kΩ",
+      "功率": "62.5mW",
+      "最大工作电压": "50V",
+      "电阻类型": "薄膜电阻",
+      "温度系数": "±50ppm/℃",
+      "精度": "±1%",
+      "工作温度": "-55℃~+155℃"
+     },
+     "params": {
+      "resistance_ohm": 39000.0,
+      "power_w": 0.0625,
+      "voltage_v": 50.0,
+      "tolerance_pct": 1.0
+     },
+     "mount": "",
+     "stock": 7450,
+     "unit": "Piece",
+     "packet": "Reel",
+     "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/46d7760c582640714d605308a25a220a.pdf?productCode=C705069",
+     "fetched_at": "2026-11-16T20:47:56",
+     "source": "lcsc",
+     "matched_by": "code"
+    }
+   },
+   "mpn": "RT0402FRE0739KL",
+   "desc": "39kΩ",
+   "brand": "YAGEO(国巨)",
+   "package": "0402 (1005)",
+   "category": "passive",
+   "category_label": "被动件",
+   "subtype": "resistor",
+   "params": {
+    "resistance_ohm": 39000.0,
+    "power_w": 0.0625,
+    "voltage_v": 50.0,
+    "tolerance_pct": 1.0
+   },
+   "params_text": "39kΩ ±1% 0.0625W 50V",
+   "design_value": {
+    "resistance_ohm": 39000.0
+   },
+   "value_conflict": null,
+   "lcsc": {
+    "code": "C705069",
+    "model": "RT0402FRE0739KL",
+    "brand": "YAGEO",
+    "package": "0402",
+    "desc": "39kΩ 62.5mW 50V Thin Film Resistor ±50ppm/℃ ±1% 0402 Chip Resistor - Surface Mount RoHS",
+    "stock": 7450,
+    "packet": "Reel",
+    "unit": "Piece",
+    "attrs": {
+     "阻值": "39kΩ",
+     "功率": "62.5mW",
+     "最大工作电压": "50V",
+     "电阻类型": "薄膜电阻",
+     "温度系数": "±50ppm/℃",
+     "精度": "±1%",
+     "工作温度": "-55℃~+155℃"
+    },
+    "catalog": "Chip Resistor - Surface Mount",
+    "catalog_path": [
+     "Passives",
+     "Resistors"
+    ],
+    "params": {
+     "resistance_ohm": 39000.0,
+     "power_w": 0.0625,
+     "voltage_v": 50.0,
+     "tolerance_pct": 1.0
+    },
+    "datasheet": "https://datasheet.lcsc.com/datasheet/pdf/46d7760c582640714d605308a25a220a.pdf?productCode=C705069",
+    "matched_by": "code"
+   },
+   "qty": 1,
+   "refs": "R12",
+   "criticality": "normal",
+   "substitution_allowed": false,
+   "status": "ready",
+   "missing": [],
+   "blocking": [],
+   "hard_gates": [
+    "封装 = 0402 (1005)",
+    "阻值 = 39kΩ",
+    "精度 不限（BOM ±1%，按 ≤±20% 放宽）",
+    "功率 ≥ 0.0625W",
+    "耐压 ≥ 50V",
+    "数量按 BOM 用量，不静默放大"
+   ],
+   "query_plan": [
+    "RT0402FRE0739KL 电阻",
+    "0402 39kΩ 0.0625W 薄膜 电阻",
+    "0402 39kΩ 电阻",
+    "0402 39kΩ 贴片电阻"
+   ],
+   "risks": [
+    {
+     "code": "H04",
+     "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+    },
+    {
+     "code": "H05",
+     "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+    },
+    {
+     "code": "S01",
+     "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+    }
+   ],
+   "decision": {
+    "headline": "0402 39kΩ ±1% 贴片电阻 ×1",
+    "buy_spec": [
+     "封装 = 0402 (1005)",
+     "阻值 = 39kΩ",
+     "精度 不限（BOM ±1%，按 ≤±20% 放宽）",
+     "功率 ≥ 0.0625W",
+     "耐压 ≥ 50V",
+     "数量按 BOM 用量，不静默放大"
+    ],
+    "search_queries": [
+     "RT0402FRE0739KL 电阻",
+     "0402 39kΩ 0.0625W 薄膜 电阻",
+     "0402 39kΩ 电阻",
+     "0402 39kΩ 贴片电阻"
+    ],
+    "must_verify": [
+     "封装/引脚数/间距与 BOM 完全一致（H01）",
+     "型号含后缀，未授权不改型号（H02）",
+     "关键参数不低于 BOM，无法确认按缺失处理（H03）",
+     "无翻新/散新/拆机/打磨信号（H04）",
+     "价格不低于同规格中位价 P10（H05）"
+    ],
+    "risk_notes": [
+     {
+      "code": "H04",
+      "text": "标题出现「散新/拆机/翻新/打磨/改字/洗板」→ 降权并人工复核。"
+     },
+     {
+      "code": "H05",
+      "text": "低于同规格候选中位价 P10 触发 H05 淘汰；低价不提升排名。"
+     },
+     {
+      "code": "S01",
+      "text": "高于 P90 需写明理由（关键件/原厂授权），否则降权。"
+     }
+    ],
+    "gate": "G1 解析确认 → G3 候选确认",
+    "manual_approval_required": true,
+    "next_action": "把候选标题/价格/店铺信息粘贴到下方评分区；本页不访问淘宝，不生成商品链接。"
+   },
+   "source": "规则引擎 v0.1.0"
+  },
+  "sku_options": [
+   {
+    "label": "颜色分类",
+    "values": [
+     {
+      "text": "8.2R",
+      "disabled": false,
+      "selected": true
+     },
+     {
+      "text": "9.1R",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "10R",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "11R",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "12R",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "13R",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "15R",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "16R",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "18R",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "20R",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "22R",
+      "disabled": false,
+      "selected": false
+     },
+     {
+      "text": "7.5R",
+      "disabled": false,
+      "selected": false
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "pick": null,
+   "reason_contains": "阻值"
+  }
+ }
+]

@@ -47,7 +47,7 @@ pip install -r requirements.txt
 启动BOM选型台.bat      ← 第 2 步：自检 → 后台起服务 → 打开界面
 ```
 
-三个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.10.0）。
+三个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.11.0）。
 
 打开 <http://127.0.0.1:8765/>。
 
@@ -108,7 +108,7 @@ bom-site/                     本地网站与调度
   lcsc.py                     立创商城器件查询（编号/型号 → 权威规格）
   window_pos.py               调试浏览器窗口显隐（跑批时不抢前台）
   static/                     前端（无框架）
-  test_*.py                  1121 项断言（13 套纯 Python 测试）
+  test_*.py                  1175 项断言（14 套纯 Python 测试）
   samples/                    示例 BOM / 候选
 Taobao-Search-Skill/scripts/  淘宝执行层（Playwright over CDP）
 taobao-bom-procurement/       决策层 SKILL 文档
@@ -129,18 +129,19 @@ python test_window_focus.py            #  58 项：窗口显隐与不抢前台
 python test_click_guard.py              #  14 项：点击三守卫
 python test_cart_cleanup.py             #  35 项：精准清车不误删、删车后进度作废
 python test_batch_progress_guard.py     #  62 项：换 BOM 不误用上一批进度、重跑语义、引擎升级不误判换表
-python test_procurement_guard.py        #  99 项：采购正确性（编号锚定/设计值/单价/同系列降规格/演练同闸门）
-python test_bom_regression.py          # 267 项：三份真实 BOM 的多品类回归（金标快照 + 危险不变式）
+python test_procurement_guard.py       # 107 项：采购正确性（编号锚定/设计值/单价/同系列降规格/演练同闸门）
+python test_bom_regression.py          # 265 项：三份真实 BOM 的多品类回归（金标快照 + 危险不变式）
 python test_candidate_replay.py        #  10 项：候选回放（31 条真机标题 + 6 条对抗样本，判定不许漂移）
+python test_sku_replay.py              #  48 项：SKU 档位回放（33 家真店的选项组，选中即核实）
 python test_integration.py             #  24 项：假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
 ```
 
-以上 13 套共 1121 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+以上 14 套共 1175 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
 另有 `python test_http.py`：需要服务**已经在 8765 跑着**，只做 HTTP 冒烟打印，不断言，故不进 CI。
 所有测试都把批量进度隔离到临时目录，不会碰到 `runs/` 里的真实进度。
-GitHub Actions 在 Windows runner 上跑 13 套测试 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。
+GitHub Actions 在 Windows runner 上跑 14 套测试 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。
 
-### 多品类回归与候选回放（v0.10.0）
+### 多品类回归与候选回放（v0.10.0 → v0.11.0）
 
 数字钟那份 BOM 只有阻容二三极管，所有闸门都是从那 19 行踩出来的。开发板（MCU/排针/LED/晶振）和电源板（LDO/DC-DC/钽电容）一进来，立刻暴露「按位号判品类」「封装名当型号」「0Ω 写成 0mΩ」这类问题。所以加了两层：
 
@@ -151,7 +152,12 @@ GitHub Actions 在 Windows runner 上跑 13 套测试 + 启动器语法/体检�
 
 改了规则要更新金标：`python test_bom_regression.py --update-golden`，它会把差异打印出来，逼你看一眼「这次动了哪些行」。
 
-**已知边界**：SKU 层（链接里的颜色分类）不在回放范围内 —— 历史上有 7 条候选是在「SKU 里没有 5kΩ 这一档」时被拒的，要抓到 SKU 选项才能回放，属于下一步。
+| SKU 档位回放（v0.11.0） | `test_sku_replay.py` + `tests/fixtures/sku-replay.json` | 从演练抓到的 33 家店里挑出 12 组（4 家该买到、8 家必须拒买），跑一遍选值 → 材料闸门 → 值核实；不变式：**选中了值就必须能核实出 BOM 参数** |
+
+SKU 夹具同样可重建：`python tests/build_sku_replay.py` 从 `runs/sku-observations.jsonl` 重新生成（期望结论表在脚本里，改行为要显式改期望）。
+
+**SKU 观测怎么来的**：演练/真跑每打开一个商品，就把该商品的 SKU 结构（组名 + 每档文本 + 页面已选值）追加到
+`runs/sku-observations.jsonl`，一份 JSON 一行。这是回放的原料，也是排查「这家为什么没买」的现场记录。
 
 
 ## 常见问题

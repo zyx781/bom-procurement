@@ -941,14 +941,9 @@
    "desc": "5.6Ω",
    "category": "passive",
    "subtype": "resistor",
-   "status": "ready",
+   "status": "needs_user",
    "code": "C325562",
-   "q": [
-    "0402 5.6Ω 0.0625W 厚膜 电阻",
-    "0402 5.6Ω 电阻",
-    "0402 5.6Ω 贴片电阻",
-    "1005 5.6Ω 电阻"
-   ],
+   "q": [],
    "params": {
     "power_w": 0.0625,
     "resistance_ohm": 5.6,

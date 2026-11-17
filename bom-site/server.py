@@ -396,6 +396,20 @@ class Handler(BaseHTTPRequestHandler):
                 patch["line_no"] = _int_field(body, "line_no", 0, 99999, label="line_no")
                 return self._send(200, tr.update_saved_line(idx, patch))
 
+            if path == "/api/taobao/run-line":
+                # 单行执行：个别行失败/改完搜索词后只跑这一行，不重复加购其它行
+                _ln = body.get("line_no")
+                _idx = body.get("index")
+                if _ln is None and _idx is None:
+                    raise ValueError("缺少 line_no 或 index")
+                return self._send(
+                    200,
+                    tr.RUNNER.run_line(
+                        line_no=_ln,
+                        index=None if _idx is None else _int_field(body, "index", 0, 99999, label="index"),
+                    ),
+                )
+
             if path == "/api/taobao/batch-start":
                 lines = body.get("lines")
                 if (not isinstance(lines, list) or not lines) and bool(body.get("resume", True)):

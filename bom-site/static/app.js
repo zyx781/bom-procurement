@@ -523,6 +523,11 @@
       <div class="detail-foot">
         <span>人工门：${esc(d.gate)}；manual_approval_required = true</span>
         <span class="foot-btns">
+          <button class="primary small" data-run-idx="${idx}" type="button" ${
+            ln.dont_buy
+              ? 'disabled title="已标记不买，先点右边「恢复采购」"'
+              : 'title="只执行这一行：搜索→评分→选规格→加购，不影响其它行"'
+          }>只跑这一行</button>
           ${
             ln.status !== "ready"
               ? `<button class="primary small" data-confirm-idx="${idx}" type="button">我已人工核对，标记为可执行</button>`
@@ -628,6 +633,50 @@
         renderLineList();
         renderDetail(idx);
         toast(`第 ${ln.line_no} 行已人工确认，标记为可执行`);
+      });
+    }
+
+    // 只跑这一行：个别行失败（换词/临时验证）时不用整批重跑 —— 整批会把
+    // 已成功的行再加一遍车。走 /api/taobao/run-line，结果只落这一行。
+    const runBtn = $("#line-detail").querySelector("[data-run-idx]");
+    if (runBtn) {
+      runBtn.addEventListener("click", async () => {
+        if (runBtn.disabled) return;
+        const oldText = runBtn.textContent;
+        runBtn.disabled = true;
+        runBtn.textContent = "正在跑…";
+        try {
+          const res = await api("/api/taobao/run-line", { line_no: ln.line_no, index: idx });
+          try {
+            const st = await fetch("/api/taobao/batch", { cache: "no-store" }).then((r) => r.json());
+            applyBatchStatus(st);
+          } catch {
+            /* 状态刷新失败不影响结果本身 */
+          }
+          renderSummary();
+          renderLineList();
+          if (res.status === "ok") {
+            toast(
+              `第 ${ln.line_no} 行已加入购物车` +
+                (res.final_price != null ? `（¥${res.final_price}）` : "")
+            );
+          } else if (res.status === "uncertain") {
+            toast(`第 ${ln.line_no} 行已加购，但需要核对：${res.message || ""}`);
+          } else {
+            toast(`第 ${ln.line_no} 行没跑成：${res.message || res.code || "未知原因"}`);
+          }
+          renderDetail(idx);
+        } catch (e) {
+          const hint =
+            e.code === "NO_SESSION"
+              ? "先点右上角「启动淘宝会话」"
+              : e.code === "BATCH_RUNNING"
+                ? "等批量任务跑完再试"
+                : e.message;
+          toast(`这一行没跑起来：${hint}`);
+          runBtn.disabled = false;
+          runBtn.textContent = oldText;
+        }
       });
     }
 
@@ -1032,6 +1081,55 @@
       btn.disabled = false;
       btn.textContent = "搜索候选";
       pollSession();
+    }
+  }
+
+  // 自动跑完这一行：和批量同一套逻辑（搜索→评分选优→匹配 SKU→加购），
+  // 只是范围限于当前行。个别行失败时不用整批重跑，避免重复加购。
+  async function execAuto() {
+    const line = currentExecLine();
+    if (!line) return toast("先在「BOM 行」里选一行");
+    const idx = state.result.lines.indexOf(line);
+    const btn = $("#btn-exec-auto");
+    const oldText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "正在跑…";
+    const note = $("#exec-search-note");
+    note.textContent = "正在跑这一行（搜索→评分→选规格→加购），通常几秒到十几秒…";
+    try {
+      const res = await api("/api/taobao/run-line", { line_no: line.line_no, index: idx });
+      try {
+        applyBatchStatus(await fetch("/api/taobao/batch", { cache: "no-store" }).then((r) => r.json()));
+      } catch {
+        /* 状态刷新失败不影响结果 */
+      }
+      renderSummary();
+      renderLineList();
+      if (res.status === "ok") {
+        note.innerHTML = `<b>已加入购物车</b>${res.final_price != null ? `，¥${res.final_price}` : ""}${
+          res.message ? `（${esc(res.message)}）` : ""
+        }`;
+        toast(`第 ${line.line_no} 行已加入购物车`);
+      } else if (res.status === "uncertain") {
+        note.innerHTML = `<span class="sess-warn">已加购但需核对：${esc(res.message || "")}</span>`;
+        toast(`第 ${line.line_no} 行已加购，但需要核对`);
+      } else {
+        note.innerHTML = `<span class="sess-warn">没跑成：${esc(res.message || res.code || "未知原因")}</span>`;
+        toast(`第 ${line.line_no} 行没跑成`);
+      }
+      if (idx === state.activeIndex) renderDetail(idx);
+    } catch (e) {
+      const hint =
+        e.code === "NO_SESSION"
+          ? "先点右上角「启动淘宝会话」"
+          : e.code === "BATCH_RUNNING"
+            ? "等批量任务跑完再试"
+            : e.message;
+      note.innerHTML = `<span class="sess-warn">没跑起来：${esc(hint)}</span>`;
+      toast(`这一行没跑起来：${hint}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldText;
     }
   }
 
@@ -2000,6 +2098,7 @@
     $("#btn-verify-recheck").addEventListener("click", recheckVerification);
     $("#btn-cart-clear").addEventListener("click", () => cartRemove(true));
     $("#btn-exec-search").addEventListener("click", execSearch);
+    $("#btn-exec-auto").addEventListener("click", execAuto);
     $("#btn-exec-open").addEventListener("click", execOpen);
     $("#exec-line").addEventListener("change", () => {
       exec.search = null;

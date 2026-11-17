@@ -199,11 +199,19 @@ def batch_fingerprint(lines: list) -> str:
     一改选型规则（比如接入立创核准、改了摘要格式）它就变，用户没换表却被告知
     「BOM 已更换，旧进度作废」—— 和本函数「只认 BOM 身份」的初衷正相反。
     BOM 换没换，看型号/名称/封装/参数/数量这几列就够了。
+
+    2026-11-17：连 `params` 也不能用**解析后**的字典。那是引擎派生值：同一条
+    「1kΩ」以前解析成 int 1000、现在 float 1000.0；晶振补了 frequency 键 ——
+    指纹就变了，29 行进度被误判「换过 BOM」。改用原始参数列（row.params）。
     """
     parts = []
     for ln in lines or []:
         if not isinstance(ln, dict):
             continue
+        raw_params = (ln.get("row") or {}).get("params")
+        if raw_params is None:
+            # 兼容没有 row 的调用方（测试/旧数据）：退回原始字符串列，别用解析字典
+            raw_params = ln.get("params_text") or ""
         parts.append(
             "\x1f".join(
                 [
@@ -211,7 +219,7 @@ def batch_fingerprint(lines: list) -> str:
                     str(ln.get("mpn") or "").strip(),
                     str(ln.get("desc") or "").strip(),
                     str(ln.get("package") or "").strip(),
-                    str(ln.get("params") or "").strip(),
+                    str(raw_params or "").strip(),
                     str(ln.get("qty") or ""),
                 ]
             )
@@ -291,6 +299,40 @@ def _line_skip_reason(line: dict) -> str:
         "；".join(line.get("blocking") or [])
         or "该行没有可用搜索词（型号/名称/参数都为空）"
     )
+
+
+def _result_progress_payload(r: dict) -> dict:
+    """一条执行结果 → 进度文件里的一行（批量、单行共用）。
+
+    放在模块级而不是 SessionRunner 方法：测试里的假 runner 只绑定个别方法，
+    用 self 调用会 AttributeError（实测踩到）。
+    """
+    return {
+        "status": r.get("status"),
+        "headline": r.get("headline"),
+        "message": r.get("message"),
+        "qty": r.get("qty"),
+        "price": r.get("final_price") if r.get("final_price") is not None else r.get("price"),
+        "final_price": r.get("final_price"),
+        "cost": r.get("cost"),
+        "unit_price": r.get("unit_price"),
+        "pack_size": r.get("pack_size"),
+        "actual_pcs": r.get("actual_pcs"),
+        # 选了哪个 SKU、靠什么信号确认加购：续跑/导出都要用，缺了就查不出买了什么规格
+        "sku": r.get("sku") or [],
+        "cart_verified_via": r.get("cart_verified_via"),
+        "query": r.get("query"),
+        # uncertain 行要留着候选和截图，续跑跳过时还能让人核对
+        "candidate": r.get("candidate"),
+        "screenshot": r.get("screenshot"),
+        # 耗时埋点：只用于复盘速度，不影响续跑判定
+        "total_ms": r.get("total_ms"),
+        "search_ms": r.get("search_ms"),
+        "open_ms": r.get("open_ms"),
+        "select_ms": r.get("select_ms"),
+        "add_ms": r.get("add_ms"),
+        "attempts_n": len(r.get("attempts") or []),
+    }
 
 
 def batch_progress_summary(active_fingerprint: str = "") -> dict:
@@ -1053,6 +1095,8 @@ class SessionRunner:
                     "finished_at": (prog or {}).get("finished_at"),
                     "stopped_reason": stopped,
                     "restored": True,
+                    # 指纹要一起装回来：前端/接口判断「这批进度属于哪份 BOM」要用它
+                    "fingerprint": (prog or {}).get("fingerprint") or "",
                 }
             )
 
@@ -2380,6 +2424,106 @@ class SessionRunner:
         self._save_progress()
         return self.batch_status()
 
+    # ---------------- 单行执行 ----------------
+
+    def run_line(self, line_no: int | str | None = None, index: int | None = None) -> dict:
+        """只跑一行，与跑批同一套逻辑（搜索→评分→SKU→加购）。
+
+        场景：整批里个别行失败（换词/临时验证/改完搜索词），整批重跑会把
+        已成功的行再加一遍车。单行跑完只落这一行的进度，其余结论原样不动。
+        """
+        lines = load_batch_lines()
+        if not lines:
+            raise SessionError("还没有可跑的行：先投放并分析 BOM", "NO_LINES")
+        if self._batch.get("running"):
+            raise SessionError("批量任务正在跑，等它跑完再单独跑这一行", "BATCH_RUNNING")
+        if self._proc is None or self._proc.poll() is not None:
+            raise SessionError("淘宝会话未启动（或已退出），先点右上角「启动淘宝会话」", "NO_SESSION")
+        if self._browser_gone or self._browser_unreachable():
+            raise SessionError("淘宝浏览器已关闭，先点「启动淘宝会话」重建会话", "BROWSER_GONE")
+
+        target = None
+        if line_no is not None:
+            for ln in lines:
+                if str(ln.get("line_no")) == str(line_no):
+                    target = ln
+                    break
+        elif index is not None and 0 <= int(index) < len(lines):
+            target = lines[int(index)]
+        if target is None:
+            raise SessionError("找不到这一行（可能换过 BOM）", "NO_LINE")
+        _skip = _line_skip_reason(target)
+        if _skip:
+            raise SessionError(f"这一行跑不了：{_skip}", "LINE_SKIPPED")
+
+        self._append_log(f"[line] 单独执行第 {target.get('line_no')} 行（不跑整批）")
+        _t0 = time.monotonic()
+        try:
+            res = self._add_line_to_cart(target, True, 2)
+        except SessionError as exc:
+            res = {
+                "line_no": target.get("line_no"),
+                "headline": (target.get("decision") or {}).get("headline") or target.get("mpn") or "",
+                "qty": target.get("qty"),
+                "attempts": [],
+                "status": "failed",
+                "message": str(exc),
+                "code": exc.code,
+            }
+        res["total_ms"] = int((time.monotonic() - _t0) * 1000)
+        # 与跑批同一套口径：BOM 自身矛盾 → 不自动算成功；采购依据跟着结果落库
+        if res.get("status") in ("ok", "failed") and res.get("attempts"):
+            _rev = _review_reason(target)
+            if _rev:
+                res["status"] = "uncertain"
+                res["needs_review"] = True
+                res["message"] = _rev
+        res["basis"] = _procurement_basis(target, res)
+        self._append_log(
+            f"[line] 第 {target.get('line_no')} 行 {res.get('status')} "
+            f"total={res['total_ms'] / 1000:.1f}s {res.get('message') or ''}"
+        )
+        # 内存里的批次结果同步更新：页面不用重启就能看到这行的新结论
+        with self._state_lock:
+            hit = False
+            for rec in self._batch.get("results") or []:
+                if str(rec.get("line_no")) == str(target.get("line_no")):
+                    rec.update(res)
+                    hit = True
+                    break
+            if not hit:
+                self._batch.setdefault("results", []).append(res)
+                if not self._batch.get("total"):
+                    self._batch["total"] = len(lines)
+        self._save_single_result(res, total_lines=len(lines))
+        return res
+
+    def _save_single_result(self, res: dict, total_lines: int = 0) -> None:
+        """单行结果并入进度文件（只覆盖这一行）。"""
+        if self._batch.get("dry_run"):
+            return
+        ln = res.get("line_no")
+        if ln is None:
+            return
+        prior = load_batch_progress() or {}
+        rows = dict(prior.get("lines") or {})
+        rows[str(ln)] = _result_progress_payload(res)
+        fp = (
+            self._batch.get("fingerprint")
+            or prior.get("fingerprint")
+            or batch_fingerprint(load_batch_lines())
+        )
+        save_batch_progress(
+            {
+                "updated_at": datetime.now().isoformat(timespec="seconds"),
+                "total": prior.get("total") or total_lines or len(rows),
+                "lines": rows,
+                "fingerprint": fp,
+                "started_at": prior.get("started_at") or self._batch.get("started_at"),
+                "finished_at": prior.get("finished_at") or self._batch.get("finished_at"),
+            }
+        )
+
     def _save_progress(self):
         """把已定局（ok/failed/uncertain）的行按 line_no 存盘，供下次续跑跳过。"""
         # 演练批次的结论**一律不落盘**。
@@ -2397,37 +2541,14 @@ class SessionRunner:
         with self._state_lock:
             rows = {}
             for r in self._batch.get("results") or []:
-                if r.get("status") not in ("ok", "failed", "uncertain", "removed"):
+                # skipped 也落盘：不买/无搜索词是**人工定局**，不写的话刷新后
+                # 这两行又变回「没跑过」，用户以为漏了（14/28 行实测）。
+                if r.get("status") not in ("ok", "failed", "uncertain", "removed", "skipped"):
                     continue
                 ln = r.get("line_no")
                 if ln is None:
                     continue
-                payload = {
-                    "status": r["status"],
-                    "headline": r.get("headline"),
-                    "message": r.get("message"),
-                    "qty": r.get("qty"),
-                    "price": r.get("final_price") if r.get("final_price") is not None else r.get("price"),
-                    "final_price": r.get("final_price"),
-                    "cost": r.get("cost"),
-                    "unit_price": r.get("unit_price"),
-                    "pack_size": r.get("pack_size"),
-                    "actual_pcs": r.get("actual_pcs"),
-                    # 选了哪个 SKU、靠什么信号确认加购：续跑/导出都要用，缺了就查不出买了什么规格
-                    "sku": r.get("sku") or [],
-                    "cart_verified_via": r.get("cart_verified_via"),
-                    "query": r.get("query"),
-                    # uncertain 行要留着候选和截图，续跑跳过时还能让人核对
-                    "candidate": r.get("candidate"),
-                    "screenshot": r.get("screenshot"),
-                    # 耗时埋点：只用于复盘速度，不影响续跑判定
-                    "total_ms": r.get("total_ms"),
-                    "search_ms": r.get("search_ms"),
-                    "open_ms": r.get("open_ms"),
-                    "select_ms": r.get("select_ms"),
-                    "add_ms": r.get("add_ms"),
-                    "attempts_n": len(r.get("attempts") or []),
-                }
+                payload = _result_progress_payload(r)
                 if r.get("resumed"):
                     # 续跑跳过的行：结论是从进度文件里读出来的，别拿它覆盖上一轮的
                     # 真实记录（message 会变成「续跑跳过」、耗时全变 null）。

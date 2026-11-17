@@ -4699,7 +4699,14 @@ def suggest_sku(line: dict, groups: list, title: str = "") -> tuple[list, list]:
 
         pick, auto, note = None, False, ""
         _any_spec = any(_sku_has_spec(line, v.get("text", "")) for v in enabled_ok)
-        if selected and _score_sku_value(line, label, selected[0].get("text", "")) >= 10:
+        _sel_score = (
+            _score_sku_value(line, label, selected[0].get("text", "")) if selected else -999
+        )
+        # 页面默认值只在「和最优选项差不多好」时保留。以前只要它得正分就保留 ——
+        # 实测 BOM 要 1%，选项里 1% 和 5% 都有，页面默认 5%（得 25 分，正分），
+        # 于是自动买了 ±5% 的货，把 80 分的 1% 档跳过去：这不是"遵循买家默认"，
+        # 是自动降精度。差 30 分以上就当默认值不对，按 BOM 挑。
+        if selected and _sel_score >= 10 and best_score - _sel_score < 30:
             pick, auto = selected[0], True
             note = "保留页面已选值"
         elif not _any_spec:
@@ -4814,8 +4821,14 @@ def suggest_sku(line: dict, groups: list, title: str = "") -> tuple[list, list]:
         # 在这里判死，交给执行层的事后闸门（它拿标题一起核）。这条只负责
         # 「明明在卖阻值，却没有 BOM 要的那个」——真机上 75kΩ 选中只卖 0.15R 的店。
         if any(_reads_value(line, t) for t in _texts):
-            _prove = " ".join([str(title or "")] + [s.get("value", "") for s in suggestions])
-            _miss = _need_kinds - _title_value_kinds(line, _prove)
+            # 逐段核实，不能拼成一整串：系列链接的标题常是「0402 30K 33K 36K 39K…」，
+            # 两个解析器都只认第一个数值（30K），拼起来判就等于「标题里永远没有 BOM 的值」。
+            # 实测 #4（200kΩ）那家店，标题列了 8 个档位、SKU 里明确写着 33K，
+            # 页级闸门仍报「这家没有这一档」—— 换店是对的，理由却是错的。
+            _proved: set = set()
+            for _t in [str(title or "")] + [str(s.get("value") or "") for s in suggestions]:
+                _proved |= _title_value_kinds(line, _t)
+            _miss = _need_kinds - _proved
             if _miss:
                 unresolved.append(
                     {

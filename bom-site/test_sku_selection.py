@@ -242,5 +242,25 @@ check("13.5×12.6mm 15A → 拦",
 check("6×6mm 15uH → 放行",
       tr._candidate_veto(_ind, "贴片功率电感 6x6mm 15uH 3A") is None)
 
+print("== 系列标题（v0.11.0）：标题列了 8 个档位，选中值里明写 33K ==")
+# 真机 #4（200kΩ）那家店：标题「贴片电阻 5% 1% 0402 30K 33K 36K …」，SKU 一档一值。
+# 旧实现把标题和选中值拼成一整串再解析，只认第一个数（30K），于是「标题里永远没有 BOM 的值」，
+# 页级闸门报「这家没有这一档」—— 店确实没有 200kΩ，但同一套逻辑会把有货的店也判死。
+_series = mkrow(desc="33kΩ", package="R0402", params="33kΩ ±1%", qty=2)
+_series_title = "贴片电阻 5% 1% 0402 30K 33K 36K 39K 43K 47K 51K 56K 62K J F"
+_g = [group("颜色分类", ["0402 （精度1%）33K 10000个", "0402 （精度1%）36K 10000个",
+                          "0402 （精度5%）33K 10000个"], selected=0)]
+_s, _u = tr.suggest_sku(_series, _g, _series_title)
+check("系列标题下选中值仍能核实", not [x for x in _u if x["label"] == "整页"], _u)
+check("选中的是 33K 那一档", (_s and _s[0]["value"].endswith("33K 10000个")), _s)
+
+print("== 页面默认值不许降规格（v0.11.0）：要 1%，默认 5%，1% 也在 ==")
+# #4 那家店页面默认选中的是「精度5% 33K」。旧实现只要默认值得正分就保留，
+# 于是自动买了 ±5%，把 80 分的 ±1% 跳过去 —— 自动降精度。
+_g2 = [group("颜色分类", ["0402 （精度5%）33K 10000个", "0402 （精度1%）33K 10000个"], selected=0)]
+_s2, _u2 = tr.suggest_sku(_series, _g2, _series_title)
+check("默认 5% 不保留，改选 1%", (_s2 and "精度1%" in _s2[0]["value"]), _s2)
+check("没被当成「保留页面已选值」", (_s2 and _s2[0].get("note") != "保留页面已选值"), _s2)
+
 print(f"\nRESULT: {PASS} passed, {FAIL} failed")
 raise SystemExit(1 if FAIL else 0)

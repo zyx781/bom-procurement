@@ -108,7 +108,7 @@ bom-site/                     本地网站与调度
   lcsc.py                     立创商城器件查询（编号/型号 → 权威规格）
   window_pos.py               调试浏览器窗口显隐（跑批时不抢前台）
   static/                     前端（无框架）
-  test_*.py                  1175 项断言（14 套纯 Python 测试）
+  test_*.py                  1179 项断言（14 套纯 Python 测试）
   samples/                    示例 BOM / 候选
 Taobao-Search-Skill/scripts/  淘宝执行层（Playwright over CDP）
 taobao-bom-procurement/       决策层 SKILL 文档
@@ -122,7 +122,7 @@ VERSION                       当前版本号
 cd bom-site
 python test_engine.py                 # 193 项：解析与规则
 python test_lcsc.py                    #  80 项：立创编号解析与型号核准
-python test_sku_selection.py            #  73 项：SKU 选择与门禁
+python test_sku_selection.py            #  77 项：SKU 选择与门禁
 python test_runner.py                   # 179 项：调度、对账、进度、续跑
 python test_verification_recovery.py    #  27 项：验证/风控恢复
 python test_window_focus.py            #  58 项：窗口显隐与不抢前台
@@ -136,7 +136,7 @@ python test_sku_replay.py              #  48 项：SKU 档位回放（33 家真�
 python test_integration.py             #  24 项：假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
 ```
 
-以上 14 套共 1175 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+以上 14 套共 1179 项断言，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
 另有 `python test_http.py`：需要服务**已经在 8765 跑着**，只做 HTTP 冒烟打印，不断言，故不进 CI。
 所有测试都把批量进度隔离到临时目录，不会碰到 `runs/` 里的真实进度。
 GitHub Actions 在 Windows runner 上跑 14 套测试 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。

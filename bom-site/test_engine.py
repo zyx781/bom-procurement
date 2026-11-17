@@ -493,6 +493,36 @@ eq("行号自动连续", [r["line_no"] for r in _res_multi["rows"]], [1, 2])
 eq("合并了 2 个工作表", any("已合并 2 个工作表" in w for w in _res_multi["warnings"]), True)
 eq("表头不一致的页被提示", any("说明" in w for w in _res_multi["warnings"]), True)
 
+print("== 晶振只认频率（2026-11-17）==")
+# 曾经的三个冤案：立创编号都核准了「频率 50MHz」，整行还被卡成「缺少阻值/容值/感值」
+# 待确认；'8MHz' 被宽松电阻规则读成 8MΩ 拿去搜「电阻」；X/Y 位号掉进 other 一刀切。
+_b_xtal = engine.analyze_line(
+    {"line_no": 7, "mpn": "OT322550MJBA4SL", "desc": "SMD 50MHz", "package": "SMD",
+     "qty": 1, "refs": "X2"},
+    7, {},
+)
+eq("X 位号归 passive", _b_xtal["category"], "passive")
+eq("晶振细分 subtype", _b_xtal.get("subtype"), "crystal")
+eq("名称带频率 → ready 不再要人确认", _b_xtal["status"], "ready")
+eq("频率进参数", _b_xtal["params"].get("frequency"), "50MHz")
+eq("频率是硬门槛", any("频率 = 50MHz" in g for g in _b_xtal["hard_gates"]), True)
+eq("搜索词带型号晶振词", any("OT322550MJBA4SL 晶振" == q for q in _b_xtal["query_plan"]), True)
+eq("搜索词带频率兜底词", any("50MHz 贴片晶振" in q for q in _b_xtal["query_plan"]), True)
+
+_b_xtal2 = engine.analyze_line(
+    {"line_no": 18, "mpn": "ABM8G-8.000MHZ", "desc": "SMD", "package": "SMD3225",
+     "qty": 1, "refs": "X1"}, 18, {},
+)
+eq("型号里的 8.000MHz 能读出频率", _b_xtal2["params"].get("frequency"), "8.000MHz")
+eq("8MHz 不再被读成 8MΩ", "resistance_ohm" in _b_xtal2["params"], False)
+
+_b_xtal3 = engine.analyze_line(
+    {"line_no": 18, "mpn": "XTAL-3225", "desc": "SMD 贴片", "package": "SMD",
+     "qty": 1, "refs": "X1"}, 18, {},
+)
+eq("没写频率的晶振拦下待确认", _b_xtal3["status"], "needs_user")
+eq("缺的是频率不是阻容感", _b_xtal3["missing"], ["频率"])
+
 print()
 print(f"RESULT: {PASS} passed, {FAIL} failed")
 sys.exit(0 if FAIL == 0 else 1)

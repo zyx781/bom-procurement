@@ -385,6 +385,17 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("清空整个购物车需要 confirm=\"清空\"")
                 return self._send(200, tr.RUNNER.cart_remove(keyword=keyword or None, remove_all=remove_all))
 
+            if path == "/api/lines/update":
+                # 网页上的人工修改：确认放行（status=ready）/ 改搜索词（query_plan）。
+                # 只按 index + line_no 双重定位、只覆盖白名单字段，改错的行改不进来。
+                idx = _int_field(body, "index", 0, 99999, label="index")
+                patch = body.get("patch")
+                if not isinstance(patch, dict) or not patch:
+                    raise ValueError("缺少 patch")
+                patch = dict(patch)
+                patch["line_no"] = _int_field(body, "line_no", 0, 99999, label="line_no")
+                return self._send(200, tr.update_saved_line(idx, patch))
+
             if path == "/api/taobao/batch-start":
                 lines = body.get("lines")
                 if (not isinstance(lines, list) or not lines) and bool(body.get("resume", True)):

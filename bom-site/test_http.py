@@ -10,11 +10,13 @@ import urllib.request
 BASE = "http://127.0.0.1:8765"
 ROOT = pathlib.Path(__file__).parent
 
-# 这套测试打的是**正在运行的真实服务**，而 /api/analyze 会写 runs/active-bom.json。
-# 不还原的话，跑完测试用户页面上的「当前 BOM」就被换成了测试表格，
-# 真实进度的指纹对不上 → 界面报「换过 BOM」，19 行进度看着像失效了。
+# 这套测试打的是**正在运行的真实服务**，而 /api/analyze 会写 runs/active-bom.json
+# 和 runs/last-analysis.json。不还原的话，跑完测试用户页面上的「当前 BOM」就被换成了
+# 测试表格、恢复区只剩两行假数据（实测 2026-11-17：真实 29 行分析被测试覆盖）。
 _ACTIVE_BOM = ROOT / "runs" / "active-bom.json"
 _active_bom_bak = _ACTIVE_BOM.read_bytes() if _ACTIVE_BOM.exists() else None
+_LAST_ANALYSIS = ROOT / "runs" / "last-analysis.json"
+_last_analysis_bak = _LAST_ANALYSIS.read_bytes() if _LAST_ANALYSIS.exists() else None
 
 
 def _restore_active_bom():
@@ -23,6 +25,10 @@ def _restore_active_bom():
             _ACTIVE_BOM.unlink(missing_ok=True)
         else:
             _ACTIVE_BOM.write_bytes(_active_bom_bak)
+        if _last_analysis_bak is None:
+            _LAST_ANALYSIS.unlink(missing_ok=True)
+        else:
+            _LAST_ANALYSIS.write_bytes(_last_analysis_bak)
     except Exception:
         pass
 

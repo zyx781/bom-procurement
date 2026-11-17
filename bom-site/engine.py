@@ -767,7 +767,10 @@ def classify(text: str) -> str:
         return "other"
     if re.search(r"mosfet|mos\s*管|场效应|igbt|irf\d|stp\d|ao\d{4}|csd\d|bsc\d|功率管|功率mos", t):
         return "power"
-    if re.search(r"电阻|电容|电感|磁珠|二极管|三极管|led\b|resistor|capacitor|inductor|bead|diode|晶体管", t):
+    # 晶振也是被动件：名称「SMD 50MHz 晶振」、封装「OSC-SMD_4P」不带晶振二字时，
+    # 型号里也常有 crystal/xtal（ABM8G、XTAL 网络名）。只敢认 crystal/xtal，
+    # 不认裸 oscillator —— 芯片描述里「internal oscillator」太常见，会误判。
+    if re.search(r"电阻|电容|电感|磁珠|二极管|三极管|led\b|resistor|capacitor|inductor|bead|diode|晶体管|晶振|crystal|xtal", t):
         return "passive"
     if re.search(
         r"连接器|排针|排母|端子|接插件|header|connector|conn[-_ ]|usb|type-c|fpc|idc|插座|牛角|kf\d{3}|xh\d?[\.\-]"
@@ -896,6 +899,9 @@ def params_text(category: str, p: dict) -> str:
         parts.append(f"{p['voltage_v']:g}V")
     if "current_a" in p:
         parts.append(f"{p['current_a']:g}A")
+    if "frequency" in p:
+        # 晶振的摘要行就靠这个数：「SMD 50MHz」比裸型号一眼能核对
+        parts.append(str(p["frequency"]))
     if "pins" in p:
         parts.append(f"{p['pins']}P")
     if "pitch_mm" in p:
@@ -939,8 +945,11 @@ _REF_KIND = {
     "VT": "power",
     "SW": "other",
     "K": "other",
-    "X": "other",
-    "Y": "other",
+    # X2 / Y1 是晶振的位号前缀（IEC 惯例）。以前归 other 是因为「拿不准」，
+    # 但拿不准的代价是整行待确认；归 passive 后 _passive_subtype 会按
+    # crystal 细分（只认频率），比 other 一刀切准得多。
+    "X": "passive",
+    "Y": "passive",
 }
 
 # 这些封装基本只出现在功率管上（TDSON/TO-220/DPAK…）
@@ -1026,6 +1035,11 @@ def _passive_subtype(refs, text, category) -> str:
     # 磁珠就被当成电感（位号常是 L1/L2）→ 报「缺少感值」判死。
     if pref == "FB" or "磁珠" in t or re.search(r"\bbeads?\b|ferrite", t):
         return "bead"
+    # 晶振（X2 / Y1）：唯一身份参数是频率。必须单独立类，否则会掉进
+    # 兜底的「必须有阻容感值」—— 一颗 50MHz 晶振被记成「缺少容值」冤枉成待确认，
+    # 用户看着立创核准框里的「频率 50MHz」还得再点一遍确认。
+    if pref in ("X", "Y") or re.search(r"晶振|晶体谐振|crystal|oscillator|xtal", t):
+        return "crystal"
     if pref == "C" or re.search(r"电容|capacitor|[pnuµm]f\b", t):
         return "capacitor"
     if pref == "L" or re.search(r"电感|inductor|[pnuµm]h\b", t):
@@ -1127,7 +1141,10 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
         and not _RE_VALUE_ONLY.match(desc)
     ):
         mpn = desc
-    if not mpn and category == "other":
+    # 晶振的位号是 X/Y：这类行往往只有封装名（OSC-SMD_4P-…-BL_SIT8008BI），
+    # 料号藏在封装里。以前只对 category=other 开这条通道，X/Y 归 passive 后
+    # 晶振行也必须能从封装抠料号，否则型号缺失 + 频率缺失两头堵。
+    if not mpn and (category == "other" or _designator_prefix(refs) in ("X", "Y")):
         fp_model = _footprint_model(footprint)
         if fp_model:
             mpn = fp_model
@@ -1273,10 +1290,32 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
             break
     # 保险丝的额定电流就是它的规格。不给它一个数值参数，SKU 选择就只能「保留页面默认」，
     # 结果 8A 的位子买成了 0.25A —— 比买贵更糟，是买错。
+    crystal_note = ""  # 频率来自立创而非 BOM 名称列时要写进风险，让人知道出处
     if subtype == "fuse" and "current_a" not in params:
         _amp = _parse_current(" ".join([str(combined or ""), str(desc or ""), str(mpn or "")]))
         if _amp:
             params["current_a"] = _amp
+    # 晶振同理只认频率：名称「SMD 50MHz」里的 MHz、立创参数「频率」都是同一证据。
+    # 抓到频率就算规格锁定 —— 立创编号核准过的型号，频率是权威值，不该再要人确认。
+    if subtype == "crystal":
+        # 先清掉误解析：'8MHz' 会被宽松电阻规则读成 8MΩ（M 当兆欧），
+        # 留在 params 里会污染闸门（「阻值 = 8MΩ」）和 SKU 打分。
+        for _k in ("resistance_ohm", "capacitance_f", "inductance_h"):
+            params.pop(_k, None)
+        _fr = _parse_freq_label(" ".join([str(combined or ""), str(desc or "")]))
+        if _fr:
+            params["frequency"] = _fr
+        if lcsc_info and "frequency" not in params:
+            _fv = str((lcsc_info.get("params") or {}).get("频率") or "").strip()
+            if _fv and re.search(r"\d", _fv):
+                params["frequency"] = _fv
+                if not _fr:
+                    # 频率来自立创而不是 BOM 名称列，记一条风险让人知道出处。
+                    _src = lcsc_info.get("code") or lcsc_info.get("model") or "立创"
+                    crystal_note = (
+                        f"BOM 名称列没写频率，按立创编号 {_src} 的参数 "
+                        f"「频率 {_fv}」锁定规格"
+                    )
     qty = row.get("qty")
     try:
         qty = int(qty) if qty is not None and str(qty).strip() != "" else None
@@ -1314,6 +1353,11 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
             if not mpn:
                 missing.append("完整型号")
                 blocking.append("二极管/LED/磁珠必须有完整型号，封装不能代替型号")
+        elif subtype == "crystal":
+            # 晶振不认阻容感值，只认频率：抓到频率（BOM 名称或立创参数）就放行。
+            if "frequency" not in params:
+                missing.append("频率")
+                blocking.append("晶振必须有频率，否则无法区分同系列的 8MHz / 50MHz")
         elif not any(k in params for k in ("resistance_ohm", "capacitance_f", "inductance_h")):
             missing.append("阻值/容值/感值")
             blocking.append("缺少关键参数，无法锁定规格")
@@ -1405,6 +1449,8 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
             footprint=footprint,
         )
     risks = _build_risks(category, package, params, mpn, gates)
+    if crystal_note:
+        risks.append({"code": "V04", "text": crystal_note})
     if value_conflict:
         risks.append({"code": "V01", "text": value_conflict})
     if lcsc_model_note:
@@ -1483,6 +1529,9 @@ def _build_gates(category, package, p, mpn, subtype=""):
             g.append(f"容值 = {fmt_capacitance(p['capacitance_f'])}")
         if "inductance_h" in p:
             g.append(f"感值 = {fmt_inductance(p['inductance_h'])}")
+        if "frequency" in p:
+            # 晶振：频率差一点都不起振。8MHz 的位子焊 50MHz 是完全不同的两颗料。
+            g.append(f"频率 = {p['frequency']}")
         if "tolerance_pct" in p:
             # 容差不作硬门槛：BOM 写 ±1% 也不拦 ±5%/±10%/±20% 的料
             g.append(f"精度 不限（BOM ±{p['tolerance_pct']:g}%，按 ≤±20% 放宽）")
@@ -1792,6 +1841,17 @@ def _build_queries(
                 if pkg and pkg.upper() != "SMD":
                     q.append(f"{pkg} {amp} 保险丝")
                 q.append(f"{amp} 保险丝 快断")
+        # 晶振只认频率：型号先搜（命中即同料），频率通用词兜底（型号搜不到还有得试）。
+        # 以前这段写在非被动件的 else 分支里，被动件晶振永远走不到 —— 搜索词只剩
+        # 裸型号，型号一没货整行就卡死。
+        if not val and subtype == "crystal":
+            freq = p.get("frequency") or _parse_freq_label(desc)
+            if mpn:
+                q.append(f"{mpn} 晶振")
+            if freq:
+                q.append(f"{freq} 贴片晶振")
+                if pkg and pkg.upper() != "SMD":
+                    q.append(f"{freq} 晶振 {pkg}".strip())
         if not val and not q:
             if mpn:
                 q.append(f"{mpn} {pkg}".strip())

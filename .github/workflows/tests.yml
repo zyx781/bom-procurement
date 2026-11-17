@@ -42,6 +42,7 @@ jobs:
           python test_candidate_replay.py
           python test_sku_replay.py
           python test_screenshot_retention.py
+          python test_line_update.py
 
       # 端到端：起假会话 + 临时 server 进程，验证调度闭环与 HTTP 路由
       - name: Integration (fake session)

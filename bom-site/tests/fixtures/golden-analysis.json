@@ -280,17 +280,15 @@
    "line_no": 16,
    "desc": "8MHz",
    "category": "passive",
-   "subtype": "capacitor",
+   "subtype": "crystal",
    "status": "ready",
    "code": "C2973805",
    "q": [
-    "XL2EL89COI-111YLC-8M 电阻",
-    "SMD 8MΩ 电阻",
-    "SMD 8MΩ 贴片电阻",
-    "YXC(扬兴晶振) 8MΩ 电阻"
+    "XL2EL89COI-111YLC-8M 晶振",
+    "8MHz 贴片晶振"
    ],
    "params": {
-    "resistance_ohm": 8000000.0
+    "frequency": "8MHz"
    },
    "conflict": false
   },
@@ -319,12 +317,11 @@
    "line_no": 18,
    "desc": "32.768kHz",
    "category": "passive",
-   "subtype": "capacitor",
+   "subtype": "crystal",
    "status": "needs_user",
    "code": "C620155",
    "q": [
-    "X321532768KGD2SI 晶振",
-    "X321532768KGD2SI SMD"
+    "X321532768KGD2SI 晶振"
    ],
    "params": {},
    "conflict": false
@@ -442,14 +439,16 @@
    "line_no": 7,
    "desc": "50MHz",
    "category": "passive",
-   "subtype": "",
-   "status": "needs_user",
+   "subtype": "crystal",
+   "status": "ready",
    "code": "C717684",
    "q": [
     "OT322550MJBA4SL 晶振",
-    "OT322550MJBA4SL SMD"
+    "50MHz 贴片晶振"
    ],
-   "params": {},
+   "params": {
+    "frequency": "50MHz"
+   },
    "conflict": false
   },
   {
@@ -631,14 +630,16 @@
    "line_no": 18,
    "desc": "8MHz",
    "category": "passive",
-   "subtype": "capacitor",
-   "status": "needs_user",
+   "subtype": "crystal",
+   "status": "ready",
    "code": "C2682775",
    "q": [
     "X32258MOB4SI 晶振",
-    "X32258MOB4SI SMD"
+    "8MHz 贴片晶振"
    ],
-   "params": {},
+   "params": {
+    "frequency": "8MHz"
+   },
    "conflict": false
   },
   {

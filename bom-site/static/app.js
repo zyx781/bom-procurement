@@ -442,11 +442,18 @@
     const gates = (d.buy_spec || []).map((g) => `<li>${esc(g)}</li>`).join("");
     const queries = (d.search_queries || [])
       .map(
-        (q) => `<div class="query"><code>${esc(q)}</code><button type="button" data-copy="${esc(
-          q
-        )}">复制</button></div>`
+        (q, qi) =>
+          `<div class="query edit"><input type="text" class="q-input" value="${esc(
+            q
+          )}" data-qi="${qi}" aria-label="搜索词 ${qi + 1}"><button type="button" class="q-copy" data-copy="${esc(
+            q
+          )}">复制</button></div>`
       )
       .join("");
+    const queriesEmpty =
+      (d.search_queries || []).length
+        ? ""
+        : '<p class="fineprint">参数不足，未生成搜索词。</p>';
     const verify = (d.must_verify || []).map((v) => `<li>${esc(v)}</li>`).join("");
     const risks = (d.risk_notes || [])
       .map(
@@ -499,8 +506,12 @@
           <ul class="checklist">${gates || "<li>暂无足够参数，先补型号/规格</li>"}</ul>
         </section>
         <section>
-          <h4>搜索词（按序使用，最多 3 条）</h4>
-          ${queries || '<p class="fineprint">参数不足，未生成搜索词。</p>'}
+          <h4>搜索词（按序使用，最多 4 条，可直接改）</h4>
+          ${queries || queriesEmpty}
+          <div class="query-actions">
+            <button class="ghost small" id="btn-add-query" type="button">+ 加一条</button>
+            <button class="primary small" id="btn-save-queries" type="button">保存搜索词</button>
+          </div>
         </section>
       </div>
       <h4>必须核对</h4>
@@ -509,12 +520,111 @@
       <div class="risks">${risks}</div>
       <div class="detail-foot">
         <span>人工门：${esc(d.gate)}；manual_approval_required = true</span>
-        <button class="ghost small" data-score-idx="${idx}">用这行评分</button>
+        <span class="foot-btns">
+          ${
+            ln.status !== "ready"
+              ? `<button class="primary small" data-confirm-idx="${idx}" type="button">我已人工核对，标记为可执行</button>`
+              : ln.user_approved
+                ? `<span class="badge ok-badge">人工已确认</span>`
+                : ""
+          }
+          <button class="ghost small" data-score-idx="${idx}" type="button">用这行评分</button>
+        </span>
       </div>`;
 
     $("#line-detail")
       .querySelectorAll("[data-copy]")
-      .forEach((b) => b.addEventListener("click", () => copyText(b.dataset.copy)));
+      .forEach((b) =>
+        b.addEventListener("click", () => {
+          // 搜索词可编辑：复制按钮优先取输入框里的**当前**内容
+          const input = b.closest(".query") && b.closest(".query").querySelector(".q-input");
+          copyText(input ? input.value.trim() : b.dataset.copy);
+        })
+      );
+
+    // 搜索词编辑：加一条 / 保存（写回 state + 落盘，刷新和续跑都在）
+    const saveQueries = $("#line-detail").querySelector("#btn-save-queries");
+    if (saveQueries) {
+      saveQueries.addEventListener("click", async () => {
+        const vals = [...$("#line-detail").querySelectorAll(".q-input")]
+          .map((el) => el.value.trim())
+          .filter(Boolean);
+        if (!vals.length) {
+          toast("至少要留一条搜索词，否则这一行没法跑");
+          return;
+        }
+        if (vals.length > 4) {
+          toast("最多 4 条，删掉几条再保存");
+          return;
+        }
+        ln.query_plan = vals.slice();
+        if (ln.decision) ln.decision.search_queries = vals.slice();
+        try {
+          await api("/api/lines/update", {
+            index: idx,
+            line_no: ln.line_no,
+            patch: { query_plan: vals.slice() },
+          });
+        } catch (e) {
+          // 服务端没存上（还没分析过/文件缺失）也不拦：前端内存是本次会话的事实来源
+          console.warn("搜索词落盘失败：", e.message);
+        }
+        renderDetail(idx);
+        toast("搜索词已保存");
+      });
+    }
+    const addQueryBtn = $("#line-detail").querySelector("#btn-add-query");
+    if (addQueryBtn) {
+      addQueryBtn.addEventListener("click", () => {
+        const list = $("#line-detail").querySelectorAll(".query.edit");
+        if (list.length >= 4) {
+          toast("最多 4 条搜索词");
+          return;
+        }
+        const wrap = document.createElement("div");
+        wrap.className = "query edit";
+        wrap.innerHTML = `<input type="text" class="q-input" value="" aria-label="搜索词 ${
+          list.length + 1
+        }"><button type="button" class="q-copy">复制</button>`;
+        const sec = addQueryBtn.closest("section");
+        sec.insertBefore(wrap, sec.querySelector(".query-actions"));
+        const input = wrap.querySelector(".q-input");
+        input.addEventListener("input", () => {
+          wrap.querySelector(".q-copy").dataset.copy = input.value;
+        });
+        input.focus();
+      });
+    }
+
+    // 人工确认：把「待确认」放行成「可执行」。改的是这行的判定结果，
+    // 不是引擎的规则 —— 该补的参数还是要在 BOM 里补。
+    const confirmBtn = $("#line-detail").querySelector("[data-confirm-idx]");
+    if (confirmBtn) {
+      confirmBtn.addEventListener("click", async () => {
+        try {
+          await api("/api/lines/update", {
+            index: idx,
+            line_no: ln.line_no,
+            patch: { status: "ready", blocking: [], missing: [], user_approved: true },
+          });
+        } catch (e) {
+          console.warn("确认落盘失败：", e.message);
+        }
+        ln.status = "ready";
+        ln.blocking = [];
+        ln.missing = [];
+        ln.user_approved = true;
+        if (state.result.summary) {
+          state.result.summary.ready = (state.result.summary.ready || 0) + 1;
+          state.result.summary.needs_user = Math.max(0, (state.result.summary.needs_user || 0) - 1);
+        }
+        renderSummary();
+        renderIntakeBar();
+        renderLineList();
+        renderDetail(idx);
+        toast(`第 ${ln.line_no} 行已人工确认，标记为可执行`);
+      });
+    }
     const t = $("#drawer-title");
     const _ln = state.result.lines[idx] || {};
     if (t) t.textContent = `行 ${String(_ln.line_no ?? idx + 1).padStart(2, "0")}`;

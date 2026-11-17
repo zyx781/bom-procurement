@@ -303,6 +303,10 @@ check("failed 行会重试", "2" not in _dm)
 tr.clear_batch_progress()
 check("清空进度后为空", tr.batch_progress_summary()["has_progress"] is False)
 tr.PROGRESS_FILE = _orig_progress
+# clear_batch_progress 只清主文件，"-prev" 副档是测试自己起的名，留在真实 runs/
+# 就是垃圾（实测 2026-11-17 runs/ 里躺了个 _test_progress-prev.json）
+(tr.RUNS / "_test_progress.json").unlink(missing_ok=True)
+(tr.RUNS / "_test_progress-prev.json").unlink(missing_ok=True)
 
 print("== 连接器 SKU：XH 系列 / 排针整条 ==")
 _xh = {"category": "connector", "params": {"pins": 4, "pitch_mm": 2.5}, "mpn": "B4B-XH-A",

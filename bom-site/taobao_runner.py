@@ -355,6 +355,89 @@ def load_last_analysis() -> dict:
     }
 
 
+# 人工在网页上改过的行（确认放行 / 改搜索词）要落盘的字段白名单
+_LINE_PATCH_KEYS = ("query_plan", "status", "blocking", "missing", "user_approved")
+
+
+def update_saved_line(index: int, patch: dict) -> dict:
+    """把网页上的人工修改写进落盘的两份行数据（last-analysis / batch-lines）。
+
+    前端内存是当前会话的事实来源；但刷新/新标签页从 last-analysis.json 恢复，
+    服务重启后「接着跑」从 batch-lines.json 恢复 —— 只改内存的话，两处都会
+    把确认和修改吞掉，用户明明放行了那行却还弹「待确认」。
+    只按 index + line_no 双重定位，只覆盖白名单字段；两份文件有一份不在
+    （还没开跑过）就跳过那份，不算失败。
+    """
+    if not isinstance(patch, dict) or not patch:
+        raise ValueError("patch 不能为空")
+    clean = {k: patch[k] for k in _LINE_PATCH_KEYS if k in patch}
+    if not clean:
+        raise ValueError(f"patch 里没有可更新的字段（允许：{', '.join(_LINE_PATCH_KEYS)}）")
+    if "query_plan" in clean:
+        qp = clean["query_plan"]
+        if not isinstance(qp, list) or not all(isinstance(x, str) for x in qp):
+            raise ValueError("query_plan 必须是字符串数组")
+        qp = [re.sub(r"\s+", " ", x).strip() for x in qp]
+        qp = [x for x in qp if x][:4]
+        if not qp:
+            raise ValueError("搜索词不能全部为空（清空等于让这一行没法跑）")
+        clean["query_plan"] = qp
+    if "status" in clean and clean["status"] not in ("ready", "needs_user"):
+        raise ValueError("status 只能是 ready / needs_user")
+    for k in ("blocking", "missing"):
+        if k in clean and not isinstance(clean[k], list):
+            raise ValueError(f"{k} 必须是数组")
+
+    want_no = patch.get("line_no")
+    applied = {"last_analysis": False, "batch_lines": False}
+
+    def _apply(lines: list) -> bool:
+        if not isinstance(lines, list) or not (0 <= index < len(lines)):
+            return False
+        ln = lines[index]
+        if not isinstance(ln, dict):
+            return False
+        # 行号对不上 = 前端和服务端的顺序已经错位，宁可不动也不能改错行
+        if want_no is not None and str(want_no) != str(ln.get("line_no")):
+            return False
+        if "query_plan" in clean:
+            ln["query_plan"] = list(clean["query_plan"])
+            d = ln.get("decision")
+            if isinstance(d, dict):
+                d["search_queries"] = list(clean["query_plan"])
+        for k in ("status", "blocking", "missing", "user_approved"):
+            if k in clean:
+                ln[k] = list(clean[k]) if isinstance(clean[k], list) else clean[k]
+        return True
+
+    def _rewrite(path, lines_key):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return False
+        except Exception:  # noqa: BLE001
+            return False
+        if not isinstance(data, dict):
+            return False
+        target = data.get(lines_key)
+        if lines_key == "result" and isinstance(target, dict):
+            target = target.get("lines")
+        if not _apply(target if isinstance(target, list) else []):
+            return False
+        try:
+            tmp = path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            tmp.replace(path)
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
+    applied["last_analysis"] = _rewrite(LAST_ANALYSIS_FILE, "result")
+    applied["batch_lines"] = _rewrite(BATCH_LINES_FILE, "lines")
+    ok = applied["last_analysis"] or applied["batch_lines"]
+    return {"ok": ok, "applied": applied, "patch": clean}
+
+
 def set_active_bom(lines: list) -> str:
     global ACTIVE_BOM_FINGERPRINT
     ACTIVE_BOM_FINGERPRINT = batch_fingerprint(lines)
@@ -4037,6 +4120,32 @@ def _sku_tolerance(text: str):
     return float(m.group(1)) if m else None
 
 
+def _sku_freq(text: str):
+    """'50MHz' → 5e7（Hz）。晶振只认频率：8MHz 和 50MHz 是两颗完全不同的料。"""
+    m = _VALUE_PATTERNS["frequency"].search(str(text or ""))
+    if not m:
+        return None
+    return float(m.group(1)) * _FREQ_SCALE.get(str(m.group(2) or "").lower(), 1.0)
+
+
+def _fmt_freq(hz: float) -> str:
+    if hz >= 1e9:
+        return f"{hz / 1e9:g}GHz"
+    if hz >= 1e6:
+        return f"{hz / 1e6:g}MHz"
+    if hz >= 1e3:
+        return f"{hz / 1e3:g}kHz"
+    return f"{hz:g}Hz"
+
+
+def _want_freq(line: dict):
+    """BOM 要的频率（Hz）。params.frequency 是 '50MHz' 这类字符串，解析成数。"""
+    f = _sku_freq(str((line.get("params") or {}).get("frequency") or ""))
+    if f is None:
+        f = _sku_freq(str(line.get("desc") or ""))
+    return f
+
+
 def _sku_has_spec(line: dict, text: str) -> bool:
     """这段 SKU 文本里有没有能和 BOM 参数对上号的东西。
 
@@ -4054,6 +4163,8 @@ def _sku_has_spec(line: dict, text: str) -> bool:
     if "capacitance_f" in p and _sku_capacitance(t) is not None:
         return True
     if "inductance_h" in p and _sku_inductance(t) is not None:
+        return True
+    if "frequency" in p and _sku_freq(t) is not None:
         return True
     if "tolerance_pct" in p and _sku_tolerance(t) is not None:
         return True
@@ -4130,6 +4241,12 @@ def _score_sku_value(line: dict, label: str, text: str) -> float:
         ind = _sku_inductance(text)
         if ind is not None:
             score += 50 if _close(ind, p["inductance_h"], 0.05) else -100
+    if "frequency" in p:
+        # 晶振：值对上 +50，读出别的频率直接 −100（能不能用的否决在 _sku_veto）
+        want_f = _want_freq(line)
+        f = _sku_freq(text)
+        if f is not None and want_f is not None:
+            score += 50 if _close(f, want_f, 0.001) else -100
     if "tolerance_pct" in p:
         tol = _sku_tolerance(text)
         if tol is not None:
@@ -4318,6 +4435,14 @@ def _sku_veto(line: dict, label: str, text: str) -> str | None:
         ind = _sku_inductance(t)
         if ind is not None and not _close(ind, p["inductance_h"], 0.05):
             return f"感值 {_fmt_farad(ind)}H ≠ 要求 {_fmt_farad(p['inductance_h'])}H"
+    if "frequency" in p:
+        # 晶振：8MHz 的位子焊 50MHz 不起振。频率是「单位相同值不同就判不同」的
+        # 硬冲突（_CONFLICT_UNITS 里有它），SKU 层也要一条不漏地拦。
+        want_f = _want_freq(line)
+        if want_f is not None:
+            f = _sku_freq(t)
+            if f is not None and not _close(f, want_f, 0.001):
+                return f"频率 {_fmt_freq(f)} ≠ 要求 {_fmt_freq(want_f)}"
     # 精密档容差：BOM 要 0.1%/0.05%，选项是 ±1% —— 这是另一个等级的料，
     # 装上分压/采样就偏，宁可 unresolved 也不买（#70）。普通档（1%/5%）只降权。
     # 「没标注」的情况不能在这里拦：容值和容差经常是两个独立 SKU 组
@@ -4656,6 +4781,7 @@ def _fmt_need_values(line: dict) -> str:
         ("resistance_ohm", "阻值"),
         ("capacitance_f", "容值"),
         ("inductance_h", "感值"),
+        ("frequency", "频率"),
     ):
         if p.get(key) is None:
             continue
@@ -4683,6 +4809,8 @@ def _reads_value(line: dict, text: str) -> bool:
         if p.get("capacitance_f") is not None and _sku_capacitance(t) is not None:
             return True
         if p.get("inductance_h") is not None and _sku_inductance(t) is not None:
+            return True
+        if p.get("frequency") is not None and _sku_freq(t) is not None:
             return True
     except Exception:  # noqa: BLE001
         return False

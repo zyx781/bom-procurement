@@ -65,6 +65,8 @@
 
   --control-h:32px;
   --bar-h:56px;
+  /* 抽屉宽度：只在桌面端（≥1081px）的网格里用；窄屏是覆盖式的 fixed */
+  --drawer-w:420px;
   --dur-micro:110ms;
   --dur-short:180ms;
 
@@ -261,6 +263,30 @@ button.cta:hover:not(:disabled){background:var(--signal-deep, var(--signal));bor
    ============================================================ */
 .board{margin-top:var(--sp-3)}
 
+/* 桌面端（≥1081px）：工作台是「左台账 / 右抽屉」两列网格。
+   以前抽屉在 .board-body 里，起点排在状态栏+运行条下面（约 265px），
+   而它的高度按 100vh 算 820px —— 900 高的窗口里必然有 185px 悬在屏幕外，
+   抽屉内部滚到底也看不到「必须核对 / 风险提示 / 底栏按钮」，
+   非得先把整页滚一下才行。改成网格后抽屉从工作台顶（约 130px）起步，
+   高度按「到窗口底部」封顶，一屏内看全，不用滚页面。 */
+@media (min-width:1081px){
+  .board:not(.hidden){
+    display:grid;
+    grid-template-columns:minmax(0,1fr) var(--drawer-w);
+    column-gap:var(--sp-3);
+    align-items:start;
+  }
+  /* 没选行时抽屉是 hidden —— 别留一条 420px 的空列把台账挤窄 */
+  .board:has(> .drawer.hidden){grid-template-columns:minmax(0,1fr)}
+  /* 左列（状态栏/运行条/进度轨/台账）包成一个网格项：抽屉只和它并排，
+     不会把自己的高度摊到状态栏、运行条那几行上去（短清单会被撑出空隙） */
+  .board-main{grid-column:1;min-width:0}
+  /* 抽屉从工作台顶（≈130px）起步，高度封到窗口底部留 16px。
+     不能沿用 100dvh - 顶栏 的算法：那个值只在「已经滚到吸附位置」时成立，
+     首屏时抽屉大半截在屏幕外，内部滚到底也够不着底栏按钮。 */
+  .board > .drawer{grid-column:2;max-height:calc(100dvh - 146px)}
+}
+
 .statusbar{
   display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);
   flex-wrap:wrap;
@@ -303,7 +329,10 @@ button.cta:hover:not(:disabled){background:var(--signal-deep, var(--signal));bor
 }
 .runbar-left{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 320px}
 .runbar-note{font-size:var(--fs-11);color:var(--ink-3);line-height:1.5;overflow-wrap:anywhere}
-.runbar-right{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.runbar-right{display:flex;align-items:center;gap:6px;flex:0 0 auto;flex-wrap:wrap}
+/* 抽屉占掉右列后运行条变窄：按钮文字别竖着折行（"显示淘宝窗口" 被挤成两行很难看），
+   宽度不够就整组换到下一行 */
+.runbar-right button{white-space:nowrap}
 
 .livedot{
   display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;
@@ -418,9 +447,9 @@ button.cta:hover:not(:disabled){background:var(--signal-deep, var(--signal));bor
    drawer
    ============================================================ */
 .drawer{
-  flex:0 0 420px;min-width:0;
+  flex:0 0 var(--drawer-w);width:var(--drawer-w);min-width:0;
   position:sticky;top:calc(var(--bar-h) + 8px);
-  max-height:calc(100vh - var(--bar-h) - 24px);
+  max-height:calc(100dvh - var(--bar-h) - 24px);
   display:flex;flex-direction:column;
   border:1px solid var(--rule);border-radius:var(--r);
   background:var(--surface);
@@ -449,7 +478,12 @@ button.cta:hover:not(:disabled){background:var(--signal-deep, var(--signal));bor
   background:transparent;color:var(--ink-3);font-size:16px;line-height:1;
 }
 .drawer-x:hover{background:var(--surface-hover);color:var(--ink)}
-.drawer-pane{padding:14px;overflow:auto;flex:1 1 auto;min-height:0}
+.drawer-pane{
+  padding:14px;overflow:auto;flex:1 1 auto;min-height:0;
+  /* 抽屉里滚到头别把整页带着滚（以前滚到底页面会突然跳一段） */
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+}
 .drawer-pane[data-pane="run"],.drawer-pane[data-pane="care"]{padding:12px}
 
 /* ---------- detail ---------- */
@@ -721,7 +755,7 @@ button.cta:hover:not(:disabled){background:var(--signal-deep, var(--signal));bor
    responsive
    ============================================================ */
 @media (max-width:1280px){
-  .drawer{flex-basis:380px}
+  :root{--drawer-w:380px}
 }
 @media (max-width:1080px){
   :root{--cols:32px minmax(0,1fr) 60px 44px 60px 90px}

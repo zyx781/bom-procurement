@@ -1595,7 +1595,7 @@
     if (sub) {
       const mins = Math.max(1, Math.round((Number(v.total_s) || 1800) / 60));
       sub.textContent =
-        `刷新后仍没出商品。窗口在屏幕外，点「打开淘宝窗口」去完成验证，最多等你 ${mins} 分钟`;
+        `自动过滑块和刷新都没成功。窗口在屏幕外，点「打开淘宝窗口」完成验证，最多等你 ${mins} 分钟`;
     }
     // 标签页不在前台时也能看到
     if (!verifyTitleTimer) {

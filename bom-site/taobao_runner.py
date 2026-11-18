@@ -1694,13 +1694,13 @@ class SessionRunner:
         with self._state_lock:
             self._batch["verification"] = {
                 "waiting": True,
-                "reason": "刷新后仍无商品，需要人工完成淘宝验证",
+                "reason": "自动过滑块和刷新都没过，需要人工完成淘宝验证",
                 "total_s": total,
                 "remaining_s": total,
                 "since": datetime.now().isoformat(timespec="seconds"),
             }
         self._append_log(
-            f"[batch] 刷新后仍无商品 → 需要你手动完成验证（最多等 {total // 60} 分钟）"
+            f"[batch] 自动过滑块和刷新都没过 → 需要你手动完成验证（最多等 {total // 60} 分钟）"
         )
         try:
             while time.monotonic() < deadline:
@@ -2929,7 +2929,7 @@ class SessionRunner:
                             if _step == "auto":
                                 _verify_retries += 1
                                 self._append_log(
-                                    f"[batch] 第 {line.get('line_no')} 行撞验证 → 刷新自恢复后重试"
+                                    f"[batch] 第 {line.get('line_no')} 行撞验证 → 自动过滑块/刷新后重试"
                                     f"（{_verify_retries}/{VERIFY_AUTO_RETRY}）"
                                 )
                                 time.sleep(VERIFY_RETRY_GAP_S)
@@ -2943,7 +2943,7 @@ class SessionRunner:
                                 )
                                 continue
                             with self._state_lock:
-                                self._batch["stopped_reason"] = "刷新后仍无商品，需要人工完成淘宝验证，批量任务已暂停"
+                                self._batch["stopped_reason"] = "自动过滑块和刷新后仍无商品，需要人工完成淘宝验证，批量任务已暂停"
                             self._batch_line_patch(i, **res)
                             _stop_after = True
                         break

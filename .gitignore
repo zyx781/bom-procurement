@@ -59,8 +59,7 @@ mech-images/
 figures/
 probe.txt
 
-# ---- 验证码求解组件（本项目不使用，也不对外发布）----
-Taobao-Search-Skill/scripts/slider_solver.py
+# ---- 内部说明文档（不对外发布）----
 Taobao-Search-Skill/README.md
 
 # ---- 个人数据 / 旧启动器 / 内部笔记 ----

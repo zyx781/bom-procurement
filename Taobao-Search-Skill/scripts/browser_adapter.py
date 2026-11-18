@@ -2008,10 +2008,67 @@ class BrowserAdapter:
 
     # ── 验证自恢复（2026-11-08 规则变更）────────────────────────────────
     # 旧规则：一见到验证（滑块/图片点选/风控中间页）就交回人工，整批挂着等 30 分钟。
-    # 新规则：**先自己刷一下**。淘宝这类验证绝大多数是「这一个请求被扣了」，
-    # 刷新一次就恢复，出商品就接着干；只有刷新完仍然没有商品，才算真被拦住、才要人工。
+    # 新规则：**先自己上**。滑块先自动拖（slider_solver），拖不过再刷新，
+    # 刷新完还没商品才算真被拦住、才要人工。
     RECOVER_TRIES = int(os.environ.get("TAOBAO_RECOVER_TRIES", "2"))
     RECOVER_PAUSE_S = float(os.environ.get("TAOBAO_RECOVER_PAUSE", "1.2"))
+    # 自动过滑块开关 / 每会话上限（防死循环把风控逼急）
+    SLIDER_SOLVE = str(os.environ.get("TAOBAO_SLIDER_SOLVE", "1")).strip().lower() not in (
+        "0", "false", "off", "no",
+    )
+    SLIDER_MAX_PER_SESSION = int(os.environ.get("TAOBAO_SLIDER_MAX_PER_SESSION", "30"))
+
+    def _slider(self):
+        """惰性构造求解器：ddddocr 模型只加载一次（约 1s），别每次重建。"""
+        solver = getattr(self, "_slider_solver", None)
+        if solver is not None:
+            return solver
+        from slider_solver import SliderSolver  # 延迟导入：缺包不影响其它功能
+
+        solver = SliderSolver()
+        self._slider_solver = solver
+        return solver
+
+    def try_solve_verification(self, page: Page | None = None) -> bool:
+        """有滑块就先自动拖一次。True = 已解除，可以直接接着干活。
+
+        任何异常、缺包、没有滑块元素都返回 False，让调用方退回原来的
+        「刷新自恢复 → 人工」路径。这里**绝不抛异常**：验证处理本来就在
+        异常路径上，再炸一次会把整个会话打成 desynced。
+        """
+        if not self.SLIDER_SOLVE:
+            return False
+        # 失败后有冷却：滑块一旦刷成「拖不过」的硬拦截，后面每个命令都重拖
+        # 一遍只会把风控惹毛（实测一个卡死点刷了 17 轮）。冷却期内直接走刷新。
+        if time.monotonic() < float(getattr(self, "_slider_cooldown", 0.0)):
+            return False
+        used = int(getattr(self, "_slider_uses", 0))
+        if used >= self.SLIDER_MAX_PER_SESSION:
+            print("[browser] 本会话自动过滑块次数已用完，转人工", file=sys.stderr)
+            return False
+        try:
+            page = page or self._ensure_page()
+            # 假 Page / 非浏览器环境（单测）直接跳过
+            if not hasattr(page, "evaluate"):
+                return False
+            solver = self._slider()
+            if not solver.is_captcha_present(page):
+                return False
+            print(f"[browser] 检测到滑块 → 自动尝试（本会话第 {used + 1} 次）",
+                  file=sys.stderr)
+            self._slider_uses = used + 1
+            ok = bool(solver.solve(page))
+            if ok:
+                print("[browser] 滑块自动通过", file=sys.stderr)
+            else:
+                cool = float(os.environ.get("TAOBAO_SLIDER_COOLDOWN", "45"))
+                self._slider_cooldown = time.monotonic() + cool
+                print(f"[browser] 滑块没拖过，{cool:.0f}s 内不再重试", file=sys.stderr)
+            return ok
+        except Exception as exc:  # noqa: BLE001
+            print(f"[browser] 自动过滑块不可用：{exc}", file=sys.stderr)
+            self._slider_cooldown = time.monotonic() + 30
+            return False
 
     def recover_from_verification(self, page: Page | None = None,
                                   tries: int | None = None) -> bool:
@@ -2071,18 +2128,23 @@ class BrowserAdapter:
         return False
 
     def _recover_cards(self, page: Page, timeout_ms: int) -> int:
-        """中间页/验证之后：刷新一次再数商品卡。刷不出来返回 -3（=仍要人工）。"""
+        """中间页/验证之后：先把滑块拖掉，不行再刷新数卡。刷不出来返回 -3。"""
+        if self.try_solve_verification(page) and not self._looks_access_blocked(page):
+            return self.wait_for_cards(timeout_ms=timeout_ms)
         if not self.recover_from_verification(page):
             return -3
         return self.wait_for_cards(timeout_ms=timeout_ms)
 
     def _handle_captcha_if_present(self, page: Page) -> None:
-        """检测到验证：先刷新自恢复，恢复不了才交回人工。
+        """检测到验证：自动拖滑块 → 刷新自恢复 → 都不行才交回人工。
 
-        2026-11-08 规则：验证不再是「一碰就停」的硬停点 —— 只有「页面刷新后
-        仍然出不来商品」才需要人工。能用刷新刷掉的（绝大多数）直接继续干。
+        2026-11-18 起多了第一级：滑块能自己拖过去就不打扰人。
+        顺序不能反 —— 先刷新的话，滑块页面会被刷成新的一张，白丢一次机会。
         """
         if not self._looks_access_blocked(page):
+            return
+        if self.try_solve_verification(page) and not self._looks_access_blocked(page):
+            print("[browser] slider solved automatically, continuing", file=sys.stderr)
             return
         print("[browser] verification detected → self-recovery (refresh)", file=sys.stderr)
         if self.recover_from_verification(page):

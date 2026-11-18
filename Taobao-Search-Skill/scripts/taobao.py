@@ -260,17 +260,22 @@ class SessionHandler:
 
                 if self._verification_blocked and cmd != "quit" and cmd not in self._CART_SAFE_CMDS:
                     if self.browser.verification_pending():
-                        # 新规则（2026-11-08）：验证不再一碰就停 —— 先刷新自恢复，
-                        # 刷出商品就继续执行这条命令；刷新后仍无商品才交回人工。
-                        _log("verification pending → self-recovery (refresh) before refusing")
-                        if not self.browser.recover_from_verification():
-                            self._error(
-                                "Taobao verification still pending after refresh "
-                                "(no products). Complete it in the browser window, then retry.",
-                                code="VERIFICATION_REQUIRED",
-                            )
-                            continue
-                        _log("verification cleared by refresh, resuming")
+                        # 2026-11-18：先自动拖滑块，拖不过再刷新。
+                        # 顺序不能反：刷新会把滑块换一张，白丢一次解法机会。
+                        _log("verification pending → auto slider")
+                        if self.browser.try_solve_verification() \
+                                and not self.browser.verification_pending():
+                            _log("verification cleared by slider solver, resuming")
+                        else:
+                            _log("verification pending → self-recovery (refresh) before refusing")
+                            if not self.browser.recover_from_verification():
+                                self._error(
+                                    "Taobao verification still pending after auto-solve and refresh "
+                                    "(no products). Complete it in the browser window, then retry.",
+                                    code="VERIFICATION_REQUIRED",
+                                )
+                                continue
+                            _log("verification cleared by refresh, resuming")
                     self._verification_blocked = False
                 elif self._verification_blocked:
                     # 购物车页不受搜索风控影响：这两个命令自己 goto cart.taobao.com，

@@ -274,11 +274,25 @@ def _fake_elim_send(req):
     return _orig_send(req)
 
 
-# 真机第 1 行：PZ254-2-20-Z-8.5 40P 间距 2.54mm 插件 ×2
-_pz = [l for l in tr.load_batch_lines() if l.get("line_no") == 1]
-_pz = _pz[0] if _pz else engine.analyze_line(
-    {"refs": "J1", "desc": "PZ254-2-20-Z-8.5 40P 间距 2.54mm 插件", "mpn": "PZ254-2-20-Z-8.5", "package": "插件"}, 1
-)
+# 真机第 1 行：PZ254-2-20-Z-8.5 40P 间距 2.54mm 插件 ×2。
+# 不能从 runs/batch-lines.json 取 —— 那是用户当前正在跑的真实清单，
+# 换一份 BOM 后第 1 行就变成别的料（实测 2026-11-18 变成 CSD18540Q5BT，
+# 这两条回放直接崩）。这里按真机行原样构造，结果不随用户数据漂移。
+_pz = engine.analyze([{
+    "line_no": 1, "refs": "J1,J2", "qty": 2,
+    "desc": "PZ254-2-20-Z-8.5 40P 间距 2.54mm 插件",
+    "mpn": "PZ254-2-20-Z-8.5",
+    "package": "HDR-TH_40P-P2.54-V-M-R2-C20-S2.54",
+    "lcsc": "C3012260",
+    "lcsc_info": {
+        "code": "C3012260", "model": "PZ254-2-20-Z-8.5",
+        "catalog": "Headers, Male Pins",
+        "attrs": {"排数": "双排", "间距": "2.54mm", "总PIN数": "40P", "插针结构": "2x20P"},
+    },
+}])["lines"][0]
+check("回放基线是真机那一行（40P 双排 2.54mm）",
+      _pz.get("params", {}).get("pins") == 40 and _pz.get("params", {}).get("rows") == 2,
+      _pz.get("params"))
 runner.send = _fake_elim_send
 try:
     _res2 = runner.search(_pz, require_scored=True)

@@ -11,6 +11,7 @@
 import os
 import pathlib
 import sys
+import time
 
 BASE = pathlib.Path(__file__).parent
 # 执行层脚本在同仓库的 Taobao-Search-Skill/scripts（以前这里写死 D:\测试\…，
@@ -165,6 +166,78 @@ skill_src = (SKILL / "browser_adapter.py").read_text(encoding="utf-8")
 check("执行层不再「一碰验证就 raise」", skill_src.count("raise VerificationRequired()") <= 3,
       skill_src.count("raise VerificationRequired()"))
 check("执行层有恢复函数", "def recover_from_verification" in skill_src)
+
+print("== F. 自动过滑块：先拖，拖不过再刷（2026-11-18）==")
+
+from slider_solver import SliderSolver, drag_distance_for, pick_mode  # noqa: E402
+
+check("模式：有背景图 + 按钮 → 拼图", pick_mode(True, True) == "puzzle")
+check("模式：只有按钮 → 拖到最右（阿里 nc）", pick_mode(False, True) == "drag_end")
+check("模式：连按钮都没有 → 不解（不能对着普通页面乱拖）", pick_mode(False, False) is None)
+check("拖到最右：算到轨道右端留 2px", drag_distance_for(100, 300, 108, 30) == 275,
+      drag_distance_for(100, 300, 108, 30))
+ok_av, why_av = SliderSolver.available()
+check("可用性探测返回 (bool, 原因)", isinstance(ok_av, bool) and bool(why_av), (ok_av, why_av))
+
+
+class SolveAdapter(FakeAdapter):
+    """能记录「解滑块」调用的适配器。"""
+
+    def __init__(self, blocked, cards=None, solved=True):
+        super().__init__(blocked, cards)
+        self.solved = solved
+        self.solver_calls = 0
+        self._slider_uses = 0
+
+    def try_solve_verification(self, page=None):
+        self.solver_calls += 1
+        return self.solved
+
+
+f1 = SolveAdapter(blocked=[True, False], cards=[])
+f1._handle_captcha_if_present(f1._page)
+check("滑块拖过 → 不再刷新页面", f1._page.reloads == 0 and f1.solver_calls == 1,
+      (f1._page.reloads, f1.solver_calls))
+
+f2 = SolveAdapter(blocked=[True, False], cards=[120], solved=False)
+f2._handle_captcha_if_present(f2._page)
+check("滑块没拖过 → 退回刷新自恢复", f2.solver_calls == 1 and f2._page.reloads == 1,
+      (f2.solver_calls, f2._page.reloads))
+
+f3 = SolveAdapter(blocked=[True, True, False], cards=[120], solved=True)
+f3._handle_captcha_if_present(f3._page)
+check("解完仍判拦截（弹层没消）→ 继续刷新，不误判成功",
+      f3._page.reloads == 1, f3._page.reloads)
+
+f4 = FakeAdapter(blocked=[])
+check("假 Page（无 evaluate）→ 直接跳过，不炸", f4.try_solve_verification() is False)
+
+f5 = FakeAdapter(blocked=[])
+f5._slider_uses = BA.BrowserAdapter.SLIDER_MAX_PER_SESSION
+check("本会话次数用完 → 转人工", f5.try_solve_verification() is False)
+
+f6 = FakeAdapter(blocked=[])
+_old_switch = BA.BrowserAdapter.SLIDER_SOLVE
+BA.BrowserAdapter.SLIDER_SOLVE = False
+try:
+    check("开关关掉 → 一次都不试", f6.try_solve_verification() is False)
+finally:
+    BA.BrowserAdapter.SLIDER_SOLVE = _old_switch
+
+f7 = FakeAdapter(blocked=[])
+f7._slider_cooldown = time.monotonic() + 30
+check("拖失败后的冷却期内不再重试（防 17 轮死循环）", f7.try_solve_verification() is False)
+check("冷却时长可配", "TAOBAO_SLIDER_COOLDOWN" in skill_src)
+
+_src_handle = skill_src.split("def _handle_captcha_if_present", 1)[1][:1200]
+check("顺序契约：先试滑块，再刷新",
+      _src_handle.find("try_solve_verification") < _src_handle.find("recover_from_verification")
+      and "try_solve_verification" in _src_handle)
+check("命令循环里也先试滑块", "auto slider" in (SKILL / "taobao.py").read_text(encoding="utf-8"))
+_slider_src = (SKILL / "slider_solver.py").read_text(encoding="utf-8")
+check("求解器缺包不影响 import（重依赖只在函数里加载）",
+      "import ddddocr" not in _slider_src.split("def _load_ddddocr", 1)[0])
+check("求解器有总时限，不会挂死", "deadline" in _slider_src)
 
 print(f"\nRESULT: {PASS} passed, {FAIL} failed")
 raise SystemExit(1 if FAIL else 0)

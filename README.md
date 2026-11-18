@@ -89,6 +89,31 @@ cp settings.example.json settings.json
 
 三处都在 `.gitignore` 里。**分享项目时只给代码，别把这两个 profile 目录一起拷走** —— 里面的 cookie 等同于登录凭证。需要换位置（比如放加密盘）可以用环境变量 `TAOBAO_PROFILE_DIR`，默认值就是项目内的 `.browser-profile`。
 
+### 2.2 自动过滑块（可选）
+
+装上依赖就启用：撞验证时先自动拖滑块，拖不过才刷新，刷新也失败才叫你。
+
+```bash
+pip install -r requirements-optional.txt   # ddddocr + opencv-python
+```
+
+不装也能跑，只是滑块一律走「刷新自恢复 → 人工」。两种滑块都认：
+
+| 形态 | 判定 | 怎么解 |
+|---|---|---|
+| 拼图（geetest） | 有背景图 + 拖动按钮 | ddddocr 找缺口 → 轮廓检测兜底 → 贝塞尔轨迹拖动 |
+| 阿里 nc（`#nc_1_n1z`） | 只有拖动按钮 | 量轨道宽度，拖到最右侧 |
+
+三个旋钮，一般在调风控节奏时才动：
+
+| 变量 | 默认 | 作用 |
+|---|---|---|
+| `TAOBAO_SLIDER_SOLVE` | `1` | 设 `0` 关掉自动过滑块 |
+| `TAOBAO_SLIDER_TRIES` | `2` | 单次撞验证最多拖几次（失败会换一张图再试） |
+| `TAOBAO_SLIDER_MAX_PER_SESSION` | `30` | 一个会话的总次数上限，防止死循环把风控逼急 |
+
+> 自动过验证属于绕过站点的人机校验，**有被加严风控的风险**。跑批时如果发现滑块出现频率明显上升，先调慢 `speed`（`settings.json`），别一味加次数。
+
 ### 3. 首次使用
 
 1. 上传 BOM（CSV / XLSX），确认解析结果与警告
@@ -170,8 +195,8 @@ cd bom-site
 python test_engine.py                 # 217 项：解析与规则
 python test_lcsc.py                    #  80 项：立创编号解析与型号核准
 python test_sku_selection.py            #  84 项：SKU 选择与门禁
-python test_runner.py                   # 184 项：调度、对账、进度、续跑
-python test_verification_recovery.py    #  27 项：验证/风控恢复
+python test_runner.py                   # 185 项：调度、对账、进度、续跑
+python test_verification_recovery.py    #  44 项：验证/风控恢复 + 自动过滑块
 python test_window_focus.py            #  58 项：窗口显隐与不抢前台
 python test_click_guard.py              #  14 项：点击三守卫
 python test_cart_cleanup.py             #  35 项：精准清车不误删、删车后进度作废
@@ -188,7 +213,7 @@ python test_settings.py                #  23 项：配置回落 example、登录
 python test_integration.py             #  24 项：假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
 ```
 
-以上 18 套共 1298 项断言 + 24 项端到端，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+以上 18 套共 1316 项断言 + 24 项端到端，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
 另有 `python test_http.py`：需要服务**已经在 8765 跑着**，只做 HTTP 冒烟打印，不断言，故不进 CI。
 所有测试都把批量进度隔离到临时目录，不会碰到 `runs/` 里的真实进度。
 GitHub Actions 在 Windows runner 上跑 18 套测试 + 端到端 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。

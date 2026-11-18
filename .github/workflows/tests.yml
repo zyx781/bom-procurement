@@ -49,6 +49,7 @@ jobs:
           python test_cart_remove_line.py
           python test_cart_reconcile_scroll.py
           python test_cart_view_ui.py
+          python test_resume_restore.py
           python test_private_window.py
           python test_settings.py
 

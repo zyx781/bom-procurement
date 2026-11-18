@@ -420,6 +420,25 @@ def load_last_analysis() -> dict:
     }
 
 
+def clear_last_analysis() -> bool:
+    """忘掉「上次分析」：删落盘结果和当前 BOM 指纹。
+
+    只影响「打开页面时接不接上次那摊活」，不碰购物车、不碰跑批进度文件。
+    """
+    global ACTIVE_BOM_FINGERPRINT
+    removed = False
+    for f in (LAST_ANALYSIS_FILE, ACTIVE_BOM_FILE):
+        try:
+            f.unlink()
+            removed = True
+        except FileNotFoundError:
+            continue
+        except OSError:
+            continue
+    ACTIVE_BOM_FINGERPRINT = ""
+    return removed
+
+
 # 人工在网页上改过的行（确认放行 / 改搜索词 / 标记不买）要落盘的字段白名单
 _LINE_PATCH_KEYS = ("query_plan", "status", "blocking", "missing", "user_approved", "dont_buy")
 

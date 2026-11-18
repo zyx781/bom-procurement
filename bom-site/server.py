@@ -459,6 +459,13 @@ class Handler(BaseHTTPRequestHandler):
                     ),
                 )
 
+            if path == "/api/last-analysis/clear":
+                # 用户点「清空」：忘掉上次分析，下次开页面不再挂着旧记录。
+                # 跑批中不许清 —— 那会把「当前 BOM」的指纹删掉，正在跑的行对不上表。
+                if tr.RUNNER.batch_status().get("running"):
+                    return self._send(409, {"error": "正在跑批，先停批再清空上次分析"})
+                return self._send(200, {"ok": tr.clear_last_analysis()})
+
             if path == "/api/taobao/batch-reset":
                 # 只清进度文件，不动购物车 —— 界面会提示先清购物车再重头跑
                 tr.clear_batch_progress()

@@ -142,6 +142,7 @@
   }
 
   async function analyze(rows) {
+    dismissResume(); // 开始分析新清单：上次那条提示不再有意义
     const btn = $("#btn-analyze");
     const old = btn.textContent;
     btn.disabled = true;
@@ -196,21 +197,65 @@
 
   // sessionStorage 只活在一个标签页里：新开标签页 / 浏览器重启后它一定是空的。
   // 那时候如果只靠它，整个执行区（含批次进度）都隐藏，页面回到空白首屏 ——
-  // 跑批明明在跑，用户看到的是「什么都没发生」。服务端落过盘就直接接上。
+  // 跑批明明在跑，用户看到的是「什么都没发生」。
+  //
+  // 但只在**正在跑批**时自动接上；平时服务端那份可能已经是几天前的旧表，
+  // 一打开就铺满台面，用户会以为自己刚传过（实测反馈）。改为投放区挂一条
+  // 「上次分析」提示，点「继续查看」才接上，「清空」则把落盘记录删掉。
+  let pendingRestore = null;
+
+  function whenText(iso) {
+    const s = String(iso || "");
+    return s.length >= 16 ? `${s.slice(5, 10)} ${s.slice(11, 16)}` : "";
+  }
+
+  function applyRestore(d, note) {
+    const res = d && d.result;
+    if (!res || !Array.isArray(res.lines) || !res.lines.length) return false;
+    state.rows = Array.isArray(d.rows) && d.rows.length ? d.rows : null;
+    state.result = res;
+    state.sets = Number(res.sets) || 1;
+    state.activeIndex = 0;
+    state.lastScore = null;
+    render();
+    saveState(); // 接上之后刷新页面也还在，不用再点一次
+    const total = (res.summary && res.summary.total) || res.lines.length;
+    setStatus(note || `已接上上次分析：${total} 行（购物车和跑批进度都还在）。`);
+    return true;
+  }
+
+  function showResumeBar(d) {
+    pendingRestore = d;
+    const res = (d && d.result) || {};
+    const total = (res.summary && res.summary.total) || (res.lines || []).length;
+    const meta = $("#resume-meta");
+    if (meta) {
+      const when = whenText(d.saved_at);
+      meta.textContent = `${total ? `${total} 行` : "一份清单"}${when ? ` · ${when}` : ""}`;
+    }
+    const bar = $("#resume-bar");
+    if (bar) bar.classList.remove("hidden");
+  }
+
+  function dismissResume() {
+    pendingRestore = null;
+    const bar = $("#resume-bar");
+    if (bar) bar.classList.add("hidden");
+  }
+
   async function restoreFromServer() {
     try {
-      const d = await fetch("/api/last-analysis", { cache: "no-store" }).then((r) => r.json());
+      const [d, b] = await Promise.all([
+        fetch("/api/last-analysis", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/taobao/batch", { cache: "no-store" })
+          .then((r) => r.json())
+          .catch(() => ({})),
+      ]);
       const res = d && d.result;
       if (!res || !Array.isArray(res.lines) || !res.lines.length) return false;
-      state.rows = Array.isArray(d.rows) && d.rows.length ? d.rows : null;
-      state.result = res;
-      state.sets = Number(res.sets) || 1;
-      state.activeIndex = 0;
-      state.lastScore = null;
-      render();
-      const total = (res.summary && res.summary.total) || res.lines.length;
-      setStatus(`已恢复上次分析结果：${total} 行（刷新或新开标签页都能接上）。`);
-      return true;
+      if (b && b.running) return applyRestore(d, "已接上正在跑的这一批（刷新/新开页面都不会断）。");
+      showResumeBar(d);
+      return false;
     } catch {
       return false;
     }
@@ -2079,6 +2124,29 @@
         await analyze(parsed.rows);
       } catch (err) {
         setStatus(err.message, "err");
+      }
+    });
+
+    $("#btn-resume-open").addEventListener("click", () => {
+      const d = pendingRestore;
+      if (!d) return;
+      dismissResume();
+      if (applyRestore(d)) toast("已接上上次分析，购物车和跑批进度都还在");
+    });
+
+    $("#btn-resume-clear").addEventListener("click", async () => {
+      if (!window.confirm("清空「上次分析」的记录？\n\n购物车和跑批进度都不动；清完请重新上传或粘贴清单。")) return;
+      dismissResume();
+      try {
+        sessionStorage.removeItem("bom.result");
+      } catch {
+        /* 存不存无所谓 */
+      }
+      try {
+        await api("/api/last-analysis/clear", {});
+        setStatus("上次分析已清空，请上传或粘贴新的清单。");
+      } catch (err) {
+        toast(`清空失败：${err.message}`);
       }
     });
 

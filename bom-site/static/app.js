@@ -1405,20 +1405,23 @@
       (data.screenshot ? `<img class="shot" src="${data.screenshot}">` : "") +
       `<div class="row row-left"><button class="ghost small" id="btn-exec-cart">查看购物车</button></div>`;
     const b = $("#btn-exec-cart");
-    if (b) b.addEventListener("click", execCart);
+    if (b) b.addEventListener("click", () => execCart());
   }
 
-  async function execCart() {
+  async function execCart(targetSel) {
+    // 结果必须写在「点按钮的那个面板」里：
+    // - 单行执行页的「查看购物车」→ #exec-add-result（SKU 面板里）
+    // - 维护页的「查看明细」→ 传 #cart-view-result（维护页里）
+    // 不能一律写 #exec-add-result：跑过单行执行后它一直存在，从维护页
+    // 点「查看明细」结果就跑进隐藏的单行执行页，用户看着像按不动。
+    const box =
+      (targetSel && $(targetSel)) || $("#exec-add-result") || $("#cart-remove-result");
+    if (!box) return;
+    // 读车要 3 秒左右，先给个即时反馈，别让人以为按钮没反应
+    box.innerHTML = `<div class="exec-result">正在读取购物车…</div>`;
     try {
       const d = await api("/api/taobao/cart", {});
-      // SKU 面板还没渲染过就没有 #exec-add-result（从「购物车维护」直接点
-      // 查看明细时就是这样）——兜底塞进购物车维护区，别让 null 崩掉。
-      let box = $("#exec-add-result");
-      if (!box) {
-        box = $("#cart-remove-result");
-        if (box) box.innerHTML = "";
-      }
-      if (!box) return;
+      box.innerHTML = "";
       if (!d.ok) {
         // I5 的新错误码（CART_ROWS_NOT_RENDERED 等）也在这里亮出来
         box.insertAdjacentHTML(
@@ -1455,6 +1458,7 @@
           (d.screenshot ? `<img class="shot" src="${d.screenshot}">` : "")
       );
     } catch (e) {
+      box.innerHTML = "";
       toast(e.message);
     }
   }
@@ -2152,7 +2156,7 @@
         // 直接下 CSV：导出的是「本次/上次批量」的逐行结果（含状态、金额、确认方式）
         window.location.href = "/api/taobao/batch/export.csv";
       });
-    $("#btn-cart-view").addEventListener("click", execCart);
+    $("#btn-cart-view").addEventListener("click", () => execCart("#cart-view-result"));
     $("#btn-cart-remove").addEventListener("click", () => cartRemove(false));
     $("#btn-cart-remove-batch").addEventListener("click", cartRemoveLastBatch);
     $("#btn-verify-show").addEventListener("click", showBrowserWindow);

@@ -63,6 +63,17 @@ BROWSE_SIM = (os.environ.get("TAOBAO_BROWSE_SIM") or "1").strip().lower() not in
     "0", "false", "off", "no",
 )
 
+# 无痕跑批（仅 CDP 模式）：连上调试浏览器后，再开一个独立的 incognito
+# context 当工作区。搜索/加购产生的 URL 只存在于无痕 context 的内存里，
+# 关闭即销毁，不会写进 .cdp-profile/Default/History —— 浏览器历史里看不到
+# 任何采购搜索词。登录态用 storage_state 从默认 profile 注入、退出时写回
+# taobao-session.json，所以不用重新扫码。
+# 隐私是增强项，任何异常都回退到默认 context，绝不让跑批因此失败。
+# TAOBAO_PRIVATE_WINDOW=0 可显式关掉、回到旧行为。
+PRIVATE_WINDOW = (os.environ.get("TAOBAO_PRIVATE_WINDOW") or "1").strip().lower() not in (
+    "0", "false", "off", "no",
+)
+
 # Screenshot names that are kept even in "fail" mode: the failure forensics
 # plus the single proof shot that the item really went into the cart.
 _SHOT_KEEP = lambda name: (  # noqa: E731
@@ -128,6 +139,8 @@ class BrowserAdapter:
         self._context: BrowserContext | None = None
         self._page: Page | None = None
         self._cdp = False
+        self._private = False          # 工作 context 是否为无痕（历史不落盘）
+        self._cdp_default_ctx = None   # CDP 默认 context（登录态从这里注入/回写）
 
     # ──────────────────────────────────────────────
     # Browser Lifecycle
@@ -160,18 +173,48 @@ class BrowserAdapter:
             try:
                 self._browser = self._playwright.chromium.connect_over_cdp(cdp_url)
                 contexts = list(self._browser.contexts)
-                self._context = contexts[0] if contexts else self._browser.new_context()
-                pages = [p for p in self._context.pages if not p.is_closed()]
-                self._page = self._pick_page(pages) or self._context.new_page()
-                if len(pages) > 1:
-                    print(
-                        "[browser] %d live pages on attach: %s"
-                        % (len(pages), " | ".join((x.url or "about:blank")[:60] for x in pages)),
-                        file=sys.stderr,
-                    )
+                default_ctx = contexts[0] if contexts else self._browser.new_context()
+                self._cdp_default_ctx = default_ctx
+
+                # 无痕工作区：搜索/加购全在这里跑，URL 不写进磁盘 History。
+                # 登录态从默认 profile 注入（含 httpOnly 的关键 cookie）；
+                # 失败一律回退默认 context，隐私增强绝不变成跑批故障。
+                if PRIVATE_WINDOW:
+                    try:
+                        state = default_ctx.storage_state()
+                        self._context = self._browser.new_context(
+                            storage_state=state,
+                            viewport={"width": 1920, "height": 1080},
+                            locale="zh-CN",
+                            timezone_id="Asia/Shanghai",
+                            ignore_https_errors=True,
+                        )
+                        self._context.set_default_timeout(15000)
+                        self._page = self._context.new_page()
+                        self._private = True
+                        print(
+                            "[browser] private window on: 采购搜索不写入浏览器历史 "
+                            f"(seeded {len(state.get('cookies') or [])} cookies from default profile)",
+                            file=sys.stderr,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"[browser] private window failed, fall back to default: {exc}", file=sys.stderr)
+                        self._private = False
+
+                if not self._private:
+                    self._context = default_ctx
+                    pages = [p for p in self._context.pages if not p.is_closed()]
+                    self._page = self._pick_page(pages) or self._context.new_page()
+                    if len(pages) > 1:
+                        print(
+                            "[browser] %d live pages on attach: %s"
+                            % (len(pages), " | ".join((x.url or "about:blank")[:60] for x in pages)),
+                            file=sys.stderr,
+                        )
                 self._cdp = True
                 print(
-                    f"[browser] attached via CDP {cdp_url} ({len(pages)} page(s))",
+                    f"[browser] attached via CDP {cdp_url} "
+                    f"({'private' if self._private else 'default'} context)",
                     file=sys.stderr,
                 )
                 return
@@ -295,6 +338,11 @@ class BrowserAdapter:
     def close(self) -> None:
         if self._cdp:
             # The browser belongs to the user; only drop our connection.
+            # 无痕工作区（我们新建的 context）关掉，历史随它一起销毁；
+            # 默认 profile context 是用户的登录态载体，绝不 close。
+            with suppress(Exception):
+                if self._private and self._context is not None:
+                    self._context.close()
             with suppress(Exception):
                 if self._playwright is not None:
                     self._playwright.stop()
@@ -303,6 +351,8 @@ class BrowserAdapter:
             self._page = None
             self._playwright = None
             self._cdp = False
+            self._private = False
+            self._cdp_default_ctx = None
             return
         with suppress(Exception):
             if self._context is not None:
@@ -392,6 +442,15 @@ class BrowserAdapter:
             for o in (state.get("origins") or [])
             if any(k in str(o.get("origin") or "") for k in keep)
         ]
+        # 无痕工作区里刷新出来的登录 cookie 要回写默认 profile：否则下次启动
+        # 从默认 profile 注入的是旧 token，淘宝会把我们判成未登录、又要扫码。
+        # 只写 cookie（登录态），不碰历史 —— 用户担心的搜索记录不在这里。
+        if self._private and self._cdp_default_ctx is not None and cookies:
+            try:
+                self._cdp_default_ctx.add_cookies(cookies)
+                print(f"[browser] synced {len(cookies)} login cookies back to default profile", file=sys.stderr)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[browser] cookie sync-back skipped: {exc}", file=sys.stderr)
         return SessionSnapshot(storage_state={"cookies": cookies, "origins": origins})
 
     # ──────────────────────────────────────────────

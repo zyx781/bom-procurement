@@ -47,6 +47,7 @@ jobs:
           python test_cart_remove_line.py
           python test_cart_reconcile_scroll.py
           python test_cart_view_ui.py
+          python test_private_window.py
           python test_settings.py
 
       # 端到端：起假会话 + 临时 server 进程，验证调度闭环与 HTTP 路由

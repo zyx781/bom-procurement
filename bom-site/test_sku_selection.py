@@ -195,10 +195,12 @@ check("只有 1%/5% → 精密档判 unresolved", not _sel and bool(_un), (_sel,
 
 _norm = mkrow(desc="10kΩ", package="0603 (1608)", params="10kΩ ±1%", qty=10)
 _sel, _un = pick(_norm, [group("精度", ["±5%", "±1%"], selected=0)])
-check("普通档 1% 与 5% → 选 1%", _sel.get("精度") == "±1%", _sel)
-check("普通档 ±5% 不否决（只降权）", tr._sku_veto(_norm, "精度", "±5%") is None)
+check("1% 与 5% 同组 → 选 1%", _sel.get("精度") == "±1%", _sel)
+# 1% 也是精密档：明确标 ±5% 是 5 倍误差，属于降规格，不能靠「唯一选项」蒙混。
+check("1% 要求下 ±5% 被否决（降规格）", tr._sku_veto(_norm, "精度", "±5%") is not None)
 _sel, _un = pick(_norm, [group("精度", ["±5%"], selected=0)])
-check("普通档唯一 ±5% 仍可买", _sel.get("精度") == "±5%", _sel)
+check("只有 ±5% → 不自动买（降规格）", not _sel and bool(_un), (_sel, _un))
+check("1% 要求下 ±2% 仍在同档容差内", tr._sku_veto(_norm, "精度", "±2%") is None)
 _sel, _un = pick(_norm, [group("精度", ["不标精度", "±1%"])])
 check("容差未知的选项排在写清楚的后头", _sel.get("精度") == "±1%", _sel)
 

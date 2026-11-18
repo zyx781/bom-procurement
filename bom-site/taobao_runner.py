@@ -918,6 +918,9 @@ VERIFY_HUMAN_RETRY = max(1, int(os.environ.get("TAOBAO_VERIFY_HUMAN_RETRY", "3")
 TOLERANCE_DEMOTE_RATIO = float(os.environ.get("TAOBAO_TOL_DEMOTE_RATIO", "3"))
 TOLERANCE_PRECISION_PCT = float(os.environ.get("TAOBAO_TOL_PRECISION", "0.5"))
 TOLERANCE_PRECISION_VETO = os.environ.get("TAOBAO_TOL_PRECISION_VETO", "1") not in ("0", "false", "False")
+# 1% 也是常见精密档：BOM 写 ±1%，SKU 明确标 ±5% 就是降一个等级（5 倍误差）。
+# 只拦「明确标了更宽」的选项，不要求 SKU 必须标精度 —— 后者会把大量不写精度的行判死。
+TOLERANCE_STRICT_PCT = float(os.environ.get("TAOBAO_TOL_STRICT", "1"))
 
 # 收尾对账的「读车异常」判据：全批都没匹配上，更可能是购物车没读对，
 # 不是 N 行同时加购失败。达到下面任一条就只标「未核实」，不逐行降级。
@@ -3438,6 +3441,13 @@ class SessionRunner:
                 )
                 last_message = attempt["message"]
                 continue
+            # 功率方向是「≥ 才够」：标题明确写 1/8W，BOM 要 1/4W，阻值/封装再对也不能买。
+            # 放在规格缺失之后判，报错优先说「读不到阻值」这种更根本的问题。
+            _pw_bad = _under_power(line, cand.get("title") or "")
+            if _pw_bad:
+                attempt["message"] = _pw_bad + "，不自动加购"
+                last_message = attempt["message"]
+                continue
             _t_open = time.monotonic()
             opened = None
             # 打开商品时常有偶发故障（店铺页慢、图片卡住、导航超时）。
@@ -4015,13 +4025,29 @@ _CAP_CERAMIC_WORDS = ("瓷片", "陶瓷", "独石", "MLCC", "C0G", "X7R", "Y5V")
 
 
 def _bom_cap_family(line: dict) -> str:
-    """BOM 这颗电容是哪一族：电解 / 瓷片（含其他无极性薄膜）。
+    """BOM 这颗电容是哪一族：钽 / 铝电解 / 瓷片（含其他无极性薄膜）。
 
     只看数值会出大事：95µF 搜出来的是 CBB65 空调压缩机**启动电容**
     （450V、体积像火柴盒），和 BOM 里那颗 10×12mm 的铝电解不是一个东西，
     容值一样也装不进去 —— 极性、纹波、体积全不一样。
+    钽电容同样有极性，但和铝电解不是同一种料，必须单独认出来。
     """
     attrs = _lcsc_attrs(line)
+    lc = line.get("lcsc") or {}
+    blob = " ".join(
+        str(line.get(k) or "") for k in ("mpn", "desc", "params_text")
+    )
+    lc_blob = " ".join(
+        [
+            str(lc.get("catalog") or ""),
+            " ".join(str(x) for x in (lc.get("catalog_path") or [])),
+            str(lc.get("desc") or ""),
+            str(attrs.get("介质材料") or ""),
+        ]
+    )
+    # 钽要排在「有极性」前面：钽也有极性，先判极性会把它归成铝电解。
+    if "钽" in blob or "钽" in lc_blob or "tantalum" in lc_blob.lower():
+        return "钽"
     if "有极性" in str(attrs.get("极性类型") or ""):
         return "电解"
     if str(attrs.get("温度系数") or "") or str(attrs.get("介质材料") or ""):
@@ -4032,7 +4058,6 @@ def _bom_cap_family(line: dict) -> str:
         return "电解"
     if re.search(r"CAP-TH_L", pkg, re.I):
         return "瓷片"
-    blob = " ".join(str(line.get(k) or "") for k in ("mpn", "desc", "params_text"))
     if any(w in blob for w in _CAP_ELEC_WORDS):
         return "电解"
     if any(w in blob for w in _CAP_CERAMIC_WORDS):
@@ -4183,12 +4208,382 @@ def _review_reason(line: dict) -> str:
     return ""
 
 
+# --------------------------------------------------------------------------
+# 形态闸门：数值全对、但「不是同一种东西」
+#
+# 2026-11-18 全链路审查发现的盲区：阻值/容值/耐压/针数都对得上，仍可能买回
+# 贴片当插件、有源晶振当无源晶体、共模电感当单绕组电感、IC 当核心板。
+# 这些都不是「降规格」，是**根本装不上/接不通**，必须在下单前拦住。
+# --------------------------------------------------------------------------
+
+_MOUNT_THT = re.compile(r"直插|插件|通孔|\bTHT\b|\bDIP\b|\bTO-?220\b|\bTO-?247\b", re.I)
+_MOUNT_SMD = re.compile(
+    r"贴片|表面贴装|\bSMD\b|卧贴|立贴|\bSOP-?\d|\bSOIC-?\d|\bQFN-?\d|\bDFN-?\d|"
+    r"\bLQFP-?\d|\bTQFP-?\d|\bSOT-?\d|\bTO-?252\b|\bTO-?263\b",
+    re.I,
+)
+_DIODE_THT = re.compile(r"\bDO-\d", re.I)
+_DIODE_SMD = re.compile(r"\bSOD-\d|\bSMA\b|\bSMB\b|\bSMC\b", re.I)
+
+
+def _bom_mount_style(line: dict) -> str | None:
+    """BOM 要的是插件还是贴片。只看封装列/原始封装名，不猜名称列。"""
+    pkg = str(line.get("package") or "")
+    raw = str((line.get("row") or {}).get("package") or "")
+    blob = f"{pkg} {raw}"
+    if pkg == "插件" or re.search(
+        r"(?:^|[_\-\s])TH(?:$|[_\-\s])|CONN-TH|CAP-TH|IND-TH|SW-TH|HDR-TH|LED-TH", blob, re.I
+    ):
+        return "tht"
+    if pkg == "SMD" or re.search(r"\bSMD\b", raw, re.I):
+        return "smd"
+    if _pkg_code(pkg) or re.search(
+        r"(?:^|[^0-9])(0201|0402|0603|0805|1206|1210|1812|2010|2512)(?![0-9])", pkg
+    ):
+        return "smd"
+    # 芯片/功率封装名本身就说明贴片/插件：SOIC/QFN/LQFP/SOT/TO-252 是贴片，
+    # DIP/TO-220 是插件。同型号买错封装（SOIC-8 买成 DIP-8）焊盘完全对不上。
+    if re.search(
+        r"SOIC|SOP-?\d|TSSOP|MSOP|SSOP|[VPLT]?QFN|DFN|LQFP|TQFP|QFP-?\d|SOT-?\d|"
+        r"WLCSP|LGA|BGA|PDFN|PDFNWB|TDSON|LFPAK|DPAK|TO-?252|TO-?263",
+        blob,
+        re.I,
+    ):
+        return "smd"
+    if re.search(r"DIP-?\d|TO-?220|TO-?247", blob, re.I):
+        return "tht"
+    # 二极管封装名：DO-35/DO-41 是轴向插件，SOD-123/SMA 是贴片
+    if str(line.get("subtype") or "") == "diode":
+        if _DIODE_THT.search(pkg):
+            return "tht"
+        if _DIODE_SMD.search(pkg):
+            return "smd"
+    return None
+
+
+def _text_mount_style(line: dict, text: str) -> str | None:
+    """候选标题/SKU 明确写的是插件还是贴片。两种都写＝多规格链接，返回 None。"""
+    t = str(text or "")
+    tht = bool(_MOUNT_THT.search(t))
+    smd = bool(_MOUNT_SMD.search(t))
+    if str(line.get("subtype") or "") == "diode":
+        tht = tht or bool(_DIODE_THT.search(t))
+        smd = smd or bool(_DIODE_SMD.search(t))
+    if tht and smd:
+        return None
+    if tht:
+        return "tht"
+    if smd:
+        return "smd"
+    return None
+
+
+def _mount_conflict(line: dict, text: str) -> str:
+    want = _bom_mount_style(line)
+    got = _text_mount_style(line, text)
+    if want and got and want != got:
+        label = {"tht": "插件/直插", "smd": "贴片"}
+        return f"封装形态不符：BOM 是{label[want]}，候选是{label[got]}（焊盘/引脚不通用）"
+    return ""
+
+
+_LED_COLORS = ("冰蓝", "暖白", "红", "绿", "蓝", "黄", "白", "橙", "紫", "粉")
+
+
+def _led_color(text: str) -> str | None:
+    """LED 发光颜色/类型。`白发红` 是红色，别被前面的「白」骗了。"""
+    t = str(text or "")
+    if re.search(r"全彩|七彩|RGB|三色", t, re.I):
+        return "RGB"
+    if re.search(r"双色|双色灯", t):
+        return "双色"
+    m = re.search(r"白发(冰蓝|暖白|红|绿|蓝|黄|白|橙|紫|粉)", t)
+    if m:
+        return m.group(1)
+    for c in _LED_COLORS:
+        if c in t:
+            return c
+    return None
+
+
+def _led_conflict(line: dict, text: str) -> str:
+    if str(line.get("subtype") or "") != "led":
+        return ""
+    want = _led_color(_line_blob(line))
+    got = _led_color(text)
+    if not want or not got or want == got:
+        return ""
+    return f"LED 颜色不符：BOM 要{want}，候选是{got}（不同颜色是不同料）"
+
+
+_CRYSTAL_ACTIVE = re.compile(r"有源|振荡器|oscillator|\bosc\b|vcxo|tcxo", re.I)
+_CRYSTAL_PASSIVE = re.compile(r"无源|晶体|谐振器|crystal|xtal", re.I)
+
+
+def _crystal_kind(text: str) -> str | None:
+    t = str(text or "")
+    if _CRYSTAL_ACTIVE.search(t):
+        return "active"
+    if _CRYSTAL_PASSIVE.search(t):
+        return "passive"
+    return None
+
+
+def _crystal_pins(text: str) -> int | None:
+    t = str(text or "")
+    m = re.search(r"(?<!\d)([1-8])\s*[pP](?![A-Za-z0-9])", t)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"([1-8])\s*(?:脚|pin)", t, re.I)
+    if m:
+        return int(m.group(1))
+    for word, n in (("两脚", 2), ("二脚", 2), ("三脚", 3), ("四脚", 4)):
+        if word in t:
+            return n
+    return None
+
+
+def _crystal_conflict(line: dict, text: str) -> str:
+    """无源晶体 ≠ 有源晶振；4P 封装 ≠ 2P 两脚。频率对了也不是同一种器件。"""
+    if str(line.get("subtype") or "") != "crystal":
+        return ""
+    want_kind = _crystal_kind(_line_blob(line))
+    got_kind = _crystal_kind(text)
+    if want_kind and got_kind and want_kind != got_kind:
+        return (
+            "晶振类型不符：BOM 是"
+            + ("有源晶振（要供电）" if want_kind == "active" else "无源晶体（两端/四端无源）")
+            + "，候选是"
+            + ("有源晶振" if got_kind == "active" else "无源晶体")
+        )
+    want_pins = _crystal_pins(
+        f"{line.get('package') or ''} {(line.get('row') or {}).get('package') or ''}"
+    )
+    got_pins = _crystal_pins(text)
+    if want_pins and got_pins and want_pins != got_pins:
+        return f"晶振脚数不符：BOM 是 {want_pins}P，候选是 {got_pins}P（焊盘对不上）"
+    return ""
+
+
+_INDUCTOR_CM = re.compile(r"共模|common\s*mode", re.I)
+
+
+def _inductor_conflict(line: dict, text: str) -> str:
+    """单绕组电感 ≠ 共模电感（双绕组四脚）；另外线径/额定电流不能往下换。"""
+    if str(line.get("subtype") or "") != "inductor":
+        return ""
+    blob = _line_blob(line)
+    want_cm = bool(_INDUCTOR_CM.search(blob))
+    got_cm = bool(_INDUCTOR_CM.search(text))
+    if got_cm and not want_cm:
+        return "候选是共模电感（双绕组四脚），BOM 是单绕组电感，脚位/接法都不对"
+    if want_cm and not got_cm:
+        return "BOM 要共模电感（双绕组），候选没有共模结构，不能当单绕组电感买"
+
+    # 线径：Altium 的 IND-TH_…-D0.5 就是 0.5mm 漆包线，淘宝写作「0.5线」。
+    # 0.3 线顶 0.5 线，感值一样但载流能力差一截（实测 3mH 行买成 0.3 线）。
+    def _wire(t: str):
+        t = str(t or "")
+        m = re.search(r"(?<![A-Za-z0-9])D\s*(\d+(?:\.\d+)?)(?![\d.])", t, re.I)
+        if m:
+            return float(m.group(1))
+        # 淘宝写法是「0.3线」「0.5mm线」，数字在「线」前面；「线径0.5」才是数字在后。
+        # 顺序不能反：旧写法 `线\s*(\d+)` 会把「0.3线 2A」里的 2A 读成 2mm 线径。
+        m = re.search(r"(\d+(?:\.\d+)?)\s*(?:mm)?\s*线(?!径)", t, re.I)
+        if m:
+            return float(m.group(1))
+        m = re.search(r"线径\s*[:：]?\s*(\d+(?:\.\d+)?)", t)
+        return float(m.group(1)) if m else None
+
+    want_wire = _wire(blob)
+    got_wire = _wire(text)
+    if want_wire and got_wire and got_wire < want_wire * 0.9:
+        return f"线径不符：BOM 是 {want_wire:g}mm 线，候选 {got_wire:g}mm 线（载流不够）"
+
+    # 额定电流：BOM 明确写了 A 数才比；候选没写不拦（标题常常只写线径）。
+    want_a = engine._parse_current(blob)
+    got_as = engine.title_amps(text)
+    if want_a and got_as and max(got_as) < want_a * 0.9:
+        return f"额定电流不符：BOM 要 ≥{want_a:g}A，候选只有 {max(got_as):g}A"
+    return ""
+
+
+_BOARD_LIKE = re.compile(
+    r"转接板|转接座|烧录座|测试座|测试架|核心板|开发板|评估板|最小系统|模块板|空板|底板|扩展板",
+    re.I,
+)
+
+
+def _board_conflict(line: dict, text: str) -> str:
+    """芯片行不能买成核心板/转接板/烧录座 —— 标题里带完整型号也照样是另一件东西。"""
+    if str(line.get("category") or "") not in ("ic", "power"):
+        return ""
+    if _BOARD_LIKE.search(_line_blob(line)):
+        return ""
+    m = _BOARD_LIKE.search(str(text or ""))
+    if m:
+        return f"候选是「{m.group(0)}」类成品板/治具，BOM 要的是芯片本体"
+    return ""
+
+
+_CONN_RIGHT = re.compile(r"弯针|弯脚|弯排|卧式|卧贴|90\s*度|right\s*angle", re.I)
+_CONN_STRAIGHT = re.compile(r"直针|直脚|立式|立贴|180\s*度", re.I)
+
+
+def _conn_orient(text: str) -> str | None:
+    t = str(text or "")
+    right = bool(_CONN_RIGHT.search(t))
+    straight = bool(_CONN_STRAIGHT.search(t))
+    if right and straight:
+        return None
+    if right:
+        return "right"
+    if straight:
+        return "straight"
+    return None
+
+
+def _conn_gender(text: str) -> str | None:
+    """公头/母座。XT30/XT60 的 -M/-F 后缀与 JST 的 B4B-XH（公针座）都算证据。"""
+    t = str(text or "")
+    m = re.search(r"\b(?:XT|MR|MT)\d{2}[A-Z0-9]*[-_ ]([MF])\b", t, re.I)
+    if m:
+        return "male" if m.group(1).upper() == "M" else "female"
+    if re.search(r"\bB\d+B-(?:XH|PH|ZH|SH|EH|GH)\b", t, re.I):
+        return "male"
+    if re.search(r"公头|公座|公针|插头|排针|\bmale\b", t, re.I):
+        return "male"
+    # 「插座」不算证据：JST 直针座、排针座卖家普遍把公针座也叫「插座」，
+    # 拿它判 female 会把「XH2.54 直针 插座」这种正确候选误杀。只认显式母端字样。
+    if re.search(r"母头|母座|母针|母端|排母|\bfemale\b", t, re.I):
+        return "female"
+    return None
+
+
+def _conn_conflict(line: dict, text: str) -> str:
+    if str(line.get("category") or "") != "connector":
+        return ""
+    blob = _line_blob(line)
+    attrs = _lcsc_attrs(line)
+    want_o = _conn_orient(blob) or _conn_orient(str(attrs.get("连接器类型") or ""))
+    got_o = _conn_orient(text)
+    if want_o and got_o and want_o != got_o:
+        return (
+            "连接器朝向不符：BOM 是"
+            + ("弯针/卧贴" if want_o == "right" else "直针/立贴")
+            + "，候选是"
+            + ("弯针/卧贴" if got_o == "right" else "直针/立贴")
+        )
+    want_g = _conn_gender(blob)
+    got_g = _conn_gender(text)
+    if want_g and got_g and want_g != got_g:
+        return (
+            "连接器公母不符：BOM 是"
+            + ("公头/公座" if want_g == "male" else "母座/母头")
+            + "，候选是"
+            + ("公头/公座" if got_g == "male" else "母座/母头")
+        )
+    return ""
+
+
+def _model_family(token: str):
+    """拆同族型号：SS34 / NE555P / 1N5819W / 2CL2FL。"""
+    t = str(token or "").upper()
+    m = re.match(r"^([A-Z]{1,4})(\d{2,4})([A-Z]{0,3})$", t)
+    if m:
+        return m.group(1), m.group(2)
+    m = re.match(r"^(\d[A-Z])(\d{2,4})([A-Z]{0,3})$", t)
+    if m:
+        return m.group(1), m.group(2)
+    return None
+
+
+def _title_model_conflict(line: dict, title: str) -> str:
+    """二极管/LED/磁珠/保险丝：标题只有同族别的号 → 不能买。
+
+    IC/功率器件有 H02（必须出现完整型号）兜底；被动件以前只看封装和数值，
+    SS34 的位子买成 SS26、1N5819W 买成 1N5817 都能混过去。
+    多型号链接（标题同时列了 BOM 型号）不算冲突，具体由 SKU 选。
+    """
+    if str(line.get("category") or "") != "passive":
+        return ""
+    if str(line.get("subtype") or "") not in ("diode", "led", "bead", "fuse"):
+        return ""
+    mpn = str(line.get("mpn") or "").strip().upper()
+    fam = _model_family(mpn)
+    if not fam or len(mpn) < 4:
+        return ""
+    nt = engine._norm_text(title)
+    if engine._norm_text(mpn) in nt:
+        return ""
+    for tok in re.findall(r"[A-Z]{1,4}\d{2,4}[A-Z]{0,3}|\d[A-Z]\d{2,4}[A-Z]{0,3}", str(title).upper()):
+        tf = _model_family(tok)
+        if not tf or tf[0] != fam[0] or tf[1] == fam[1]:
+            continue
+        if tok in mpn or mpn in tok:
+            continue
+        return f"标题里只有同系列 {tok}，没有 BOM 型号 {mpn}（同系列不同号＝另一种料）"
+    return ""
+
+
+def _under_power(line: dict, text: str) -> str:
+    """候选明确写了更低的功率 → 拦。没写不拦（标题常常只写封装）。"""
+    want = (line.get("params") or {}).get("power_w")
+    if not want:
+        return ""
+    got = _parse_watts(text)
+    if got is not None and got < float(want) * 0.9:
+        return f"功率不符：BOM 要 {float(want):g}W，候选只有 {got:g}W（会过热）"
+    return ""
+
+
+_CONN_TITLE_RE = re.compile(
+    r"排针|排母|端子|接插件|连接器|牛角|简牛|航空插|FPC\s*座|IDC\s*座|排线", re.I
+)
+_PASSIVE_TITLE_RE = re.compile(r"贴片电阻|贴片电容|二极管|三极管|电感|晶振|磁珠")
+
+
+def _category_conflict(line: dict, text: str) -> str:
+    """整件东西的品类就不对：BOM 要 100uF 电容，搜出来是 PZ254 排针。
+
+    2026-11-18 真机 #24：100uF 行匹配到「PZ254V-11-03P 排针」，以前要等开页、
+    到 SKU 层「核实不到容值」才拒 —— 白跑一趟；万一那家 SKU 里恰好写着 100uF，
+    就会把排针当电容加进购物车。值闸门永远发现不了「这不是同一类元件」。
+    """
+    cat = str(line.get("category") or "")
+    sub = str(line.get("subtype") or "")
+    t = str(text or "")
+    if not t:
+        return ""
+    if cat == "passive" or sub in ("resistor", "capacitor", "inductor", "diode", "led", "crystal"):
+        if _CONN_TITLE_RE.search(t) and not _PASSIVE_TITLE_RE.search(t):
+            return "品类不符：BOM 要被动件，候选是连接器/排针类"
+    elif cat == "connector":
+        m = _PASSIVE_TITLE_RE.search(t)
+        if m:
+            return f"品类不符：BOM 要连接器，候选是{m.group(0)}"
+    return ""
+
+
 def _material_conflict(line: dict, text: str) -> str:
     """材料/结构对不上时返回一句原因；空字符串表示可以继续。"""
     t = str(text or "")
     if not t:
         return ""
     p = line.get("params") or {}
+
+    # 形态先判：贴片/插件、LED 颜色、晶振类型、电感结构、芯片本体/成品板、连接器朝向。
+    # 这些和阻值/容值无关，值闸门永远发现不了，但装上去就是错的。
+    _why = _category_conflict(line, t)
+    if _why:
+        return _why
+    _why = _mount_conflict(line, t)
+    if _why:
+        return _why
+    for _check in (_led_conflict, _crystal_conflict, _inductor_conflict, _board_conflict, _conn_conflict):
+        _why = _check(line, t)
+        if _why:
+            return _why
 
     # —— 电阻：类型必须一致（金属膜 ≠ 绕线 ≠ 碳膜）——
     bom_type = _bom_res_type(line)
@@ -4211,7 +4606,14 @@ def _material_conflict(line: dict, text: str) -> str:
     # 数值对得上也可能完全不是一个元件：95µF 的 CBB65 空调启动电容（450V）
     # 和 10×12mm 铝电解容值相同，但极性、体积、纹波电流全都不一样。
     fam = _bom_cap_family(line)
-    if fam == "电解":
+    if fam == "钽":
+        # 钽电容有极性、低 ESR、体积小，和铝电解不是同一种料。反过来
+        # （BOM 铝电解、候选钽）算升级，可以不拦；但 BOM 明确要钽时，
+        # 买成铝电解/瓷片/薄膜就是实打实的错料。
+        for w in ("铝电解", "电解", "瓷片", "陶瓷", "薄膜", "CBB", "固态"):
+            if w in t and "钽" not in t:
+                return f"候选是「{w}」类，BOM 要的是钽电容（低 ESR、有极性，不能互顶）"
+    elif fam == "电解":
         for w in _CAP_FILM_WORDS + _CAP_CERAMIC_WORDS:
             if w in t:
                 return f"候选是「{w}」类（无极性/薄膜），BOM 要的是铝电解（有极性、体积相近才装得下）"
@@ -4852,6 +5254,25 @@ def _sku_veto(line: dict, label: str, text: str) -> str | None:
         return None
     if any(w in t for w in _UNBUYABLE):
         return "要询价/改价，不能直接下单"
+    # 形态/结构类：值对了也可能不是同一种器件。放在封装/数值前面判，
+    # 报错更直白（「LED 颜色不符」比「容值对不上」更接近真实原因）。
+    for _check in (
+        _mount_conflict,
+        _led_conflict,
+        _crystal_conflict,
+        _inductor_conflict,
+        _board_conflict,
+        _conn_conflict,
+    ):
+        _why = _check(line, t)
+        if _why:
+            return _why
+    _why_pn = _title_model_conflict(line, t)
+    if _why_pn:
+        return _why_pn
+    _why_pw = _under_power(line, t)
+    if _why_pw:
+        return _why_pw
     # 封装：BOM 要 0402，SKU 写 2010 —— 焊盘从 1.0×0.5mm 变成 5.0×2.5mm，装不上。
     # 标题闸门看不出这个：「贴片电阻 100R 1% 5% 0402/0603/…/2010」标题里 0402 在，
     # 真机上却选中了「2010贴片电阻 100R ±5%（10只）」。
@@ -4890,10 +5311,12 @@ def _sku_veto(line: dict, label: str, text: str) -> str | None:
         got_tol = _sku_tolerance(t)
         if (
             got_tol is not None
-            and want_tol <= TOLERANCE_PRECISION_PCT + 1e-9
+            # 0.1%/0.5% 是精密档，1% 也是常见精密档：明确写 5%/10% 就是降等级。
+            # 只拦「明确标宽」的选项，没标精度的交给标题级打分，避免整行被判死。
+            and want_tol <= TOLERANCE_STRICT_PCT + 1e-9
             and got_tol > want_tol * TOLERANCE_DEMOTE_RATIO + 1e-9
         ):
-            return f"容差 {got_tol:g}% 宽于要求 {want_tol:g}%（精密档不能用）"
+            return f"容差 {got_tol:g}% 宽于要求 {want_tol:g}%（降规格，不能用）"
     # 介质（P0-4）：要 C0G 买了 X7R 是另一个等级的料 —— SKU 值里明确写了
     # 别的介质就拦（#8 的错买：1nF 50V C0G 5% 买成 1nF_±10%_50V_X7R）。
     # 没写介质不算冲突，由 suggest_sku 挂「未标注」备注让人工留意。
@@ -5099,14 +5522,29 @@ def _size_verdict(line: dict, title: str) -> str | None:
     req_sizes = _size_pairs(blob)
     cand_sizes = _size_pairs(title)
     if req_sizes and cand_sizes:
-        req_max = max(max(a, b) for a, b in req_sizes)
-        cand_max = max(max(a, b) for a, b in cand_sizes)
-        if cand_max > req_max * 1.35:
-            kind = "电解电容" if is_elec else "电感"
-            return (
-                f"{kind}体积不符：BOM 最大边 {req_max:g}mm，候选 {cand_max:g}mm"
-                "（大概率装不进焊盘）"
-            )
+        # BOM 只有 BD10.0（圆柱直径、没给长宽）时只能比直径：
+        # 候选写「10x17」的 17 是高度，按最大边比会把对的电容判成装不上。
+        _bd = re.search(r"BD\s*(\d+(?:\.\d+)?)", blob, re.I)
+        _has_lw = re.search(
+            r"\d+(?:\.\d+)?\s*[x*×]\s*\d|L\s*\d+(?:\.\d+)?\s*[-_ ]\s*W\s*\d", blob, re.I
+        )
+        kind = "电解电容" if is_elec else "电感"
+        if _bd and not _has_lw:
+            req_d = float(_bd.group(1))
+            cand_d = min(min(a, b) for a, b in cand_sizes)
+            if cand_d > req_d * 1.25:
+                return (
+                    f"{kind}体积不符：BOM 直径 {req_d:g}mm，候选 {cand_d:g}mm"
+                    "（大概率装不进焊盘）"
+                )
+        else:
+            req_max = max(max(a, b) for a, b in req_sizes)
+            cand_max = max(max(a, b) for a, b in cand_sizes)
+            if cand_max > req_max * 1.35:
+                return (
+                    f"{kind}体积不符：BOM 最大边 {req_max:g}mm，候选 {cand_max:g}mm"
+                    "（大概率装不进焊盘）"
+                )
     if is_elec:
         req_v = _volts(line.get("mpn") or "") or _volts((line.get("row") or {}).get("mpn") or "")
         # 标题里列了「10/16/25/35V」这种多档电压的，第一个数字不代表实际买到的那档，
@@ -5134,6 +5572,14 @@ def _candidate_veto(line: dict, title: str) -> str | None:
         return "品类不符：要固定电阻，候选是压敏/热敏/可调电阻"
     if _sub == "capacitor" and re.search(r"压敏电阻|热敏电阻|电阻器", t) and "电容" not in t:
         return "品类不符：要电容，候选是电阻"
+    # 形态/材料/同族不同号：贴片当插件、有源当无源、共模当单绕组、SS26 顶 SS34…
+    # 以前这些只在打开商品后才查（甚至根本不查），错货会先被评分排到前面。
+    _mat = _material_conflict(line, t)
+    if _mat:
+        return _mat
+    _pn = _title_model_conflict(line, t)
+    if _pn:
+        return _pn
     # 尺寸/耐压（电解、电感）：容值对了也可能装不上，见 _size_verdict 注释
     _sv = _size_verdict(line, t)
     if _sv:

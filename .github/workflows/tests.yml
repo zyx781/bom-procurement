@@ -39,6 +39,7 @@ jobs:
           python test_cart_cleanup.py
           python test_batch_progress_guard.py
           python test_procurement_guard.py
+          python test_buy_guard.py
           python test_bom_regression.py
           python test_candidate_replay.py
           python test_sku_replay.py

@@ -301,7 +301,9 @@ _RE_IND = re.compile(
 # 用 \b 收尾会判成「没有词边界」，整段规格读不出来 —— 中文是 Unicode 词字符，
 # F「F」和「单」之间不存在边界。改成「后面不是英文字母」才符合真实文本。
 _RE_POWER_FRAC = re.compile(r"(\d+)\s*/\s*(\d+)\s*[wW](?![A-Za-z])")
-_RE_POWER = re.compile(r"(\d+(?:\.\d+)?)\s*[wW](?![A-Za-z])")
+# 前面不能紧贴字母/数字：`1N5819W` 里的 `5819W` 是料号后缀，不是 5819 瓦。
+# 这条以前把肖特基二极管读成「5819W」，摘要和功率闸门都跟着错。
+_RE_POWER = re.compile(r"(?<![A-Za-z0-9])(\d+(?:\.\d+)?)\s*[wW](?![A-Za-z])")
 _RE_VOLT = re.compile(r"(\d+(?:\.\d+)?)\s*[vV](?:dc|DC)?(?![A-Za-z])")
 _RE_TOL = re.compile(r"(?:±|\+/-|\+-)?\s*(\d+(?:\.\d+)?)\s*%")
 # 电流：必须自成一个 token。「AO3400A」里的 3400 不是电流 —— 前面紧挨字母的要排除。
@@ -607,6 +609,28 @@ def _parse_power(t):
             return None
     m = _RE_POWER.search(t)
     return float(m.group(1)) if m else None
+
+
+def _parse_powers(t):
+    """文本里出现的所有功率档位（`1/4W`、`1W/2W`、`1/8W 1/4W`）。
+
+    标题级判断必须看全部档位：多规格链接「1/8W/1/4W」里确实有 1/4W 这一档，
+    只看第一个会把整条链接误杀；反过来「1/8W 只有这一档」才该拦。
+    """
+    s = str(t or "")
+    out, spans = [], []
+    for m in _RE_POWER_FRAC.finditer(s):
+        try:
+            out.append(float(m.group(1)) / float(m.group(2)))
+        except ZeroDivisionError:
+            pass
+        spans.append((m.start(), m.end()))
+    for m in _RE_POWER.finditer(s):
+        # 分数功率已被上面的规则整体读过，`4W` 这一截不能重复算成 4W
+        if any(a <= m.start() < b for a, b in spans):
+            continue
+        out.append(float(m.group(1)))
+    return out
 
 
 def _parse_voltage(t):
@@ -2494,8 +2518,13 @@ def _check_title(line, cand, extra_ctx):
             hit = t_tol is not None and t_tol <= tol_cap + 1e-9
             checks.append((f"精度 ≤ ±{tol_cap:g}%（放宽）", 8, hit))
         if "power_w" in p:
-            t_pw = _parse_power(title)
-            checks.append((f"功率 ≥ {p['power_w']:g}W", 10, t_pw is not None and t_pw >= p["power_w"] * 0.999))
+            # 功率是「≥ 就够」的方向，但**不足**是硬错：1/4W 的位子买 1/8W，
+            # 阻值/封装全对，通电后照样过热。多档链接只看最大值，避免误杀。
+            t_pws = _parse_powers(title)
+            t_pw = max(t_pws) if t_pws else None
+            checks.append((f"功率 ≥ {p['power_w']:g}W", 10, t_pw is not None and t_pw >= p["power_w"] * 0.9))
+            if t_pw is not None and t_pw < p["power_w"] * 0.9:
+                return "H03", f"标题功率 {t_pw:g}W 低于要求 {p['power_w']:g}W", checks, hit_risk
         if "voltage_v" in p:
             # 耐压必须够：只有标题里所有电压都低于要求才淘汰（多电压链接留给 SKU 去选）
             req_v = p["voltage_v"]

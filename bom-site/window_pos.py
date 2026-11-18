@@ -7,6 +7,9 @@
 
 * ``hide()``：窗口移到屏幕外 (-2000, 0)。**不最小化** —— 最小化的窗口 Chromium
   会停渲染，截图会变白；移到屏幕外渲染照常，截图/CDP 都正常。
+  挪完还要**复核**：Chromium 的「还原页面」气泡依附主窗口，主窗口一离开桌面，
+  它会被夹回屏幕左上角（实测 x 从 -2000 变成 0），屏幕边上就露一条。这种
+  挪不动的气泡直接 ``SW_HIDE``（不是页面，藏掉不影响截图），``show()`` 时放回来。
 * ``show()``：移回屏幕内（需要人工点图时），用 SW_SHOWNOACTIVATE，不抢前台。
 * 移动走 ``GetWindowPlacement`` / ``SetWindowPlacement``：``MoveWindow`` 对最大化
   的窗口是无效的（很多人习惯把浏览器最大化，那样藏了个寂寞），而 SetWindowPlacement
@@ -42,6 +45,7 @@ CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 _PID_CACHE: dict[int, tuple[float, set[int]]] = {}
 _PID_TTL = 1.5
 
+SW_HIDE = 0
 SW_SHOWNOACTIVATE = 4
 SW_SHOWMAXIMIZED = 3
 SW_SHOWMINIMIZED = 2
@@ -51,9 +55,14 @@ SWP_NOSIZE = 0x0001
 SWP_NOMOVE = 0x0002
 SWP_NOACTIVATE = 0x0010
 SWP_NOZORDER = 0x0004
+GWL_EXSTYLE = -20
+WS_EX_TOOLWINDOW = 0x00000080
 
 # hide 之前的原始摆放（尺寸 / 是否最大化），show 时原样还回去
 _SAVED: dict[int, "WINDOWPLACEMENT"] = {}
+# 挪不走、只好 SW_HIDE 的窗口（Chromium 的「还原页面」气泡会依附父窗口被夹回屏幕
+# 左上角）。记下句柄，show 时用 SW_SHOWNOACTIVATE 放出来。
+_HIDDEN: dict[int, int] = {}
 
 
 class POINT(ctypes.Structure):
@@ -118,6 +127,12 @@ def _user32():
         u.GetWindowTextLengthW.argtypes = [wintypes.HWND]
         u.GetWindowTextLengthW.restype = ctypes.c_int
         u.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+        u.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+        u.GetWindowLongW.restype = ctypes.c_long
+        u.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+        u.ShowWindow.restype = wintypes.BOOL
+        u.GetSystemMetrics.argtypes = [ctypes.c_int]
+        u.GetSystemMetrics.restype = ctypes.c_int
         u._dsh_protos = True
     return u
 
@@ -175,6 +190,8 @@ def close(pids: set[int] | None = None, force: bool = True) -> bool:
         except Exception:
             pass
     _PID_CACHE.clear()  # 进程号全变了，别让缓存骗到下一次判断
+    _SAVED.clear()
+    _HIDDEN.clear()
     return killed
 
 
@@ -318,14 +335,85 @@ def move(x: int, y: int, pids: set[int] | None = None, sweep_to_bottom: bool = F
     return moved
 
 
+def virtual_screen() -> tuple[int, int, int, int]:
+    """整个桌面（所有显示器）的 (x, y, w, h)。多屏时左边那块可能是负坐标。"""
+    u = _user32()
+    return (
+        u.GetSystemMetrics(76),
+        u.GetSystemMetrics(77),
+        u.GetSystemMetrics(78) or u.GetSystemMetrics(0) or 1920,
+        u.GetSystemMetrics(79) or u.GetSystemMetrics(1) or 1080,
+    )
+
+
+def on_screen(rect: tuple[int, int, int, int], border: int = 2) -> bool:
+    """窗口是否还有像素落在桌面里（纯判断，方便单测）。
+
+    留 ``border`` 像素余量：贴着边缘、只差一两像素的窗口也算「露出来了」。
+    """
+    x, y, w, h = virtual_screen()
+    left, top, right, bottom = rect
+    return (
+        right > x + border
+        and left < x + w - border
+        and bottom > y + border
+        and top < y + h - border
+    )
+
+
+def _is_tool_window(hwnd: int) -> bool:
+    """Chromium 的气泡/提示窗（「还原页面」「下载完成」）带 WS_EX_TOOLWINDOW。"""
+    try:
+        return bool(_user32().GetWindowLongW(wintypes.HWND(hwnd), GWL_EXSTYLE) & WS_EX_TOOLWINDOW)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def hide(pids: set[int] | None = None) -> bool:
-    """藏到屏幕外并压到 Z 序底部（不最小化、不隐藏，渲染继续，截图照常）。"""
-    return move(OFFSCREEN[0], OFFSCREEN[1], pids=pids, sweep_to_bottom=True)
+    """藏到屏幕外并压到 Z 序底部（不最小化、不隐藏，渲染继续，截图照常）。
+
+    挪完必须**复核**：Chromium 的「还原页面」气泡是主窗口的附属窗口，主窗口一离开
+    桌面，它就被夹回屏幕左上角（实测 x 从 -2000 被夹成 0），结果浏览器藏好了，
+    屏幕边上却一直露一条。这种窗口挪不动，直接 ``SW_HIDE``；它不是页面，藏掉
+    不影响截图和自动化，``show`` 时再放出来。
+    """
+    pids = debug_edge_pids() if pids is None else pids
+    if not pids:
+        return False
+    wins = windows_of(pids)
+    ok = False
+    for hwnd in wins:
+        ok = place(hwnd, OFFSCREEN[0], OFFSCREEN[1], sweep_to_bottom=True) or ok
+
+    u = _user32()
+    for hwnd, rect in windows_of(pids).items():
+        if not on_screen(rect):
+            continue
+        if not _is_tool_window(hwnd):
+            # 主窗口挪不走只可能是被系统/Chromium 夹住：再试一次（改尺寸，避免
+            # 被「保持可见区域」的规则弹回），还不行就只能留着，绝不 SW_HIDE
+            # 主窗口 —— 隐藏的 Chromium 会停渲染，截图会变白。
+            place(hwnd, OFFSCREEN[0], OFFSCREEN[1], width=600, height=400,
+                  sweep_to_bottom=True)
+            if on_screen(windows_of(pids).get(hwnd, rect)):
+                continue
+            ok = True
+            continue
+        _HIDDEN[hwnd] = SW_SHOWMAXIMIZED if u.IsZoomed(hwnd) else SW_SHOWNOACTIVATE
+        u.ShowWindow(wintypes.HWND(hwnd), SW_HIDE)
+        ok = True
+    return ok
 
 
 def show(pids: set[int] | None = None, pos: tuple[int, int] = SCREEN_POS) -> bool:
     """移回屏幕内（需要人工点验证图时），不抢前台。藏之前的位置记得住就还回去。"""
     pids = debug_edge_pids() if pids is None else pids
+    u = _user32()
+    # 先把上一轮为「藏干净」而 SW_HIDE 的气泡放出来；页面窗口从来没有被 SW_HIDE。
+    for hwnd, cmd in list(_HIDDEN.items()):
+        if u.IsWindow(wintypes.HWND(hwnd)):
+            u.ShowWindow(wintypes.HWND(hwnd), cmd)
+        _HIDDEN.pop(hwnd, None)
     wins = windows_of(pids)
     shown = False
     for hwnd in wins:
@@ -334,11 +422,17 @@ def show(pids: set[int] | None = None, pos: tuple[int, int] = SCREEN_POS) -> boo
 
 
 def is_offscreen(rect: tuple[int, int, int, int], screen_w: int = 0) -> bool:
-    """窗口是不是已经被藏到主屏左边（纯判断，给测试用）。"""
-    if screen_w <= 0:
-        screen_w = _user32().GetSystemMetrics(0) or 1920
-    left, _, right, _ = rect
-    return right <= 0 or left <= -(screen_w // 2)
+    """窗口是不是已经被藏到桌面外（纯判断，给测试用）。
+
+    不传 ``screen_w`` 时按整个虚拟桌面判断（多显示器时右边/下边也要算），
+    传了就沿用老的「主屏左边」语义，方便单测不受机器分辨率影响。
+    """
+    if screen_w > 0:
+        left, _, right, _ = rect
+        return right <= 0 or left <= -(screen_w // 2)
+    x, y, w, h = virtual_screen()
+    left, top, right, bottom = rect
+    return right <= x or left >= x + w or bottom <= y or top >= y + h
 
 
 def _main(argv: list[str]) -> int:

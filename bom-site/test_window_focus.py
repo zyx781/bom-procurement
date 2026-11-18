@@ -55,14 +55,36 @@ def test_pure():
 
 
 # ---------------------------------------------------------------- 假 user32
+def _hwnd_int(hwnd) -> int:
+    """窗口句柄可能是 int，也可能是 wintypes.HWND（c_void_p）。"""
+    return hwnd.value if hasattr(hwnd, "value") else int(hwnd)
+
+
 class FakeUser32:
     def __init__(self, fg=0):
         self.fg = fg
         self.foreground_calls = []
         self.zorder_calls = []
+        self.hidden = []
+        self.shown = []
+        self.longw = {}
 
     def GetForegroundWindow(self):
         return self.fg
+
+    def GetSystemMetrics(self, index):
+        # 1707x1067 单屏：和用户的笔记本一致，负坐标才真的在桌面外
+        return {0: 1707, 1: 1067, 76: 0, 77: 0, 78: 1707, 79: 1067, 80: 1}.get(index, 0)
+
+    def GetWindowLongW(self, hwnd, _index):
+        return self.longw.get(_hwnd_int(hwnd), 0)
+
+    def ShowWindow(self, hwnd, cmd):
+        (self.hidden if cmd == 0 else self.shown).append(_hwnd_int(hwnd))
+        return True
+
+    def IsZoomed(self, _hwnd):
+        return False
 
     def IsWindow(self, _h):
         return True
@@ -165,6 +187,15 @@ class FakeGuard:
         self.pauses = 0
         self.resumes = 0
         self.pids = {4321}
+        self.keep = False
+        self.keep_calls = []
+
+    def set_keep_hidden(self, value):
+        self.keep = bool(value)
+        self.keep_calls.append(self.keep)
+
+    def keep_hidden(self):
+        return self.keep
 
     def begin(self):
         self.begins += 1
@@ -248,8 +279,10 @@ def test_runner():
     try:
         check("hide_browser 把窗口藏起来", runner.hide_browser())
         check("hide 用的是守卫的 pid", fake_wp.calls[-1] == ("hide", (4321,)), str(fake_wp.calls))
+        check("hide 让守卫进入「保持隐藏」", fake_guard.keep_calls == [True], str(fake_guard.keep_calls))
         check("show_browser 把窗口移回屏幕内", runner.show_browser())
         check("show 传到屏幕坐标", fake_wp.calls[-1][2] == (80, 80), str(fake_wp.calls))
+        check("show 先撤掉隐藏意图", fake_guard.keep_calls == [True, False], str(fake_guard.keep_calls))
 
         # 等人工验证：守卫退场，但**不自动把窗口翻到屏幕内**（2026-11-11 改：
         # 太突兀，改成前端弹站内提示，用户点「打开淘宝窗口」才移）
@@ -405,11 +438,93 @@ def test_alive_probe():
         srv.server_close()
 
 
+def test_guard_keep_hidden():
+    """藏起来之后才冒出来的窗口，也要被继续藏（用户反馈的「屏幕边上露一条」）。"""
+    fake = FakeUser32(fg=555)
+    orig = (wg.wp._user32, wg.wp.windows_of, wg.wp.hide,
+            wg.wp.debug_browser_alive, wg.wp.debug_edge_pids_for)
+    wg.wp._user32 = lambda: fake
+    wg.wp.debug_browser_alive = lambda port=9222, timeout=0.8: True
+    wg.wp.debug_edge_pids_for = lambda port: {1234}
+    # 101 已藏好；202 是「还原页面」气泡，被 Chromium 夹回 x=0
+    wg.wp.windows_of = lambda pids: {101: (-2000, 0, -950, 999), 202: (0, 76, 344, 242)}
+    hides = []
+    wg.wp.hide = lambda pids=None: hides.append(set(pids or ())) or True
+    try:
+        guard = wg.FocusGuard(pids={1234}, tail_s=0.0)
+        guard.set_keep_hidden(True)
+        guard._tick()
+        check("露在桌面里的气泡 → 再藏一次", hides == [{1234}], str(hides))
+        check("统计里记了一次再藏", guard.rehides == 1, str(guard.rehides))
+
+        guard.pause("等人工过验证")
+        hides.clear()
+        guard._tick()
+        check("暂停时不再自动藏（用户正要看窗口）", not hides, str(hides))
+        guard.resume()
+
+        guard.set_keep_hidden(False)  # 用户点了「显示淘宝窗口」
+        hides.clear()
+        guard._tick()
+        check("用户接管后不再自动藏", not hides, str(hides))
+        check("keep_hidden 意图可读", guard.keep_hidden() is False)
+
+        # 全都在桌面外：不该白跑 hide
+        guard.set_keep_hidden(True)
+        wg.wp.windows_of = lambda pids: {101: (-2000, 0, -950, 999)}
+        guard._wins_at = 0.0  # 位置缓存过期，强制重新枚举
+        hides.clear()
+        guard._tick()
+        check("已经藏干净就不再动", not hides, str(hides))
+    finally:
+        (wg.wp._user32, wg.wp.windows_of, wg.wp.hide,
+         wg.wp.debug_browser_alive, wg.wp.debug_edge_pids_for) = orig
+
+
+def test_hide_bubble():
+    """挪不走的气泡要 SW_HIDE；主窗口绝不许 SW_HIDE（隐藏的 Chromium 会停渲染）。"""
+    fake = FakeUser32()
+    fake.longw = {202: wp.WS_EX_TOOLWINDOW, 303: 0}
+    rects = {202: (0, 76, 344, 242), 303: (0, 10, 1050, 1009)}
+    places = []
+    orig = (wp._user32, wp.windows_of, wp.place, wp.debug_edge_pids, dict(wp._HIDDEN))
+    wp._user32 = lambda: fake
+    wp.windows_of = lambda pids=None: dict(rects)
+    wp.debug_edge_pids = lambda: {1}
+
+    def fake_place(hwnd, x, y, width=None, height=None, sweep_to_bottom=False):
+        places.append((int(hwnd), int(x), int(y)))
+        if int(hwnd) == 303:  # 主窗口挪得走
+            rects[303] = (-2000, 0, -950, 999)
+        return True  # 202 被夹回 x=0，等于没动
+
+    wp.place = fake_place
+    wp._HIDDEN.clear()
+    try:
+        check("hide 认为处理成功", wp.hide({1}) is True)
+        check("挪不走的气泡 → SW_HIDE", 202 in fake.hidden, str(fake.hidden))
+        check("主窗口不许 SW_HIDE", 303 not in fake.hidden, str(fake.hidden))
+        check("气泡句柄记下来了，show 时放回去", 202 in wp._HIDDEN, str(wp._HIDDEN))
+
+        ok = wp.show({1})
+        check("show 把气泡放出来", 202 in fake.shown, str(fake.shown))
+        check("show 不再记着气泡", 202 not in wp._HIDDEN, str(wp._HIDDEN))
+        check("show 返回真", ok is True)
+    finally:
+        wp._user32, wp.windows_of, wp.place, wp.debug_edge_pids = orig[:4]
+        wp._HIDDEN.clear()
+        wp._HIDDEN.update(orig[4])
+
+
 def main():
     print("== 纯判断 ==")
     test_pure()
     print("== 守卫线程 ==")
     test_guard_tick()
+    print("== 藏起来后冒出来的窗口 ==")
+    test_guard_keep_hidden()
+    print("== 气泡窗口藏干净 ==")
+    test_hide_bubble()
     print("== 浏览器关闭后不许起子进程 ==")
     test_browser_gone_no_spawn()
     print("== 不建控制台窗口 ==")

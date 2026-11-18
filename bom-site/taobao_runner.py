@@ -858,6 +858,10 @@ def ensure_debug_browser(cdp_url: str, wait_seconds: float = 25.0, log=None) -> 
         f"--user-data-dir={CDP_PROFILE_DIR}",
         "--no-first-run",
         "--no-default-browser-check",
+        # 上次会话是被 taskkill 收掉的（结束会话就是这么关的），Chromium 会认定
+        # 「上次异常退出」并在窗口右下角弹「还原页面」气泡。那个气泡依附主窗口，
+        # 主窗口藏到屏幕外时它会被夹回桌面左上角——用户看到的就是屏幕边上露一条。
+        "--hide-crash-restore-bubble",
         "--restore-last-session",
         "https://www.taobao.com",
     ]
@@ -1374,6 +1378,12 @@ class SessionRunner:
         """把调试浏览器藏到屏幕外（不最小化，渲染不停，截图照常）。"""
         if _window_pos is None:
             return False
+        guard = self._guard
+        if guard is not None:
+            try:
+                guard.set_keep_hidden(True)  # 后冒出来的气泡/新窗口也接着藏
+            except Exception:  # noqa: BLE001
+                pass
         try:
             ok = _window_pos.hide(self._guard_pids())
         except Exception as exc:  # noqa: BLE001
@@ -1391,6 +1401,12 @@ class SessionRunner:
         """
         if _window_pos is None:
             return False
+        guard = self._guard
+        if guard is not None:
+            try:
+                guard.set_keep_hidden(False)  # 先撤意图，否则守卫会把刚显示出来的又藏回去
+            except Exception:  # noqa: BLE001
+                pass
         try:
             ok = _window_pos.show(self._guard_pids(), pos or _window_pos.SCREEN_POS)
         except Exception as exc:  # noqa: BLE001

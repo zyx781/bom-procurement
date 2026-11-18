@@ -76,12 +76,14 @@ class FocusGuard(threading.Thread):
         self._depth = 0
         self._tail_until = 0.0
         self._paused = False
+        self._keep_hidden = False
         self._user_hwnd: int | None = None
         self._wins: dict[int, tuple[int, int, int, int]] = {}
         self._wins_at = 0.0
         self._next_lookup = 0.0  # 退避到期时间：到点之前不查进程、不起子进程
         self._browser_gone = False
         self.restores = 0
+        self.rehides = 0
         self.last_error: str | None = None
 
     # ---------------- 生命周期 ----------------
@@ -107,6 +109,21 @@ class FocusGuard(threading.Thread):
         with self._lock:
             self._paused = False
         self._wake.set()
+
+    def set_keep_hidden(self, value: bool) -> None:
+        """「这个会话要把浏览器藏起来」的意图。
+
+        一火性的 hide 挡不住后出现的窗口：淘宝新开标签、Chromium 的「还原页面」
+        气泡、下载提示，都会在隐藏之后才冒出来，落在屏幕边上。带着这个意图，
+        守卫每轮发现还有 Edge 窗口在桌面里就再藏一次；用户点「显示」时清掉。
+        """
+        with self._lock:
+            self._keep_hidden = bool(value)
+        self._wake.set()
+
+    def keep_hidden(self) -> bool:
+        with self._lock:
+            return self._keep_hidden
 
     # ---------------- 命令区间 ----------------
     def begin(self) -> None:
@@ -172,6 +189,16 @@ class FocusGuard(threading.Thread):
         u = wp._user32()
         fg = int(u.GetForegroundWindow() or 0)
         wins = self.edge_windows()
+        # 「藏干净」：隐藏之后才冒出来的窗口（新标签、还原页面气泡、下载提示）
+        # 会落在桌面里，尤其气泡会被 Chromium 夹到屏幕左上角露一条。带意图的
+        # 会话里发现一个就整体再藏一次；暂停（等人工过验证）时不动。
+        if self.keep_hidden() and not self.paused() and wins:
+            if any(wp.on_screen(r) for r in wins.values()):
+                wp.hide(self._pids)
+                self._wins = wp.windows_of(self._pids)
+                self._wins_at = time.monotonic()
+                wins = self._wins
+                self.rehides += 1
         if should_restore(fg, wins, self.active()):
             self._give_back(fg)
             return

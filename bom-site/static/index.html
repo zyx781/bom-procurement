@@ -4,10 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="本地 BOM 采购台：上传清单，按规则锁定规格，在已登录的淘宝会话里搜索、匹配并加购到购物车；结算始终由人完成。">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#14161a">
 <title>BOM 采购台 · 从清单到购物车</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+
+<a class="skip" href="#main">跳到主内容</a>
 
 <header class="topbar">
   <div class="brand">
@@ -17,7 +21,10 @@
             stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
     </svg>
     <div class="brand-text">
-      <h1>BOM 采购台</h1>
+      <div class="brand-line">
+        <h1>BOM 采购台</h1>
+        <span class="env">LOCAL</span>
+      </div>
       <p>清单进，购物车出；结算与付款始终由你完成</p>
     </div>
   </div>
@@ -29,8 +36,10 @@
       <span class="sess-task" id="sess-task"></span>
       <span class="sess-warn" id="sess-warn"></span>
     </div>
-    <button class="ghost small" id="btn-session-start">启动淘宝会话</button>
-    <button class="ghost small" id="btn-session-stop">结束会话</button>
+    <div class="tb-group">
+      <button class="ghost small" id="btn-session-start">启动淘宝会话</button>
+      <button class="ghost small" id="btn-session-stop">结束会话</button>
+    </div>
     <span class="engine-sep" aria-hidden="true"></span>
     <span class="engine">引擎 <b id="engine-ver">…</b></span>
     <button class="ghost small" id="btn-shutdown" title="关闭本地服务与淘宝浏览器；下次使用需重新双击启动脚本">退出服务</button>
@@ -52,12 +61,13 @@
   <button class="ghost small" id="btn-verify-recheck">我已完成，重新检测</button>
 </div>
 
-<main class="wrap">
+<main class="wrap" id="main">
 
-  <!-- 投放：无清单时展开，有清单后压成一条 -->
+  <!-- 01 投放：无清单时展开，有清单后压成一条 -->
   <section class="intake" id="input-panel">
     <div class="intake-bar">
       <button class="intake-title" id="intake-toggle" aria-expanded="true" aria-controls="intake-body">
+        <span class="step" aria-hidden="true">01</span>
         <span class="intake-name" id="intake-name">投放清单</span>
         <span class="intake-meta" id="intake-meta">csv 或 xlsx</span>
         <svg class="chev" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
@@ -70,6 +80,7 @@
           套数
           <input id="sets-input" type="number" min="1" max="999" step="1" value="1">
         </label>
+        <span class="v-sep" aria-hidden="true"></span>
         <button class="ghost small" id="btn-export-csv">导出清单 csv</button>
         <button class="ghost small" id="btn-export">导出 JSON</button>
       </div>
@@ -93,21 +104,24 @@
             <strong>拖入文件，或点击选择</strong>
             <span class="dz-sub">.csv 与 .xlsx，表头中英文都认，多工作表自动合并</span>
           </span>
+          <span class="dz-hint" aria-hidden="true">BROWSE</span>
         </label>
 
         <div class="paste">
           <textarea id="bom-text" spellcheck="false" aria-label="粘贴 CSV 内容" placeholder="也可以直接粘贴 CSV：&#10;行号,型号,名称,封装,参数,数量&#10;1,RC0603FR-0710KL,贴片电阻,0603,10kΩ ±1% 0.1W,100&#10;2,STM32F103C8T6,MCU,LQFP48,64KB Flash,10"></textarea>
-          <div class="row">
-            <button class="ghost" id="btn-sample">载入示例</button>
-            <button class="primary" id="btn-analyze">解析并出方案</button>
-          </div>
         </div>
       </div>
-      <div class="status" id="input-status" role="status" aria-live="polite"></div>
+      <div class="intake-foot">
+        <div class="status" id="input-status" role="status" aria-live="polite"></div>
+        <div class="row">
+          <button class="ghost" id="btn-sample">载入示例</button>
+          <button class="primary" id="btn-analyze">解析并出方案</button>
+        </div>
+      </div>
     </div>
   </section>
 
-  <!-- 工作台 -->
+  <!-- 02 台账 -->
   <section class="board hidden" id="result-panel">
     <div class="board-main">
       <div class="statusbar">
@@ -117,6 +131,7 @@
           <button class="ghost hidden" id="btn-batch-retry" title="只重跑失败/待核对的行，已成功的跳过">重跑问题行</button>
           <button class="ghost" id="btn-batch-stop" disabled>停止</button>
           <button class="ghost hidden" id="btn-batch-reset" title="只清进度记录，不动购物车">重新开始</button>
+          <span class="v-sep" aria-hidden="true"></span>
           <button class="ghost" id="btn-batch-export" title="导出本次批量逐行结果（CSV，Excel 可直接打开）">导出结果</button>
         </div>
       </div>
@@ -138,7 +153,7 @@
       <div class="board-body">
         <div class="table-wrap">
           <div class="ledger-head" id="ledger-head">
-            <span>行</span><span>用料</span><span class="col-pkg">封装</span><span class="col-qty">数量</span>
+            <span class="h-no">行</span><span>用料</span><span class="col-pkg">封装</span><span class="col-qty">数量</span>
             <span class="col-code">立创编号</span><span>选型</span><span>加购</span><span class="col-cost">成本</span>
           </div>
           <div class="ledger" id="line-list" aria-label="BOM 行清单"></div>
@@ -154,7 +169,11 @@
           <button class="dtab" data-tab="run" role="tab">单行执行</button>
           <button class="dtab" data-tab="care" role="tab">维护</button>
         </div>
-        <button class="drawer-x" id="drawer-close" title="收起详情" aria-label="收起详情">×</button>
+        <button class="drawer-x" id="drawer-close" title="收起详情" aria-label="收起详情">
+          <svg viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+            <path d="M3.5 3.5l7 7M10.5 3.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
       </div>
 
       <div class="drawer-pane" data-pane="detail">
@@ -229,6 +248,8 @@
 </main>
 
 <footer class="foot">
+  <span class="foot-brand">BOM 采购台</span>
+  <span class="foot-sep">·</span>
   <span>规则源 taobao-bom-procurement SKILL <span id="app-ver">—</span></span>
   <span class="foot-sep">·</span>
   <details class="foot-note">
@@ -241,8 +262,8 @@
       <p class="fineprint">结论来自规则，不是实时报价；执行结果以淘宝页面为准。关键件需逐行确认。</p>
     </div>
   </details>
-  <span class="foot-sep">·</span>
-  <span>本地运行 · 127.0.0.1:8765</span>
+  <span class="foot-grow"></span>
+  <span class="foot-local">本地运行 · 127.0.0.1:8765</span>
 </footer>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>

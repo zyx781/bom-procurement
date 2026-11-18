@@ -923,6 +923,8 @@ TOLERANCE_PRECISION_VETO = os.environ.get("TAOBAO_TOL_PRECISION_VETO", "1") not 
 # 不是 N 行同时加购失败。达到下面任一条就只标「未核实」，不逐行降级。
 RECONCILE_MIN_CHECK = max(2, int(os.environ.get("TAOBAO_RECONCILE_MIN", "5")))
 RECONCILE_MIN_RATIO = float(os.environ.get("TAOBAO_RECONCILE_RATIO", "0.35"))
+# 读到的购物车行数 / 页面显示件数低于此值 → 判定「滚动加载不全」，不逐行降级。
+RECONCILE_ROW_RATIO = float(os.environ.get("TAOBAO_RECONCILE_ROW_RATIO", "0.85"))
 
 DEFAULT_TIMEOUTS = {
     "ping": 20,
@@ -3115,14 +3117,23 @@ class SessionRunner:
 
         # 读车结果本身可不可信（不可信时一律不下结论）
         anomaly_reason = ""
+        cart_count = int(cart_data.get("cart_item_count") or 0)
         if not rows:
             anomaly_reason = (
                 "购物车读成空（0 行）"
-                if not cart_data.get("cart_item_count")
-                else f"购物车显示 {cart_data.get('cart_item_count')} 件但一行都没读到"
+                if not cart_count
+                else f"购物车显示 {cart_count} 件但一行都没读到"
             )
         elif not cart_titles:
             anomaly_reason = f"购物车 {len(rows)} 行全都没有标题"
+        elif cart_count and len(rows) < cart_count * RECONCILE_ROW_RATIO:
+            # 2026-11-18：购物车是无限滚动，只读到第一页 29/68 行时，
+            # 后面 39 件的商品会被误判「没加购」。读到的行远少于显示件数
+            # = 没滚到底/没加载全，这时逐行降级是错的，只能标「未核实」。
+            anomaly_reason = (
+                f"购物车显示 {cart_count} 件但只读到 {len(rows)} 行"
+                "（滚动加载不全，本批不逐行降级）"
+            )
 
         matched, missed = [], []
         uncertain_found = []

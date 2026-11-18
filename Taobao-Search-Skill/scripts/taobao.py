@@ -1394,8 +1394,52 @@ class SessionHandler:
                 continue
         return False
 
+    def _cart_scroll_load_all(self, page, settle: float = 1.0,
+                              max_rounds: int = 12) -> int:
+        """滚动到底，触发淘宝购物车的无限滚动加载，返回最终 DOM 行数。
+
+        2026-11-18 实测：购物车显示 68 件，但 DOM 初始只渲染 29 行，必须滚动
+        才加载后面的（滚 1 次 48 行、2 次 67、3 次 68）。旧代码只找「下一页」
+        按钮，新版购物车根本没有分页按钮 → 只读 29 行就去对账，45 个 ok 行里
+        10 行被误判「购物车里没找到」。滚动到行数连续 2 轮不增为止。
+        只读 DOM、不点任何按钮，不会误删/误选商品。
+        """
+        from taobao_selectors import CART_ITEM_ROW_SELECTORS
+
+        sel = CART_ITEM_ROW_SELECTORS[0] if CART_ITEM_ROW_SELECTORS else '[class*="cartItemInfoContainer"]'
+        stable = 0
+        last = -1
+        for _ in range(max(1, max_rounds)):
+            before = 0
+            try:
+                before = page.evaluate("(s)=>document.querySelectorAll(s).length", sel)
+            except Exception:
+                return 0
+            try:
+                # 同时滚 window 和滚轮：新版是 window 级滚动，个别版本是内层容器
+                page.evaluate("()=>window.scrollTo(0, document.body.scrollHeight)")
+                page.mouse.wheel(0, 120000)
+            except Exception:
+                return before
+            page.wait_for_timeout(int(settle * 1000))
+            try:
+                after = page.evaluate("(s)=>document.querySelectorAll(s).length", sel)
+            except Exception:
+                return before
+            if after <= before:
+                stable += 1
+                if stable >= 2:
+                    return after
+            else:
+                stable = 0
+            last = after
+        return last
+
     def _cart_rows_all(self, page, max_pages: int = 8, settle: float = 1.2) -> dict:
-        """翻页读完整个购物车（30 件/页）。"""
+        """读完整个购物车：先滚动加载全部行（新版无限滚动），再翻页兜底（老版分页）。"""
+        # 第一步：滚动让所有行进入 DOM（新版淘宝购物车）
+        self._cart_scroll_load_all(page, settle=0.9)
+        # 第二步：读当前（已全量）的行；老版分页的「下一页」逻辑保留作兼容
         first = self._cart_rows(page)
         all_rows = list(first["rows"])
         pages = 1

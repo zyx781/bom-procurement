@@ -55,6 +55,10 @@ check("10MF 不猜", engine._parse_capacitance("10MF") is None)
 check("1N4148 不是 1nF", engine._parse_capacitance("1N4148") is None)
 check("2N2222 不是 2nF", engine._parse_capacitance("2N2222") is None)
 check("4.7UH 大写", abs(engine._parse_inductance("4.7UH") - 4.7e-6) < 1e-12)
+# 电感 SKU 的「3MH」是 3mH（毫亨），不是 3 兆亨；淘宝大量这么写。
+check("3MH 按毫亨", abs(engine._parse_inductance("3MH 0.5线") - 3e-3) < 1e-12)
+check("3000mH 仍是 3H", abs(engine._parse_inductance("3000mH") - 3.0) < 1e-12)
+check("系列感值全解析", engine._parse_inductances("1MH/2.2MH/3MH/4.7MH") == [0.001, 0.0022, 0.003, 0.0047])
 # 淘宝标题里单位后面直接跟中文（「95UF单盒精装」「1/4W金属膜」「50V贴片」）。
 # 中文算 Unicode 词字符，用 \b 收尾会判成没有边界 → 整段规格读不出来，
 # 库里的 0.25W 电阻会被当成「没写功率」，5W 的也能过闸门。
@@ -227,6 +231,20 @@ vcs = """title,price,sales,rating,shop_type,is_tmall,real_photo
 """
 vs2 = {c["title"]: c for c in engine.score_candidates(vline, vcs)["candidates"]}
 check("多电压链接不误杀", vs2["0603 10kΩ 1% 10V 16V 25V 50V 电阻"]["score"] > 0, vs2["0603 10kΩ 1% 10V 16V 25V 50V 电阻"]["reasons"])
+
+print("== 电感系列链接：不能只看第一个档位 ==")
+iline = engine.analyze(
+    [{"line_no": 13, "mpn": "", "desc": "插件 3mH 直插电感", "package": "插件",
+      "params": "3mH", "qty": 1}]
+)["lines"][0]
+icsv = """title,price,sales,rating,shop_type,is_tmall,real_photo
+插件 1MH 2.2MH 3MH 4.7MH 直插电感,4.0,100,0.95,企业店,false,true
+插件 1000MH 2000MH 3000MH 直插电感,4.0,100,0.95,企业店,false,true
+"""
+isc = {c["title"]: c for c in engine.score_candidates(iline, icsv)["candidates"]}
+_i_series = isc["插件 1MH 2.2MH 3MH 4.7MH 直插电感"]
+check("系列链接含 3MH 可用", _i_series["score"] > 0 and not any(r["code"] == "H03" for r in _i_series["risks"]), _i_series)
+check("只有 3H 的链接仍淘汰", any(r["code"] == "H03" for r in isc["插件 1000MH 2000MH 3000MH 直插电感"]["risks"]), isc["插件 1000MH 2000MH 3000MH 直插电感"])
 check("只有 10V 仍淘汰", any(r["code"] == "H03" for r in vs2["0603 10kΩ 1% 10V 电阻"]["risks"]), vs2["0603 10kΩ 1% 10V 电阻"]["risks"])
 
 print("== 连接器：排针 / XH / 端子台 ==")

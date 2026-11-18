@@ -32,6 +32,7 @@ jobs:
           python test_lcsc.py
           python test_sku_selection.py
           python test_runner.py
+          python test_query_fallback.py
           python test_verification_recovery.py
           python test_window_focus.py
           python test_click_guard.py

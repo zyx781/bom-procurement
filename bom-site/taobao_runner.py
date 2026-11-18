@@ -3247,6 +3247,75 @@ class SessionRunner:
         )
 
     def _add_line_to_cart(self, line: dict, prefer_cheap: bool, max_candidates: int, dry_run: bool = False) -> dict:
+        """首选词候选都失败后，继续试 query_plan 里后面的搜索词。
+
+        实测 1210 100µF：型号词只召回一个「标价非实价」的链接，SKU 无法确认；
+        后面的「1210 100uF 6.3V 贴片电容」其实有一堆正常货。search() 只在
+        「没有可用候选」时换词，不会在「打开后全部选型失败」时换词，这里补上
+        第二层。只在 failed 时换；一旦 ok/uncertain 立刻停，绝不重复加购。
+        """
+        queries = [
+            str(q).strip()
+            for q in (
+                line.get("query_plan")
+                or (line.get("decision") or {}).get("search_queries")
+                or []
+            )
+            if str(q).strip()
+        ]
+        first = self._add_line_to_cart_once(line, prefer_cheap, max_candidates, dry_run=dry_run)
+        if (
+            first.get("status") != "failed"
+            or len(queries) < 2
+            or not (first.get("search") or {}).get("ok")
+        ):
+            return first
+        used = str((first.get("search") or {}).get("query") or "")
+        start = queries.index(used) + 1 if used in queries else 1
+        if start >= len(queries):
+            return first
+        all_attempts = list(first.get("attempts") or [])
+        totals = {
+            k: first.get(k) or 0
+            for k in ("search_ms", "open_ms", "select_ms", "add_ms")
+        }
+        fallback_meta = []
+        last = first
+        for q in queries[start:]:
+            variant = dict(line)
+            variant["query_plan"] = [q]
+            decision = dict(line.get("decision") or {})
+            decision["search_queries"] = [q]
+            variant["decision"] = decision
+            last = self._add_line_to_cart_once(
+                variant, prefer_cheap, max_candidates, dry_run=dry_run
+            )
+            all_attempts.extend(last.get("attempts") or [])
+            for k in totals:
+                totals[k] += last.get(k) or 0
+            fallback_meta.append(
+                {
+                    "query": q,
+                    "status": last.get("status"),
+                    "message": last.get("message"),
+                }
+            )
+            if last.get("status") != "failed":
+                last["attempts"] = all_attempts
+                last["fallback_queries"] = fallback_meta
+                for k, v in totals.items():
+                    last[k] = v
+                return last
+        first["attempts"] = all_attempts
+        first["fallback_queries"] = fallback_meta
+        first["search"] = last.get("search") or first.get("search")
+        for k, v in totals.items():
+            first[k] = v
+        if last.get("message"):
+            first["message"] = last.get("message")
+        return first
+
+    def _add_line_to_cart_once(self, line: dict, prefer_cheap: bool, max_candidates: int, dry_run: bool = False) -> dict:
         base = {
             "line_no": line.get("line_no"),
             "headline": (line.get("decision") or {}).get("headline") or line.get("mpn") or "",
@@ -4247,9 +4316,11 @@ def _title_value_kinds(line: dict, title: str) -> set:
             if c is not None and engine._value_match(float(c), float(p["capacitance_f"]), 0.02):
                 out.add("容值")
         if p.get("inductance_h") is not None:
-            ind = engine._parse_inductance(t)
-            if ind is not None and engine._value_match(float(ind), float(p["inductance_h"]), 0.02):
-                out.add("感值")
+            # 系列标题列多档：只要其中一档是 BOM 要的就算读到，不能只看第一个。
+            for ind in engine._parse_inductances(t):
+                if engine._value_match(float(ind), float(p["inductance_h"]), 0.02):
+                    out.add("感值")
+                    break
     except Exception:  # noqa: BLE001
         return out
     return out

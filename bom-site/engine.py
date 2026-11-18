@@ -292,8 +292,10 @@ _RE_RES_K = re.compile(r"(\d+(?:\.\d+)?)\s*([kKmM])\s*(?:电阻|resistor)")
 _RE_CAP = re.compile(
     r"(\d+(?:\.\d+)?)\s*(p|n|u|µ|μ|P|N|U|m)\s*[fF](?![A-Za-z])"
 )
+# 电感单位同样要收大写：淘宝 SKU 常写「3MH」表示 3mH，不是 3 兆亨。
+# 电感没有「兆亨」这种常用档，M 在这里按毫处理；与电容的 MF 不同（电容大写 M 仍不认）。
 _RE_IND = re.compile(
-    r"(\d+(?:\.\d+)?)\s*(u|µ|μ|n|U|N|m)\s*[hH](?![A-Za-z])"
+    r"(\d+(?:\.\d+)?)\s*([uµμnUNmM])\s*[hH](?![A-Za-z])"
 )
 # 单位后面紧跟中文在淘宝标题里是常态（「95UF单盒精装」「1/4W金属膜」「50V贴片」）。
 # 用 \b 收尾会判成「没有词边界」，整段规格读不出来 —— 中文是 Unicode 词字符，
@@ -568,14 +570,27 @@ def _parse_capacitance(t):
 
 
 def _parse_inductance(t):
-    m = _RE_IND.search(t)
-    if not m:
-        return None
-    val = float(m.group(1))
-    mult = {"n": 1e-9, "u": 1e-6, "µ": 1e-6, "μ": 1e-6, "m": 1e-3}.get(
-        m.group(2).lower(), 1.0
-    )
-    return val * mult
+    vals = _parse_inductances(t)
+    return vals[0] if vals else None
+
+
+def _parse_inductances(t):
+    """标题里出现的所有感值（系列链接会写 1MH/2.2MH/3MH/4.7MH）。
+
+    只取第一个会误杀「1MH 2MH 3MH」这种多档链接：BOM 要 3mH，标题第一个
+    1mH 对不上就整条淘汰，明明 SKU 里有 3MH。评分和页面闸门都要看全部档位。
+    """
+    out = []
+    for m in _RE_IND.finditer(str(t or "")):
+        try:
+            val = float(m.group(1))
+        except (TypeError, ValueError):
+            continue
+        mult = {"n": 1e-9, "u": 1e-6, "µ": 1e-6, "μ": 1e-6, "m": 1e-3}.get(
+            m.group(2).lower(), 1.0
+        )
+        out.append(val * mult)
+    return out
 
 
 def _parse_tolerance(t):
@@ -2452,7 +2467,7 @@ def _check_title(line, cand, extra_ctx):
     if cat == "passive":
         req_r, req_c, req_i = p.get("resistance_ohm"), p.get("capacitance_f"), p.get("inductance_h")
         tol = p.get("tolerance_pct")
-        t_r, t_c, t_i = _parse_resistance(title), _parse_capacitance(title), _parse_inductance(title)
+        t_r, t_c, t_is = _parse_resistance(title), _parse_capacitance(title), _parse_inductances(title)
         if req_r is not None:
             # 0Ω 跳线电阻：要求值为 0，相对误差会除零，改用绝对差
             hit = t_r is not None and _value_match(t_r, req_r, 0.005)
@@ -2465,10 +2480,13 @@ def _check_title(line, cand, extra_ctx):
             if t_c is not None and not hit:
                 return "H03", f"标题容值 {fmt_capacitance(t_c)} ≠ 要求 {fmt_capacitance(req_c)}", checks, hit_risk
         if req_i is not None:
-            hit = t_i is not None and _value_match(t_i, req_i, 0.02)
+            # 系列链接的标题常列多个档位（1MH/2.2MH/3MH/4.7MH）。只有所有档位
+            # 都对不上才淘汰；第一个不对但后面有 3MH 的，留给 SKU 层去选。
+            hit = any(_value_match(v, req_i, 0.02) for v in t_is)
             checks.append((f"感值 {fmt_inductance(req_i)}", 35, hit))
-            if t_i is not None and not hit:
-                return "H03", f"标题感值 {fmt_inductance(t_i)} ≠ 要求 {fmt_inductance(req_i)}", checks, hit_risk
+            if t_is and not hit:
+                shown = "/".join(fmt_inductance(v) for v in t_is[:6])
+                return "H03", f"标题感值 {shown} ≠ 要求 {fmt_inductance(req_i)}", checks, hit_risk
         if tol is not None:
             # 容差只做加减分，不再淘汰：只要数值/耐压/封装对，±20% 以内都可用
             t_tol = _parse_tolerance(title)

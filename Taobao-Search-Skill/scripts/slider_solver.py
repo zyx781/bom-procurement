@@ -20,7 +20,7 @@ import os
 import random
 import sys
 import time
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from typing import Any
 
 from taobao_selectors import (
@@ -150,6 +150,37 @@ class SliderSolver:
             os.environ.get("TAOBAO_SLIDER_SECONDS", "45")
         )
         deadline = time.monotonic() + max(5.0, budget)
+        # Playwright 的 bounding_box()/evaluate() 不接受 timeout，会用页面默认
+        # 30s；一个卡住的调用就能拖垮整次求解（实测启动阶段卡了 3 分钟）。
+        # 求解期间把默认超时收紧到 2s，结束一定恢复 —— 这一步是硬保障，
+        # 光靠循环里的 deadline 检查救不了「卡在单个调用里」的情况。
+        op_ms = int(float(os.environ.get("TAOBAO_SLIDER_OP_MS", "2000")))
+        with self._tight_timeout(page, op_ms):
+            return self._solve_loop(page, tries, deadline)
+
+    @staticmethod
+    @contextmanager
+    def _tight_timeout(page: Any, op_ms: int):
+        """临时收紧 page 默认超时；假 Page / 不支持时安静跳过。"""
+        old: Any = None
+        changed = False
+        try:
+            old = page.context.default_timeout
+        except Exception:
+            pass
+        try:
+            page.set_default_timeout(op_ms)
+            changed = True
+        except Exception:
+            changed = False
+        try:
+            yield
+        finally:
+            if changed:
+                with suppress(Exception):
+                    page.set_default_timeout(old if old else 30000)
+
+    def _solve_loop(self, page: Any, tries: int, deadline: float) -> bool:
         for attempt in range(max(1, tries)):
             if time.monotonic() > deadline:
                 print("[slider] 超时，交回上层处理", file=sys.stderr)

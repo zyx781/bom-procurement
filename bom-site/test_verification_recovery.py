@@ -239,5 +239,38 @@ check("求解器缺包不影响 import（重依赖只在函数里加载）",
       "import ddddocr" not in _slider_src.split("def _load_ddddocr", 1)[0])
 check("求解器有总时限，不会挂死", "deadline" in _slider_src)
 
+print("== G. 启动不阻塞 + auto-hide 不闪退（2026-11-18 启动卡死修复）==")
+
+# 启动导航里不再解滑块：源码层契约 —— navigate_to_taobao 函数体内不能出现
+# _handle_captcha_if_present / try_solve_verification（否则启动又被卡几分钟）。
+_nav_body = skill_src.split("def navigate_to_taobao(self) -> None:", 1)[1]
+_nav_body = _nav_body.split("\n    def ", 1)[0]
+# 剥掉注释行，只看真实代码（注释里会提到这些函数名）
+_nav_code = "\n".join(ln for ln in _nav_body.splitlines() if not ln.lstrip().startswith("#"))
+check("启动导航不在这里解滑块（先把 ready 发出去）",
+      "_handle_captcha_if_present(" not in _nav_code
+      and "try_solve_verification(" not in _nav_code, _nav_code[:200])
+check("启动导航仍有验证检测（只是不就地求解）", "_looks_access_blocked" in _nav_body)
+
+# 求解器用 page 级超时收紧，防止 bounding_box/evaluate 卡满 30s。
+check("求解器有超时收紧上下文", "_tight_timeout" in _slider_src
+      and "set_default_timeout" in _slider_src)
+check("超时时长可配", "TAOBAO_SLIDER_OP_MS" in _slider_src)
+
+# 假 Page 没有 set_default_timeout：收紧上下文要安静跳过，不能炸。
+class NoTimeoutPage:
+    def set_default_timeout(self, _ms):
+        raise AttributeError("fake page")
+
+with SliderSolver._tight_timeout(NoTimeoutPage(), 2000):
+    _tight_ok = True
+check("假 Page 无 set_default_timeout → 跳过且不炸", _tight_ok)
+
+# auto-hide：用户主动显示后，本会话不再自动藏回。
+_runner_src = (BASE / "taobao_runner.py").read_text(encoding="utf-8")
+_show_body = _runner_src.split("def show_browser", 1)[1].split("def ", 1)[0]
+check("用户点显示 → 标记 _autohide_done（不再被自动藏）",
+      "_autohide_done = True" in _show_body, _show_body[:300])
+
 print(f"\nRESULT: {PASS} passed, {FAIL} failed")
 raise SystemExit(1 if FAIL else 0)

@@ -1379,7 +1379,11 @@ class SessionRunner:
         return ok
 
     def show_browser(self, pos: tuple[int, int] | None = None) -> bool:
-        """把调试浏览器移回屏幕内（人工过验证 / 用户主动看），不抢前台。"""
+        """把调试浏览器移回屏幕内（人工过验证 / 用户主动看），不抢前台。
+
+        用户主动点过「显示」= 接管窗口显示权：本会话之后 status() 不再自动
+        藏回屏幕外（否则启动期间点显示，ready 一到就被藏，看着像「闪一下就没」）。
+        """
         if _window_pos is None:
             return False
         try:
@@ -1387,6 +1391,8 @@ class SessionRunner:
         except Exception as exc:  # noqa: BLE001
             self._append_log(f"[site] 显示浏览器窗口失败：{exc}")
             return False
+        if ok:
+            self._autohide_done = True  # 用户已主动接管，别再自动藏
         return ok
 
     def stop(self, timeout: float = 8.0) -> dict:

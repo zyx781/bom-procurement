@@ -403,8 +403,16 @@ class BrowserAdapter:
         page.goto("https://www.taobao.com", wait_until="domcontentloaded", timeout=30000)
         with suppress(Exception):
             page.wait_for_load_state("networkidle", timeout=5000)
-        # Auto-solve CAPTCHA if triggered on navigation
-        self._handle_captcha_if_present(page)
+        # 启动阶段**绝不**在这里解滑块：会话启动必须几秒内发 ready，
+        # 否则前端一直「启动中」，用户等不及点命令还会把会话拖成 desynced。
+        # 滑块检测/求解放到真正执行命令时（_handle_captcha_if_present /
+        # _recover_cards），那里有前台守卫和时间预算。
+        try:
+            if self._looks_access_blocked(page):
+                print("[browser] startup: verification present, skip auto-solve here "
+                      "(will handle on first command)", file=sys.stderr)
+        except Exception:
+            pass
 
     def is_logged_in(self) -> bool:
         page = self._ensure_page()

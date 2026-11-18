@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """立创商城（LCSC）器件查询回归。
 
 全部离线：网络层用注入的假 fetcher，不打真接口、不依赖外网。
@@ -13,9 +12,7 @@
     #7 名称写 100nF 却复用了 #4 的 10nF 型号。
 """
 
-import json
 import os
-import pathlib
 import sys
 import tempfile
 
@@ -305,7 +302,7 @@ raw = (
     "ID,Name,Designator,Footprint,Quantity,Manufacturer Part,Manufacturer,Supplier,Supplier Part\n"
     "1,NE555P,U4,DIP-8_L9.8,1,NE555P,TI(德州仪器),LCSC,C46749\n"
     "2,470,R1,RES-TH,42,MF1/4W-1KΩ±1%T52,华星,LCSC,\n"
-).encode("utf-8")
+).encode()
 book = engine.parse_workbook("bom.csv", raw)
 rows = book["rows"]
 check("Supplier Part → lcsc", rows[0].get("lcsc") == "C46749", rows[0].get("lcsc"))
@@ -317,7 +314,7 @@ check("Manufacturer → brand", rows[0].get("brand") == "TI(德州仪器)")
 raw2 = (
     "序号,数量,器件名称,器件标号,器件参数,供应商编号,供应商,封装,备注\n"
     "1,1,贴片电阻,R1,10kΩ, C25804 ,LCSC,0603,\n"
-).encode("utf-8")
+).encode()
 book2 = engine.parse_workbook("easyeda.csv", raw2)
 check("中文表头也认", book2["rows"][0].get("lcsc") == "C25804", book2["rows"][0].get("lcsc"))
 

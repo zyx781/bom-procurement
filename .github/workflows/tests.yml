@@ -23,40 +23,23 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
-      # 纯 Python 套件：不需要浏览器，也不联网
-      - name: Unit & rule tests
-        working-directory: bom-site
-        run: |
-          python test_engine.py
-          python test_lcsc.py
-          python test_sku_selection.py
-          python test_runner.py
-          python test_query_fallback.py
-          python test_verification_recovery.py
-          python test_window_focus.py
-          python test_click_guard.py
-          python test_cart_cleanup.py
-          python test_batch_progress_guard.py
-          python test_procurement_guard.py
-          python test_buy_guard.py
-          python test_bom_regression.py
-          python test_candidate_replay.py
-          python test_sku_replay.py
-          python test_screenshot_retention.py
-          python test_single_run.py
-          python test_line_update.py
-          python test_cart_remove_line.py
-          python test_cart_reconcile_scroll.py
-          python test_cart_view_ui.py
-          python test_resume_restore.py
-          python test_private_window.py
-          python test_settings.py
+      # 静态检查：能藏 bug 的规则（未使用导入/未定义名字/可疑异常处理）；
+      # 不做全库格式化，避免一次重排上千行掩盖真实改动。
+      - name: Ruff
+        run: python -m ruff check bom-site Taobao-Search-Skill/scripts
 
-      # 端到端：起假会话 + 临时 server 进程，验证调度闭环与 HTTP 路由
-      - name: Integration (fake session)
+      # 类型检查是渐进式的：只覆盖边界清晰的新模块（见 bom-site/mypy.ini）。
+      - name: Mypy (core modules)
         working-directory: bom-site
-        run: python test_integration.py
+        run: python -m mypy
+
+      # 一条命令跑全部纯 Python 套件（自己发现 test_*.py，新增脚本不用改 CI）。
+      # runtests.py 会把子进程输出固定成 UTF-8，本地 cmd/PowerShell 也不再误报。
+      - name: Unit, rule & integration tests
+        working-directory: bom-site
+        run: python runtests.py
 
       # Windows 启动器：语法解析 + 只读体检（不启动服务/浏览器）
       - name: Launcher smoke

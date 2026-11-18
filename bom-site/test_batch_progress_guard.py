@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """换 BOM 后不许复用上一批进度（2026-11-11 真实事故回归）。
 
 事故经过：新 BOM 恰好也是 19 行，`start_batch(resume=True)` 的 done_map 只按
@@ -254,7 +253,7 @@ with tempfile.TemporaryDirectory() as td:
             raised = exc
         check("全部跑完再点继续 → 报 BATCH_ALL_DONE 而不是空跑",
               raised is not None and raised.code == "BATCH_ALL_DONE", raised)
-        check("拒绝时不动进度文件", len((tr.load_batch_progress().get("lines") or {})) == 3)
+        check("拒绝时不动进度文件", len(tr.load_batch_progress().get("lines") or {}) == 3)
         check("拒绝时不起批量任务", not r7._batch.get("running"))
 
         # 全部标「不买」的行不算可跑：即使它们上次都跑完了，也不该被

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """购物车对账：无限滚动读全 + 读不全时误报保护（2026-11-18）。
 
 真机现象：购物车显示 68 件，旧代码只读到 29 行（新版购物车无限滚动，
@@ -71,6 +70,7 @@ class ScrollPage:
 
 # 直接调真方法（它是 SessionHandler 上的方法，用 types.SimpleNamespace 提供 self）
 import taobao  # noqa: E402
+
 sp = ScrollPage()
 page_obj = types.SimpleNamespace(
     evaluate=sp.evaluate,

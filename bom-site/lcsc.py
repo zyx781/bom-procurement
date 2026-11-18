@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """立创商城（LCSC）器件库查询 —— 把「立创编号」换成权威规格。
 
 为什么需要它
@@ -37,6 +36,23 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
+from typing import TypedDict
+
+
+class EnrichStats(TypedDict):
+    """`enrich_rows` 的统计口径。
+
+    以前这里是个裸 dict：混着 int / list / bool 三种值，类型检查只能把它当
+    `dict[str, object]`，于是 `stats["resolved"] += 1` 和 `stats["failed"].append()`
+    都报错。用 TypedDict 把字段钉住，调用方（server / 前端摘要）也看得清有哪几个键。
+    """
+
+    resolved: int
+    by_code: int
+    by_model: int
+    skipped: list[str]
+    failed: list[str]
+    online: bool
 
 BASE = Path(__file__).resolve().parent
 
@@ -343,7 +359,8 @@ def _save_cache() -> None:
         pass
 
 
-def _cache_get(bucket: str, key: str, ttl: int):
+def _cache_get(bucket: str, key: str, ttl: int) -> tuple[dict | None, bool]:
+    """读缓存。返回 (数据, 是否命中)；负缓存命中时数据是 None。"""
     data = _load_cache()
     row = (data.get(bucket) or {}).get(key)
     if not isinstance(row, dict):
@@ -354,7 +371,8 @@ def _cache_get(bucket: str, key: str, ttl: int):
         return None, False
     if age > ttl:
         return None, False
-    return row.get("data"), True
+    payload = row.get("data")
+    return (payload if isinstance(payload, dict) else None), True
 
 
 def _cache_put(bucket: str, key: str, value) -> None:
@@ -515,7 +533,7 @@ def enrich_rows(
     workers: int = 6,
     budget: float = 30.0,
     use_cache: bool = True,
-) -> dict:
+) -> EnrichStats:
     """给每行挂 `row["lcsc_info"]`（查得到才有），返回统计。
 
     两种来源：
@@ -526,7 +544,10 @@ def enrich_rows(
     一次慢网络拖住十分钟。离线（LCSC_OFFLINE=1）时只读缓存。
     """
     rows = rows or []
-    stats = {"resolved": 0, "by_code": 0, "by_model": 0, "skipped": [], "failed": [], "online": _online()}
+    stats: EnrichStats = {
+        "resolved": 0, "by_code": 0, "by_model": 0,
+        "skipped": [], "failed": [], "online": _online(),
+    }
     if not rows:
         return stats
 

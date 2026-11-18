@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+
 def _item_id(url: str) -> str:
     """从商品 URL 里取商品 id（item.taobao.com/item.htm?id=... / detail.tmall.com）。"""
     m = re.search(r"[?&](?:id|itemId)=(\d+)", url or "")
@@ -1606,7 +1607,7 @@ class SessionHandler:
             return None
 
         rows = None
-        for attempt in range(2):
+        for _attempt in range(2):
             for _ in range(20):
                 rows = _targets()
                 if rows is not None:

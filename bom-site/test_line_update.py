@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """人工放行 / 改搜索词的落盘测试（/api/lines/update 的底层 update_saved_line）。
 
 背景：网页上把「待确认」放行、把搜索词改对之后，只改前端内存是不够的 ——

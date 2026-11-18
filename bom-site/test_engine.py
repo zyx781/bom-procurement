@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """规则引擎单元测试：python test_engine.py（不依赖 pytest）"""
 
 import pathlib

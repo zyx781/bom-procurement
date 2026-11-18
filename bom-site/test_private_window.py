@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """无痕跑批测试：CDP 模式下用独立 incognito context 做工作区。
 
 要守的几条：

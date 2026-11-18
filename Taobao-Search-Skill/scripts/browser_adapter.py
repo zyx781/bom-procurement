@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import math
 import os
 import random
@@ -8,25 +7,33 @@ import re
 import sys
 import time
 import unicodedata
+from collections.abc import Iterable
 from contextlib import suppress
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 from urllib.parse import parse_qs, quote, urljoin, urlparse
 
-from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
-
 from models import MatchedItem
-from taobao_selectors import (
-    ACCESS_BLOCKED_SIGNALS, ADD_TO_CART_BUTTONS, CAPTCHA_BG_SELECTORS,
-    CAPTCHA_PANEL_SELECTORS, CAPTCHA_SLIDER_BTN_SELECTORS,
-    CART_CONFIRM_POPUP, CART_ITEM_SELECTORS, LOGGED_IN_INDICATORS,
-    LOGIN_COOKIE_NAMES, LOGIN_PAGE_URL_SIGNALS, MIDDLEWARE_OVERLAY_HIDE_JS,
-    NOT_LOGGED_IN_TEXT, POPUP_CLOSE_BUTTONS, PRICE_SELECTORS,
-    PRODUCT_CARD_CLIMB_SELECTORS, PRODUCT_LINK_SELECTORS, RATING_SELECTORS,
-    SALES_COUNT_SELECTORS, SEARCH_INPUT, SEARCH_SUBMIT,
-    SKU_GROUP_LABEL_SELECTORS, SKU_OPTION_SELECTORS, SKU_VALUE_SELECTOR,
-)
+from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
 from session_manager import SessionSnapshot
+from taobao_selectors import (
+    ACCESS_BLOCKED_SIGNALS,
+    ADD_TO_CART_BUTTONS,
+    CAPTCHA_PANEL_SELECTORS,
+    CAPTCHA_SLIDER_BTN_SELECTORS,
+    CART_ITEM_SELECTORS,
+    LOGGED_IN_INDICATORS,
+    LOGIN_COOKIE_NAMES,
+    LOGIN_PAGE_URL_SIGNALS,
+    NOT_LOGGED_IN_TEXT,
+    PRICE_SELECTORS,
+    PRODUCT_CARD_CLIMB_SELECTORS,
+    PRODUCT_LINK_SELECTORS,
+    RATING_SELECTORS,
+    SALES_COUNT_SELECTORS,
+    SKU_OPTION_SELECTORS,
+    SKU_VALUE_SELECTOR,
+)
 
 _SCRIPTS_DIR = Path(__file__).parent.resolve()
 _PROFILE_DIR = Path(
@@ -207,8 +214,8 @@ class BrowserAdapter:
                     self._page = self._pick_page(pages) or self._context.new_page()
                     if len(pages) > 1:
                         print(
-                            "[browser] %d live pages on attach: %s"
-                            % (len(pages), " | ".join((x.url or "about:blank")[:60] for x in pages)),
+                            f"[browser] {len(pages)} live pages on attach: "
+                            + " | ".join((x.url or "about:blank")[:60] for x in pages),
                             file=sys.stderr,
                         )
                 self._cdp = True
@@ -860,15 +867,19 @@ class BrowserAdapter:
             )
             candidates.append(item)
             # 原来是每 3 个候选等 0.3–1s：16 个候选 = 5 次 = 2–4 秒纯空转，
-  # 而且这一步不产生任何请求，对防风控毫无作用。改成每 8 个等 0.1–0.25s。
+            # 而且这一步不产生任何请求，对防风控毫无作用。改成每 8 个等 0.1–0.25s。
             if len(candidates) % 8 == 0:
                 self._human_wait(0.1, 0.25)
 
         filter_msgs = []
-        if skipped_price: filter_msgs.append(f"price={skipped_price}")
-        if skipped_sales: filter_msgs.append(f"sales={skipped_sales}")
-        if skipped_shipping: filter_msgs.append(f"shipping={skipped_shipping}")
-        if skipped_tmall: filter_msgs.append(f"tmall={skipped_tmall}")
+        if skipped_price:
+            filter_msgs.append(f"price={skipped_price}")
+        if skipped_sales:
+            filter_msgs.append(f"sales={skipped_sales}")
+        if skipped_shipping:
+            filter_msgs.append(f"shipping={skipped_shipping}")
+        if skipped_tmall:
+            filter_msgs.append(f"tmall={skipped_tmall}")
         filter_info = f", skipped({', '.join(filter_msgs)})" if filter_msgs else ""
 
         print(
@@ -1049,7 +1060,7 @@ class BrowserAdapter:
         if tokens:
             matched = 0
             for token in tokens:
-                for i, (text, el) in enumerate(visible_items):
+                for _i, (text, el) in enumerate(visible_items):
                     if token in text.upper():
                         if self._is_sku_selected(el):
                             matched += 1
@@ -1923,7 +1934,7 @@ class BrowserAdapter:
 
     def _human_type(self, page: Page, text: str) -> None:
         """Type text with human-like variable delays and occasional pauses."""
-        for i, char in enumerate(text):
+        for char in text:
             page.keyboard.type(char)
 
             # Variable delay between keystrokes

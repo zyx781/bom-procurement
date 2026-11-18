@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """控制「调试版 Edge」（remote-debugging-port=9222）的窗口位置与 Z 序。
 
 为什么要这个模块：淘宝自动化是 CDP 驱动一个**用户自己的浏览器窗口**，Chromium
@@ -59,7 +58,7 @@ GWL_EXSTYLE = -20
 WS_EX_TOOLWINDOW = 0x00000080
 
 # hide 之前的原始摆放（尺寸 / 是否最大化），show 时原样还回去
-_SAVED: dict[int, "WINDOWPLACEMENT"] = {}
+_SAVED: dict[int, WINDOWPLACEMENT] = {}
 # 挪不走、只好 SW_HIDE 的窗口（Chromium 的「还原页面」气泡会依附父窗口被夹回屏幕
 # 左上角）。记下句柄，show 时用 SW_SHOWNOACTIVATE 放出来。
 _HIDDEN: dict[int, int] = {}

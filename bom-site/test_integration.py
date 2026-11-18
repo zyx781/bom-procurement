@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """端到端集成测试（不访问网络，用 tests/fake_session.py 当执行层）。
 
 补的是「纯函数测试覆盖不到」的两条链路：
@@ -115,7 +114,7 @@ try:
     check("不给关键字被拒", bad.get("ok") is False and bad.get("code") == "CART_REMOVE_AMBIGUOUS", bad)
 
     exported = tr.batch_export_rows(st.get("results") or [])
-    check("导出表头 10 列", len(exported[0]) == 10, exported[0])
+    check("导出表头 12 列（新增错误码/处理建议）", len(exported[0]) == 12, exported[0])
     check("导出含该行", any(r[0] == "1" and r[1] == "ok" for r in exported[1:]), exported[1:])
 finally:
     try:

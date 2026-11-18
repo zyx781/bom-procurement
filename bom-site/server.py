@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """BOM 选型台 —— 本地网站（决策 + 淘宝执行）。
 
     python server.py            # http://127.0.0.1:8765
@@ -21,9 +20,11 @@ import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
+import diagnostics
 import engine
+import errors
 import lcsc
 import taobao_runner as tr
 
@@ -212,7 +213,7 @@ class Handler(BaseHTTPRequestHandler):
                     payload = {"error": f"状态读取失败：{exc}"}
                 payload["streamed_at"] = _time.strftime("%H:%M:%S")
                 body = json.dumps(payload, ensure_ascii=False, default=str)
-                self.wfile.write(f"data: {body}\n\n".encode("utf-8"))
+                self.wfile.write(f"data: {body}\n\n".encode())
                 self.wfile.flush()
                 # 跑批中 1 秒推一次；闲着 3 秒推一次就够（还能顺带发现会话掉线）
                 _time.sleep(1.0 if (payload.get("running") or payload.get("error")) else 3.0)
@@ -249,6 +250,26 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, tr.RUNNER.status())
         if path == "/api/taobao/batch":
             return self._send(200, self._batch_payload())
+        if path == "/api/diagnostics":
+            # 只读诊断：页面改版/风控时可以按行号看「搜索几条、SKU 几组、加购回执」。
+            # 只暴露结构化计数，不含页面全文、cookie 或订单信息。
+            qs = parse_qs(urlparse(self.path).query)
+            line_no = (qs.get("line") or [None])[0]
+            try:
+                limit = min(500, max(1, int((qs.get("limit") or ["100"])[0])))
+            except (TypeError, ValueError):
+                limit = 100
+            try:
+                line_arg = int(line_no) if line_no not in (None, "") else None
+            except ValueError:
+                line_arg = line_no
+            records = diagnostics.recent(limit=limit, line_no=line_arg)
+            return self._send(200, {
+                "line": line_arg,
+                "count": len(records),
+                "summary": diagnostics.summarize(records),
+                "records": records,
+            })
         if path == "/api/taobao/batch/stream":
             return self._batch_stream()
         if path == "/api/taobao/batch/export.csv":
@@ -298,7 +319,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     raw = base64.b64decode(b64, validate=True)
                 except Exception:
-                    raise ValueError("文件内容不是有效的 base64")
+                    raise ValueError("文件内容不是有效的 base64") from None
                 result = engine.parse_workbook(filename, raw)
                 # 嘉立创EDA 导出的 BOM 每行带立创编号（Supplier Part），这里先数一下，
                 # 让用户一眼看出「这张表能不能按编号核准」。
@@ -512,7 +533,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, {"error": str(exc), "code": getattr(exc, "code", "BAD_REQUEST")})
         except Exception as exc:  # noqa: BLE001
             traceback.print_exc()
-            return self._send(500, {"error": f"服务端异常：{exc}"})
+            info = errors.classify(exc)
+            # 500 也带 code/kind：前端不再显示「未知错误」，日志里能按 UNEXPECTED 搜。
+            return self._send(
+                500,
+                {"error": f"服务端异常：{info.message}", "code": info.code,
+                 "kind": info.kind, "hint": info.hint},
+            )
 
 
 def _take_over_logs() -> None:

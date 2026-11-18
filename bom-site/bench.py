@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """多轮回归 / 速度测试驱动器。
 
 用法：

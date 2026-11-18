@@ -68,7 +68,7 @@ class OpenClawSkillConfig:
     sku_keywords: str | None = None
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "OpenClawSkillConfig":
+    def from_payload(cls, payload: dict[str, Any]) -> OpenClawSkillConfig:
         return cls(
             task_id=payload.get("task_id"),
             feishu_message_id=payload.get("feishu_message_id"),

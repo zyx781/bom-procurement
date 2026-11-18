@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """前台守卫：自动化跑批时，别让被驱动的 Edge 窗口盖住用户正在用的软件。
 
 背景：执行层是用 CDP 驱动**用户自己的** Edge（不是 Playwright 拉起来的），
@@ -87,7 +86,7 @@ class FocusGuard(threading.Thread):
         self.last_error: str | None = None
 
     # ---------------- 生命周期 ----------------
-    def start(self) -> "FocusGuard":  # type: ignore[override]
+    def start(self) -> FocusGuard:  # type: ignore[override]
         super().start()
         return self
 

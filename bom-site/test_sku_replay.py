@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """选型回放：拿真机抓到的 SKU 档位，重跑一遍「该选哪个值 / 该不该拒买」。
 
 为什么单开一套：`test_candidate_replay.py` 只回放到标题层（标题写错了才拦得住），
@@ -21,7 +20,6 @@ ROOT = pathlib.Path(__file__).parent
 FIXTURE = ROOT / "tests" / "fixtures" / "sku-replay.json"
 
 sys.path.insert(0, str(ROOT))
-import engine  # noqa: E402
 import taobao_runner as tr  # noqa: E402
 
 PASS = 0

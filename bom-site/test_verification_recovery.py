@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """验证自恢复测试（2026-11-08 规则变更）。
 
 规则：遇到验证（滑块 / 图片点选 / 风控中间页）先自己刷新恢复；
@@ -21,6 +20,7 @@ sys.path.insert(0, str(BASE))
 sys.path.insert(0, str(SKILL))
 
 import browser_adapter as BA  # noqa: E402
+
 import taobao_runner as tr  # noqa: E402
 
 PASS = 0

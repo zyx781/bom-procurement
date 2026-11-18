@@ -7,14 +7,22 @@ description: 把硬件 BOM（CSV/Excel：型号、数量、封装、参数、位
 
 > **绑定实现**：执行层 Taobao-Search-Skill v4.0.0（`scripts/taobao.py` session 模式）
 > ＋ 决策引擎 `bom-site/engine.py`（`ENGINE_VERSION = "0.1.0"`）
-> ＋ 执行封装 `bom-site/taobao_runner.py`。
+> ＋ 参数解析 `bom-site/bom_params.py`（封装归一化、阻容感/电压/引脚抽取、目录归类；只依赖 `re`）
+> ＋ 采购规则 / SKU 决策 `bom-site/rules.py`（纯函数，不碰浏览器/网络/文件）
+> ＋ 执行封装 `bom-site/taobao_runner.py`（调度、会话、购物车、持久化）
+> ＋ 错误分类 `bom-site/errors.py`、执行诊断 `bom-site/diagnostics.py`。
 >
 > **每个数字都能在代码里核到**，函数对应关系：
 > `engine._check_title`（硬门槛）／`engine.score_candidates`（评分与价格）／
-> `engine.detect_pack`·`plan_qty`（份数）／`taobao_runner._tol_verdict`（容差分档）／
-> `taobao_runner._add_line_to_cart`（批量单行）／`suggest_sku`（SKU 选择）／
+> `engine.detect_pack`·`plan_qty`（份数）／`bom_params.parse_params`·`classify`（参数与品类；
+> `engine.parse_params` 等旧路径照常可用）／`rules._tol_verdict`（容差分档）／
+> `taobao_runner._add_line_to_cart`（批量单行）／`rules.suggest_sku`（SKU 选择；`taobao_runner` 里仍可按旧名 `tr.suggest_sku` 调用）／
 > `taobao_runner.add_to_cart`（金额闸门）／`browser_adapter.wait_for_cards`（三态等待）／
 > `taobao.SessionHandler._cmd_cart_view`·`_cmd_cart_remove`（购物车问答）。
+>
+> 行级失败带 `error_code` / `error_kind`（input·network·page·auth·internal）/
+> `error_retryable` / `error_needs_human` 四件套；「所有搜索词 0 结果」或选择器失败
+> 会标 `structure_suspect`，细节看 `runs/diagnostics-*.jsonl` 或 `/api/diagnostics`。
 >
 > v0.5 → v0.6 改了哪些口径，见 **§18**；执行层契约（三态/错误码/返回结构）见 **§19**；
 > 已知限制与人工清单见 **§20**；**v0.7 → v0.8 的「验证先自救」规则**见 **§21**。

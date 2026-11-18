@@ -46,7 +46,7 @@ class VisualState:
         return d
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "VisualState":
+    def from_dict(cls, data: dict[str, Any]) -> VisualState:
         stage = data.get("stage", "idle")
         if isinstance(stage, str):
             stage = VisualStage(stage)

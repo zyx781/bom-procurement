@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """多品类 BOM 回归：python test_bom_regression.py（不联网、不起浏览器）
 
 为什么要这套：数字钟那份 BOM 只有阻容二三极管，所有闸门都是从那 19 行踩出来的。
@@ -184,7 +183,7 @@ else:
             check(f"{name} 行数一致", False, f"金标 {len(w)} 行，实际 {len(g)} 行")
             continue
         diffs = []
-        for a, b in zip(w, g):
+        for a, b in zip(w, g, strict=True):
             if a != b:
                 keys = [k for k in b if a.get(k) != b[k]]
                 diffs.append(f"#{b['line_no']}({b['desc']}): " + ", ".join(

@@ -380,8 +380,14 @@
     const price = rec.cost != null ? rec.cost : rec.candidate && rec.candidate.price;
     let sub = price != null ? fmtMoney(price) : "";
     if (rec.status === "ok" && rec.cart_unverified) sub = "未核实";
-    if ((rec.status === "failed" || rec.status === "uncertain") && rec.message) sub = rec.message.slice(0, 12);
-    return `<span class="bstate ${cls}"><b>${esc(label)}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</span>`;
+    if ((rec.status === "failed" || rec.status === "uncertain") && rec.message) {
+      // 错误分类：先给「可重试 / 需人工」一句话结论，再截原因。
+      // 完整错误码挂在 title 里，悬停可见，不占列宽。
+      const hint = rec.error_needs_human ? "需人工" : rec.error_retryable ? "可重试" : "";
+      sub = (hint ? hint + "·" : "") + rec.message.slice(0, 10);
+    }
+    const tip = [rec.error_code, rec.message].filter(Boolean).join(" · ");
+    return `<span class="bstate ${cls}"${tip ? ` title="${esc(tip)}"` : ""}><b>${esc(label)}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</span>`;
   }
 
   function costCell(rec) {

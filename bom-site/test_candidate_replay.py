@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """候选回放：python test_candidate_replay.py（不联网、不开浏览器）
 
 规则全是对着淘宝标题做判断的：59 条正则、20 处评分权重、几十条 H 编号闸门。

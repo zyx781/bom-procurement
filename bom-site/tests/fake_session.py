@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """假的 Taobao session，用于测试站点的执行层协议（不访问网络）。"""
 
 import json

@@ -1,0 +1,51 @@
+# Ruff 配置：只做「能阻断合并」的检查，不做全库自动格式化。
+#
+# 为什么不开 E501（行太长）：这个库里大段中文注释、内联表格和选择器字符串都很长，
+# 硬折行只会让 diff 变脏、可读性变差。真正重要的是未使用导入、未定义名字、
+# 可疑的异常处理这些「会藏 bug」的规则。
+#
+# 为什么不开 `ruff format --check`：那会一次性重排 1.5 万行，评审时谁也看不出
+# 改了什么。格式统一留给新文件（编辑器保存时格式化），门禁只管语义。
+target-version = "py310"
+line-length = 120
+
+exclude = [
+    ".git",
+    ".cdp-profile",
+    ".browser-profile",
+    "__pycache__",
+    "_archive",
+    "_refactor_tmp",
+    "runs",
+    "static",
+    "*.bak-*",
+]
+
+[lint]
+select = [
+    "E4",   # import 相关
+    "E7",   # 语句级问题
+    "E9",   # 运行时会直接炸的问题
+    "F",    # pyflakes：未使用导入/变量、未定义名字
+    "B",    # bugbear：可疑写法（可变默认参数、循环里闭包等）
+    "I",    # import 排序
+    "UP",   # pyupgrade：按 target-version 升级过时写法
+]
+ignore = [
+    "E402",  # 测试脚本要先改 sys.path / 环境变量再 import，属有意为之
+    "E741",  # 单字母变量 l/I/O 在数学式与选择器里很自然
+]
+
+[lint.isort]
+known-first-party = [
+    "engine",
+    "bom_params",
+    "errors",
+    "diagnostics",
+    "lcsc",
+    "rules",
+    "taobao_runner",
+    "focus_guard",
+    "window_pos",
+    "server",
+]

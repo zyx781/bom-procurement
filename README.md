@@ -40,6 +40,12 @@
 pip install -r requirements.txt
 ```
 
+只想跑程序不需要别的。要跑测试和静态检查（`ruff` / `mypy`）再装一份开发依赖：
+
+```bash
+pip install -r requirements-dev.txt
+```
+
 ### 2. 启动
 
 ```text
@@ -47,7 +53,7 @@ pip install -r requirements.txt
 启动BOM选型台.bat      ← 第 2 步：自检 → 后台起服务 → 打开界面
 ```
 
-两个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.12.0）。
+两个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.13.0）。
 
 打开 <http://127.0.0.1:8765/>。
 
@@ -157,6 +163,39 @@ pip install -r requirements-optional.txt   # ddddocr + opencv-python
   只在进度轨上写「上一批（另一份清单）的记录」。否则上一批 18 行会把这份 6 行的 1–6 行全标成「已删车」。
 - **一屏看全**：6 行 BOM 的页面高度约 700px（旧版是 2981px，要点开三屏才看完），表头吸顶。
 
+### 4.1 出错了怎么看
+
+每一行失败都会带上四个分类字段（界面悬停可见，也进进度文件和导出 CSV）：
+
+| 字段 | 取值 | 意思 |
+|---|---|---|
+| `error_code` | `COMMAND_TIMEOUT` / `VERIFICATION_REQUIRED` / `SKU_NOT_SELECTED` … | 稳定的短码，日志和导出里可搜 |
+| `error_kind` | `input` / `network` / `page` / `auth` / `internal` | 数据问题 / 网络 / 页面 / 验证 / 程序异常 |
+| `error_retryable` | true / false | 原样再跑一次有没有意义 |
+| `error_needs_human` | true / false | 是否必须人工介入（登录、验证码、页面改版） |
+
+界面上的失败行会先显示「需人工·原因」或「可重试·原因」；日志里每条异常是一行：
+
+```text
+[error] code=VERIFICATION_REQUIRED kind=auth line=7 stage=batch-line retryable=0 human=1 msg='需要人工完成验证'
+```
+
+认不出来的异常一律算 `internal` 并附 `[error/tb]` traceback —— 程序缺陷不会被伪装成
+「网页波动」重试掉。日志和错误信息在落盘前会抹掉 `cookie` / `token` / `x5secdata`
+这类键值。
+
+**诊断流水**：每次搜索/开页/加购都会往 `runs/diagnostics-YYYY-MM-DD.jsonl` 追加一行
+结构化事件（搜索词、结果条数、SKU 组数、加购回执来源、错误码），不记页面全文。
+按行号看：
+
+```bash
+curl "http://127.0.0.1:8765/api/diagnostics?line=7&limit=80"
+```
+
+返回里带 `summary.structure_suspect`：当**所有搜索词都是 0 结果**或出现
+`SELECTOR_MISS`/`OPEN_FAILED` 时置 true，并在行结果上标 `structure_suspect` ——
+这时先怀疑页面改版/风控，别急着改选型规则。诊断文件按 `BOM_KEEP_DAYS`（默认 14 天）清理。
+
 ### 5. 关闭
 
 - 网页右上角 **退出服务**：停批量、停会话、关浏览器、退进程（最常用）
@@ -184,49 +223,124 @@ pip install -r requirements-optional.txt   # ddddocr + opencv-python
 bom-site/                     本地网站与调度
   launcher.ps1                启动 / 停止 / 状态 / 体检 / 调试 Edge 的统一入口
   server.py                   HTTP 服务（127.0.0.1:8765）
-  engine.py                   BOM 解析 + 选型规则 + 候选打分
-  taobao_runner.py            批量调度、SKU 决策、加购确认、对账
+  engine.py                   BOM 解析 + 候选打分 + 单行分析
+  bom_params.py               参数解析（封装归一化、阻容感/电压/引脚抽取、目录归类）
+  rules.py                    采购规则与 SKU 决策（纯函数：能不能买、选哪一档）
+  taobao_runner.py            批量调度、会话、购物车、加购确认、对账
+  errors.py                   错误分类（重试 / 人工 / 程序异常）与日志脱敏
+  diagnostics.py              执行诊断流水（按行号记「搜到几条、卡在哪一步」）
   lcsc.py                     立创商城器件查询（编号/型号 → 权威规格）
   window_pos.py               调试浏览器窗口显隐（跑批时不抢前台）
   static/                     前端（无框架）
   settings.example.json       本机配置模板（settings.json 本身不进仓库）
-  test_*.py                  1298 项断言（18 套纯 Python 测试）
+  test_*.py                   27 套、约 1500 项断言的纯 Python 测试
+  runtests.py                 测试总入口：一条命令跑全部（UTF-8 输出）
+  mypy.ini                    类型检查范围（渐进式，先覆盖新模块）
   samples/                    示例 BOM / 候选
 Taobao-Search-Skill/scripts/  淘宝执行层（Playwright over CDP）
 taobao-bom-procurement/       决策层 SKILL 文档
+ruff.toml                     静态检查规则（只查会藏 bug 的，不做全库格式化）
+requirements-dev.txt          开发/CI 依赖（ruff + mypy）
 *.bat                         三个 Windows 入口（UTF-8 / CRLF）
 VERSION                       当前版本号
 ```
 
+**分层是硬的**：`rules.py` 不 import `taobao_runner`，不碰浏览器、网络和文件；它只回答
+「这个候选能不能买」和「这家店的 SKU 选哪一档」。`bom_params.py` 只依赖 `re`，是纯粹的
+字符串解析层。调度器与引擎把规则入口 re-export 回去（`tr.suggest_sku`、`engine.parse_params`
+这类老写法照常能用），所以拆分不改变任何调用方。
+
 ## 测试
+
+一条命令跑全部（在 `bom-site` 下）：
 
 ```bash
 cd bom-site
-python test_engine.py                 # 217 项：解析与规则
-python test_lcsc.py                    #  80 项：立创编号解析与型号核准
-python test_sku_selection.py            #  84 项：SKU 选择与门禁
-python test_runner.py                   # 185 项：调度、对账、进度、续跑
-python test_verification_recovery.py    #  44 项：验证/风控恢复 + 自动过滑块
-python test_window_focus.py            #  58 项：窗口显隐与不抢前台
-python test_click_guard.py              #  14 项：点击三守卫
-python test_cart_cleanup.py             #  35 项：精准清车不误删、删车后进度作废
-python test_batch_progress_guard.py     #  71 项：换 BOM 不误用上一批进度、重跑语义、引擎升级不误判换表
-python test_procurement_guard.py       # 107 项：采购正确性（编号锚定/设计值/单价/同系列降规格/演练同闸门）
-python test_bom_regression.py          # 262 项：三份真实 BOM 的多品类回归（金标快照 + 危险不变式）
-python test_candidate_replay.py        #  10 项：候选回放（31 条真机标题 + 6 条对抗样本，判定不许漂移）
-python test_sku_replay.py              #  48 项：SKU 档位回放（33 家真店的选项组，选中即核实）
-python test_screenshot_retention.py    #  16 项：截图留存（只留本批证据图，.jpg 也要能删）
-python test_single_run.py              #  18 项：单行执行（前置拦截、进度只覆盖这一行）
-python test_line_update.py             #  19 项：人工放行 / 改搜索词会落盘
-python test_cart_remove_line.py        #  25 项：行级删车（只删这一件，别的行不动）
-python test_settings.py                #  23 项：配置回落 example、登录态目录可被环境变量覆盖
-python test_integration.py             #  24 项：假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
+python runtests.py
 ```
 
-以上 18 套共 1316 项断言 + 24 项端到端，纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+输出形如：
+
+```text
+Python 3.14.4 · 27 个脚本 · UTF-8 输出
+  [PASS] test_engine.py                              0.4s
+  ...
+27/27 套通过，共 1496 项断言，总耗时 18.7s
+```
+
+`runtests.py` 做三件事，都是为了不再出现「测试没跑起来却以为挂了」：
+
+1. **自己发现 `test_*.py`** —— 新增脚本不用改 CI，也不用记清单；
+2. **把子进程输出钉成 UTF-8** —— Windows 默认控制台是 GBK，`print("µF")` 直接抛
+   `UnicodeEncodeError`，看起来像断言失败，其实一条都没执行（以前要手工设
+   `PYTHONIOENCODING=utf-8`，现在 cmd / PowerShell / Git Bash 结果一致）；
+3. **失败时打印该脚本末尾 25 行**，并通过退出码让 CI 变红。
+
+常用参数：
+
+| 命令 | 作用 |
+|---|---|
+| `python runtests.py test_engine` | 只跑名字匹配的（可给多个子串） |
+| `python runtests.py --list` | 只列出会被跑的脚本 |
+| `python runtests.py --fail-fast` | 第一个失败就停 |
+| `python runtests.py -v` | 透传每个脚本的完整输出 |
+| `python runtests.py --include-http` | 连 `test_http.py` 一起跑（需 8765 已在跑） |
+
+单个脚本仍可单独跑：`python test_engine.py`（老控制台请先 `set PYTHONIOENCODING=utf-8`）。
+
+各套件分工：
+
+```bash
+cd bom-site
+python test_engine.py                 # 解析与规则
+python test_lcsc.py                   # 立创编号解析与型号核准
+python test_sku_selection.py          # SKU 选择与门禁
+python test_runner.py                 # 调度、对账、进度、续跑
+python test_errors.py                 # 错误分类 / 日志脱敏 / 导出列
+python test_diagnostics.py            # 诊断流水 / 结构变化判定
+python test_verification_recovery.py  # 验证/风控恢复 + 自动过滑块
+python test_window_focus.py           # 窗口显隐与不抢前台
+python test_click_guard.py            # 点击三守卫
+python test_cart_cleanup.py           # 精准清车不误删、删车后进度作废
+python test_batch_progress_guard.py   # 换 BOM 不误用上一批进度、重跑语义、引擎升级不误判换表
+python test_procurement_guard.py      # 采购正确性（编号锚定/设计值/单价/同系列降规格/演练同闸门）
+python test_bom_regression.py         # 三份真实 BOM 的多品类回归（金标快照 + 危险不变式）
+python test_candidate_replay.py       # 候选回放（31 条真机标题 + 6 条对抗样本，判定不许漂移）
+python test_sku_replay.py             # SKU 档位回放（33 家真店的选项组，选中即核实）
+python test_screenshot_retention.py   # 截图留存（只留本批证据图，.jpg 也要能删）
+python test_single_run.py             # 单行执行（前置拦截、进度只覆盖这一行）
+python test_line_update.py            # 人工放行 / 改搜索词会落盘
+python test_cart_remove_line.py       # 行级删车（只删这一件，别的行不动）
+python test_cart_reconcile_scroll.py  # 购物车滚动加载与收尾对账
+python test_cart_view_ui.py           # 购物车维护区块的前端结构
+python test_buy_guard.py              # 加购三态确认与金额闸门
+python test_query_fallback.py         # 搜索词回退（词 1 全被门槛拒时换词）
+python test_private_window.py         # 无痕工作窗口与登录 cookie 回写
+python test_resume_restore.py         # 「上次分析」恢复提示条
+python test_settings.py               # 配置回落 example、登录态目录可被环境变量覆盖
+python test_integration.py            # 假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
+```
+
+以上 27 套（含 1 套端到端）纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
 另有 `python test_http.py`：需要服务**已经在 8765 跑着**，只做 HTTP 冒烟打印，不断言，故不进 CI。
 所有测试都把批量进度隔离到临时目录，不会碰到 `runs/` 里的真实进度。
-GitHub Actions 在 Windows runner 上跑 18 套测试 + 端到端 + 启动器语法/体检（见 `.github/workflows/tests.yml`）。
+
+### 静态检查（CI 同款）
+
+```bash
+pip install -r requirements-dev.txt
+
+# 仓库根目录：未使用导入、未定义名字、可疑异常处理、import 排序
+python -m ruff check bom-site Taobao-Search-Skill/scripts
+
+# bom-site 目录：类型检查（渐进式，只覆盖边界清晰的模块，见 mypy.ini）
+cd bom-site && python -m mypy
+```
+
+CI 在 Windows runner 上依次跑 **ruff → mypy → runtests.py（27 套）→ 启动器语法/体检**
+（见 `.github/workflows/tests.yml`）。规则是刻意收窄的：不做全库自动格式化（一次重排上千行
+会把真实改动埋掉），类型检查先覆盖 `lcsc.py` / `errors.py` / `diagnostics.py` /
+`bom_params.py` / `runtests.py`，老模块等拆分时再逐个纳入。
 
 ### 多品类回归与候选回放（v0.10.0 → v0.11.0）
 
@@ -270,6 +384,8 @@ SKU 夹具同样可重建：`python tests/build_sku_replay.py` 从 `runs/sku-obs
 | 想重跑上一批，结果提示「已跑过」并跳过 | 按钮按情况自动切换：全部跑完时显示「重新跑全部」（走 `redo`，清空进度从头跑）；有失败/待核对行时旁边出现「重跑问题行 N」（只重跑这几行，已成功的仍跳过）。重跑会重复加购，所以先点「删除上一批」清购物车 —— 进度清掉后仍可用，因为清之前会留一份底档 |
 | 嘉立创EDA 导出的 BOM，怎么保证买对 | 每行都带立创编号（`Supplier Part`，形如 `C46749`）。分析时先拿编号去立创商城换回**权威规格**（型号/品牌/封装/阻值/耐压/精度/库存），采购也以它为准：**第一条搜索词就是编号对应的型号**（如 `CC1H103ZA1ED3F4D1100 瓷片电容`），标题命中型号的候选优先；没命中就按编号规格逐项核对（值/耐压/族系/脚距），结果里标「同规格替代」，每行都留一条「采购依据 C 编号 + 是否命中型号」。两种冲突分开处理：型号列与编号不一致（`V02`）以编号型号为准并提示核对；**名称列的设计值**与编号规格冲突（`V01`，例：名称写 470Ω、编号却是 1kΩ 的那颗料）说明 BOM 自相矛盾，这一行不自动买、交人工核对原理图 —— 编号是唯一标识，但两处打架时替谁猜都可能买错。没有编号的行可用完整型号精确匹配（型号完全一致才认，模糊命中一律放弃），但同型号反查只是参考，不当采购依据 |
 | 批量在跑，页面数字却不动 | 看按钮右边的连接状态：`实时`（服务端推送中）、`轮询中`（推送断了，退回 3 秒一问）、`已断开 Ns`。以前只靠前端 3 秒轮询，标签页在后台会被浏览器限流到 1 分钟一次、服务重启后旧页面还会静默失联，两种都表现为「数字卡住」。现在进度由服务端推（SSE），切到别的标签页照常刷新，断线会自己重连；真的连不上时会显示断了多久 |
+| 某行失败了，不知道要不要重跑 | 看这一行悬停提示里的 `error_code` 和导出表的「处理建议」列：`可重试`（超时/点击被挡）直接点「重跑问题行」；`需要人工处理`（验证码/登录/页面改版）先处理再跑；`程序异常` 把 `runs/server.err.log` 里同 code 的 `[error]` + `[error/tb]` 行一起反馈 |
+| 怀疑淘宝页面改版了 | 看行结果有没有 `structure_suspect`，或 `curl "http://127.0.0.1:8765/api/diagnostics?line=行号"`；`summary.reason` 会写「N 条搜索词全部 0 结果」或「N 次选择器/开页失败」，诊断明细在 `runs/diagnostics-*.jsonl` |
 
 ## 可调参数（环境变量）
 

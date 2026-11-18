@@ -15,8 +15,8 @@ SKILL = BASE.parent / "Taobao-Search-Skill" / "scripts"
 sys.path.insert(0, str(SKILL))
 
 import taobao  # noqa: E402
+
 import taobao_runner as tr  # noqa: E402
-import engine  # noqa: E402
 
 PASS = FAIL = 0
 

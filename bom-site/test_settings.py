@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """配置加载：settings.json 不进仓库，缺它时退回 settings.example.json。
 
 背景：settings.json 以前是入库的，别人 clone 会继承我的本机调参 ——

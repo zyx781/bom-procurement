@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """单行执行的防呆与落盘测试（POST /api/taobao/run-line 的底层 run_line）。
 
 背景：整批里个别行失败（换词/临时验证）时，用户不该为了 1 行重跑整批 ——

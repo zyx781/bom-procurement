@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """点击守卫单测：滚进视口 / 禁用判定 / 遮挡命中测试 / 返回值语义。
 
 背景（2026-11-09）：加购「有时候点了没加上」，根因之一是按视口坐标硬点 ——
@@ -7,8 +6,8 @@
 这里用假 locator/page 把三条守卫钉死，防止以后改回去。
 """
 
-import sys
 import pathlib
+import sys
 
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent / "Taobao-Search-Skill" / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -64,7 +63,7 @@ class FakeLocator:
         return self.enabled
 
     def bounding_box(self, timeout=None):
-        return dict(zip(("x", "y", "width", "height"), self.box))
+        return dict(zip(("x", "y", "width", "height"), self.box, strict=True))
 
     def evaluate(self, expr, arg=None):
         self.hit_queries.append(arg)

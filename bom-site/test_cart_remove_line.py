@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """行级删车测试（POST /api/taobao/cart-remove-line → SessionRunner.cart_remove_line）。
 
 背景：整批删车（「删上次加购的」）只能整批操作。买错一件时用户要的是

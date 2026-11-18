@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """执行层测试：用 fake_session 跑通 search → open → select-sku → cart-add → cart-view。"""
 
 import json
@@ -944,7 +943,7 @@ _rows = tr.batch_export_rows(
         {"line_no": 5, "status": "pending"},
     ]
 )
-check("表头 10 列", len(_rows[0]) == 10, _rows[0])
+check("表头 12 列（新增错误码/处理建议）", len(_rows[0]) == 12, _rows[0])
 check("ok 行字段齐全", _rows[1][0] == "3" and _rows[1][6] == "1.28" and _rows[1][7] == "xhr", _rows[1])
 check("备注里的换行被压平", "\n" not in _rows[1][9], _rows[1][9])
 check("pending 行不导出", all(r[0] != "5" for r in _rows[1:]), _rows)

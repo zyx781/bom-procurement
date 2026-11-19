@@ -80,8 +80,11 @@ check("缺失文件返回空", diag.tail_text(TMP / "missing.log") == "")
 (TMP / "server.out.log").write_text("SERVING\n", encoding="utf-8")
 (TMP / "session-bom-20260101-000000.log").write_text("[site] session started\n", encoding="utf-8")
 (TMP / "client.log").write_text('{"kind":"error"}\n', encoding="utf-8")
-check("白名单内可解析", diag.resolve_log("server.err") == TMP / "server.err.log")
-check("文件名也可解析", diag.resolve_log("server.err.log") == TMP / "server.err.log")
+# runs_dir() 会 .resolve()，CI 的临时路径可能含 8.3 短名（RUNNER~1），
+# 展开后与 mkdtemp 返回的字面量不同，所以按 runs_dir() 比，不按 TMP 比
+RD = diag.runs_dir()
+check("白名单内可解析", diag.resolve_log("server.err") == RD / "server.err.log")
+check("文件名也可解析", diag.resolve_log("server.err.log") == RD / "server.err.log")
 check("路径穿越被拒", diag.resolve_log("../server.py") is None)
 check("任意文件被拒", diag.resolve_log("taobao-session.json") is None)
 names = [x["key"] for x in diag.log_files()]

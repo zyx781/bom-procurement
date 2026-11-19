@@ -60,7 +60,7 @@ pip install -r requirements-dev.txt
 
 启动器优先用根目录的 `.venv`（`安装环境.bat` 建的）；没有才去系统 PATH 里挑依赖齐全的 Python。
 
-两个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.13.4）。
+两个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.13.5）。
 
 打开 <http://127.0.0.1:8765/>。
 
@@ -321,6 +321,7 @@ python test_line_update.py            # 人工放行 / 改搜索词会落盘
 python test_cart_remove_line.py       # 行级删车（只删这一件，别的行不动）
 python test_cart_reconcile_scroll.py  # 购物车滚动加载与收尾对账
 python test_cart_view_ui.py           # 购物车维护区块的前端结构
+python test_cart_quick_clear.py       # 常驻清空按钮（没选商品也能清车）
 python test_buy_guard.py              # 加购三态确认与金额闸门
 python test_query_fallback.py         # 搜索词回退（词 1 全被门槛拒时换词）
 python test_private_window.py         # 无痕工作窗口与登录 cookie 回写
@@ -329,7 +330,7 @@ python test_settings.py               # 配置回落 example、登录态目录�
 python test_integration.py            # 假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
 ```
 
-以上 27 套（含 1 套端到端）纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+以上 33 套（含 1 套端到端）纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
 另有 `python test_http.py`：需要服务**已经在 8765 跑着**，只做 HTTP 冒烟打印，不断言，故不进 CI。
 所有测试都把批量进度隔离到临时目录，不会碰到 `runs/` 里的真实进度。
 
@@ -345,7 +346,7 @@ python -m ruff check bom-site Taobao-Search-Skill/scripts
 cd bom-site && python -m mypy
 ```
 
-CI 在 Windows runner 上依次跑 **ruff → mypy → runtests.py（27 套）→ 启动器语法/体检**
+CI 在 Windows runner 上依次跑 **ruff → mypy → runtests.py（33 套）→ 启动器语法/体检**
 （见 `.github/workflows/tests.yml`）。规则是刻意收窄的：不做全库自动格式化（一次重排上千行
 会把真实改动埋掉），类型检查先覆盖 `lcsc.py` / `errors.py` / `diagnostics.py` /
 `bom_params.py` / `runtests.py`，老模块等拆分时再逐个纳入。
@@ -386,7 +387,7 @@ SKU 夹具同样可重建：`python tests/build_sku_replay.py` 从 `runs/sku-obs
 | 解析少行 | 多工作表 XLSX 会自动合并（表头不一致的页会在警告里点名）；若仍少行，检查表头是否被识别 |
 | 批量跑完有几行显示「跳过」 | 型号/名称/参数都空的行没有搜索词，跑也搜不到东西，会直接跳过并在行上写明缺什么；补好 BOM 再跑 |
 | 跑完一堆行变成「待核对」，提示购物车里没找到 | 先看是不是**整批**都这样：整批都不匹配时程序会判「读车异常」（车被清空/页面没渲染完），此时会保留「已加购」并标「未核实」，不会再整车降级；个别几行对不上才按行降级，去购物车看一眼那几行即可 |
-| 购物车越跑越多 | 用「购物车维护」按关键字删除，或跑批前清空；开跑前会自动看件数，≥190 直接不启动（淘宝上限约 200 行） |
+| 购物车越跑越多 | 用页面顶部常驻的「清空购物车」（不用先点商品，需手输「清空」确认）或维护区按关键字删除；开跑前会自动看件数，≥190 直接不启动（淘宝上限约 200 行） |
 | 换了一份新 BOM 再点加购 | 会按 BOM 指纹识别出「不是上一批」，旧进度自动作废、从头跑；上一批的加购记录仍保留，「删上次加购的」照常可用 |
 | 买到的阻值/型号不对，或单价离谱 | 名称列（`Name`/`Comment`）是设计值时优先按它买，型号复用错会记 `V01` 风险提示；每只单价超过品类常见价（电阻 ¥2、电容 ¥6、开关 ¥15）直接不买；评分 20 分以下、或单规格商品标题核实不到规格的候选也不会自动加购。这类行会停在「失败」并写明原因，交人工挑 |
 | 想重跑上一批，结果提示「已跑过」并跳过 | 按钮按情况自动切换：全部跑完时显示「重新跑全部」（走 `redo`，清空进度从头跑）；有失败/待核对行时旁边出现「重跑问题行 N」（只重跑这几行，已成功的仍跳过）。重跑会重复加购，所以先点「删除上一批」清购物车 —— 进度清掉后仍可用，因为清之前会留一份底档 |

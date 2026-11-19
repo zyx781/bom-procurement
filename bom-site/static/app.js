@@ -1975,14 +1975,24 @@
 
   /* ---------- 购物车维护 ---------- */
 
+  /** 整车删除的统一二次确认：必须手输「清空」，防止误点。 */
+  function confirmClearCart() {
+    const t = window.prompt(
+      "这会删掉购物车里的全部商品（包括你自己加的非 BOM 商品），不可撤销。\n如果确定，请输入：清空"
+    );
+    if (t !== "清空") {
+      toast("已取消");
+      return false;
+    }
+    return true;
+  }
+
   async function cartRemove(removeAll) {
     if (!sessionReady) return toast("先启动淘宝会话");
+    if (batchRunning) return toast("正在加购，先点「停止」再删购物车商品");
     let payload;
     if (removeAll) {
-      const t = window.prompt(
-        "这会删掉购物车里的全部商品（包括你自己加的非 BOM 商品），不可撤销。\n如果确定，请输入：清空"
-      );
-      if (t !== "清空") return toast("已取消");
+      if (!confirmClearCart()) return;
       payload = { all: true, confirm: "清空" };
     } else {
       const kw = $("#cart-keyword").value.trim();
@@ -2013,6 +2023,50 @@
         (d.screenshot ? `<img class="shot" src="${d.screenshot}">` : "");
     } catch (e) {
       box.innerHTML = `<span class="sess-warn">${esc(e.message)}</span>`;
+    }
+  }
+
+  /**
+   * 页面顶部的常驻「清空购物车」：不依赖上传清单、不依赖点过某一行。
+   * 和行内删车走同一个后端接口、同一套二次确认，只是结果写在页面顶部，
+   * 免得用户在没打开行详情时点了按钮却看不到反馈。
+   */
+  async function cartQuickClear() {
+    if (!sessionReady) return toast("先启动淘宝会话");
+    if (batchRunning) return toast("正在加购，先点「停止」再清空购物车");
+    if (!confirmClearCart()) return;
+
+    const btn = $("#btn-cart-quick-clear");
+    const box = $("#cart-quick-result");
+    const oldText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "清空中…";
+    box.className = "cq-result";
+    box.textContent = "正在打开购物车并删除…";
+    try {
+      const d = await api("/api/taobao/cart-remove", { all: true, confirm: "清空" });
+      if (!d.ok) {
+        box.classList.add("bad");
+        box.textContent = `删除失败${d.code ? `［${d.code}］` : ""}：${d.message || "未知错误"}`;
+        toast("清空购物车失败");
+        return;
+      }
+      const n = d.removed || 0;
+      const emptyAlready = n === 0 && d.after === 0;
+      const good = n > 0 || emptyAlready;
+      const label = n > 0 ? `已清空 ${n} 件` : emptyAlready ? "购物车本来就是空的" : "没有删除成功";
+      box.classList.add(good ? "ok" : "bad");
+      box.textContent =
+        `${label}｜购物车 ${d.before ?? "?"} → ${d.after ?? "?"}` +
+        (d.verified ? "（已回读确认）" : "（数量未回读，请到淘宝核对）");
+      toast(label);
+    } catch (e) {
+      box.classList.add("bad");
+      box.textContent = e.message;
+      toast(`清空失败：${e.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldText;
     }
   }
 
@@ -2260,6 +2314,7 @@
     $("#btn-verify-show").addEventListener("click", showBrowserWindow);
     $("#btn-verify-recheck").addEventListener("click", recheckVerification);
     $("#btn-cart-clear").addEventListener("click", () => cartRemove(true));
+    $("#btn-cart-quick-clear").addEventListener("click", cartQuickClear);
     $("#btn-exec-search").addEventListener("click", execSearch);
     $("#btn-exec-auto").addEventListener("click", execAuto);
     $("#btn-exec-open").addEventListener("click", execOpen);

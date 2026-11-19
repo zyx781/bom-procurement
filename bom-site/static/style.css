@@ -243,6 +243,21 @@ input[type=file]{display:none}
 .verify-banner .vb-go:hover{background:var(--warn-deep)}
 .verify-banner .ghost{background:var(--panel);border-color:var(--warn-rule);color:var(--warn)}
 
+/* 常驻购物车快捷条：在投放区之外，没上传清单/没点商品行时也能清空 */
+.cart-quick{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:7px 20px;
+  background:var(--panel);border-bottom:1px solid var(--line);
+  font-size:11.5px;
+}
+.cq-copy{display:flex;align-items:baseline;gap:8px;min-width:0;flex:1 1 320px}
+.cq-copy b{color:var(--ink);font-weight:650;white-space:nowrap}
+.cq-copy span{color:var(--ink-3);overflow-wrap:anywhere}
+.cq-actions{flex:0 0 auto}
+.cq-result{flex:1 1 220px;min-width:0;color:var(--ink-3);font-size:11px;overflow-wrap:anywhere}
+.cq-result.ok{color:var(--ok)}
+.cq-result.bad{color:var(--bad)}
+
 /* ============================================================
    6. layout / intake
    ============================================================ */
@@ -1008,6 +1023,8 @@ input[type=file]{display:none}
   .col-pkg,.col-qty{display:none}
   .ledger-head{position:static}
   .wrap{padding:12px 12px 32px}
+  .cart-quick{padding:7px 12px}
+  .cq-copy{flex-basis:100%}
   .topbar{padding:0 12px;gap:8px}
   .sess-pill{max-width:200px}
   .sess-task{display:none}

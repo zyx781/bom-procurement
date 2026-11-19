@@ -4,6 +4,8 @@
   "speed": 0.35,
   "idle_timeout": 2,
   "screenshot_keep": 0,
+  "same_shop_grouping": true,
+  "shipping_cost_per_shop": 6,
   "max_line_cost": {
     "passive": 200,
     "connector": 300,

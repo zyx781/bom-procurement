@@ -450,6 +450,8 @@ class SessionHandler:
                 "rating": item.rating,
                 "is_tmall": item.is_tmall,
                 "free_shipping": item.free_shipping,
+                # 店铺名：runner 用它把「同一家店」的多行合并，省运费
+                "shop": item.shop,
             }
             for idx, item in enumerate(candidates)
         ]

@@ -867,6 +867,7 @@ class BrowserAdapter:
             sales = self._extract_sales_count(card_text)
             free_shipping = self._check_free_shipping(card_text)
             is_tmall = self._check_is_tmall(absolute_href, card_text)
+            shop = self._extract_shop(link.get("shop", ""), card_text)
 
             # Apply filters
             if require_tmall is True and not is_tmall:
@@ -892,6 +893,7 @@ class BrowserAdapter:
                 title=title, spec_text=card_text or "", url=absolute_href, rating=rating,
                 price=price_str, price_value=price_val,
                 sales_count=sales, free_shipping=free_shipping, is_tmall=is_tmall,
+                shop=shop,
             )
             candidates.append(item)
             # 原来是每 3 个候选等 0.3–1s：16 个候选 = 5 次 = 2–4 秒纯空转，
@@ -2302,7 +2304,19 @@ class BrowserAdapter:
                         // card.innerText 要上万节点做布局计算，26 张卡就是 1 秒；
                         // textContent 便宜一个数量级，价格/销量/包邮这些正则照样命中。
                         const cardText = card ? (card.textContent || '').trim() : text;
-                        results.push({ href, text, title, card_text: cardText });
+                        // 店铺名：多店比价时要靠它把「同一家店」认出来，运费才合得起来。
+                        // 优先读淘宝卡片上的店名节点，读不到就让 Python 端从 cardText 里兜。
+                        let shop = '';
+                        if (card) {
+                            for (const ss of ['[class*="ShopName"]', '[class*="shopName"]',
+                                              '[class*="shop-name"]', '[class*="ShopInfo"]',
+                                              '[class*="shopInfo"]', '[class*="shop-info"]']) {
+                                const el = card.querySelector(ss);
+                                const t = el ? (el.textContent || '').trim() : '';
+                                if (t) { shop = t.slice(0, 40); break; }
+                            }
+                        }
+                        results.push({ href, text, title, card_text: cardText, shop });
                         if (results.length >= 16) break;
                     }
                     if (results.length > 0) break;
@@ -2409,6 +2423,28 @@ class BrowserAdapter:
         if "tmall.com" in url.lower():
             return True
         return bool(re.search(r'天猫|Tmall|TMALL', card_text))
+
+    # 店名常见后缀。淘宝卡片多数能直接读到店名节点；读不到时用这段兜底，
+    # 认不出就返回空 —— 空店名等于「不参与同店合并」，比认错店安全。
+    _SHOP_SUFFIX_RE = re.compile(
+        r"([\u4e00-\u9fa5A-Za-z0-9()（）·\-]{2,24}?"
+        r"(?:旗舰店|专卖店|专营店|企业店|工厂店|直营店|品牌店|折扣店|小店))"
+    )
+
+    def _extract_shop(self, link_shop: str, card_text: str) -> str:
+        """卡片里的店铺名。同店合并（省运费）要用它判「是不是同一家」。"""
+        s = str(link_shop or "").strip()
+        # 店名节点里偶尔混着「进店」「客服」这类按钮文案，过短的不要
+        if 2 <= len(s) <= 40 and not re.search(r"[¥￥]|\d{4,}", s):
+            return s
+        hits = self._SHOP_SUFFIX_RE.findall(str(card_text or ""))
+        if not hits:
+            return ""
+        # 取最后一条：卡片排版是「标题 → 价格销量 → 店铺」，靠后更可能是店名。
+        # 只留尾部 8 个字：textContent 会把标题、价格、地区黏在店名前面，
+        # 这些前缀每张卡都不一样，留着会让「同一家店」算出两个名字，合并就白做了。
+        # 尾部 8 字正好是「XX电子旗舰店」这种区分度最高的部分。
+        return hits[-1][-8:]
 
     # ──────────────────────────────────────────────
 

@@ -137,6 +137,9 @@ class MatchedItem:
     sales_count: int | None = None
     rating: float | None = None
     free_shipping: bool = False
+    # 店铺名：同店合并（省运费）靠它认「这家店已经买过」。读不到就是空字符串，
+    # 空值一律不参与合并，不会因为认不出店名而改变原来的选店结果。
+    shop: str = ""
     is_tmall: bool = False
     url: str | None = None
     cart_added: bool = False

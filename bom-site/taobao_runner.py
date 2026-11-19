@@ -375,6 +375,9 @@ def _result_progress_payload(r: dict) -> dict:
         "query": r.get("query"),
         # uncertain 行要留着候选和截图，续跑跳过时还能让人核对
         "candidate": r.get("candidate"),
+        # 店铺：续跑/汇总要按店统计运费，缺了「同店合并」在续跑后就统计不出来
+        "shop": r.get("shop") or (r.get("candidate") or {}).get("shop"),
+        "same_shop": r.get("same_shop"),
         "screenshot": r.get("screenshot"),
         # 耗时埋点：只用于复盘速度，不影响续跑判定
         "total_ms": r.get("total_ms"),
@@ -852,6 +855,90 @@ def load_settings() -> dict:
         return {}
 
 
+# ---------------- 同店合并（省运费） ----------------
+# 实测痛点：电阻电容这种几分钱的东西，一行一个店 → 每店一次运费，
+# 十行阻容比料钱还贵。所以被动件选店时把「已经买过的店」往前排，
+# 运费只算一次。这里只调**先开哪家**：候选照样要过硬门槛、规格核实、
+# SKU 核实，调序不会让不该买的货被买进来。
+SHIP_COST_DEFAULT = 6.0
+
+
+def _shop_key(name) -> str:
+    """店铺名归一：只用来判「是不是同一家店」，取不到就返回空（等于不参与合并）。"""
+    s = re.sub(r"\s+", "", str(name or ""))
+    s = s.strip("·-—_|/\\")
+    # 卡片文本里店名前面常黏着标题/价格，取**尾部**：店名的区分度在尾部
+    # （「XX电子旗舰店」），前缀是每张卡都不一样的噪声。
+    return s[-24:]
+
+
+def _shop_name_ok(name) -> bool:
+    """像不像店铺名：太短、带价格符号、纯数字的都不算。"""
+    s = str(name or "").strip()
+    if not (2 <= len(s) <= 40):
+        return False
+    if re.search(r"[¥￥]|\d{4,}", s):
+        return False
+    return bool(re.search(r"[\u4e00-\u9fa5A-Za-z]", s))
+
+
+def _shipping_cost() -> float:
+    """每多一家店，预计多付一次运费（settings.json 的 shipping_cost_per_shop）。"""
+    try:
+        v = float((load_settings() or {}).get("shipping_cost_per_shop", SHIP_COST_DEFAULT))
+    except (TypeError, ValueError):
+        return SHIP_COST_DEFAULT
+    return max(0.0, min(v, 100.0))
+
+
+def _same_shop_enabled() -> bool:
+    v = (load_settings() or {}).get("same_shop_grouping", True)
+    if isinstance(v, str):
+        return v.strip().lower() not in ("0", "false", "off", "no")
+    return bool(v)
+
+
+def same_shop_rank(line: dict, cands: list, shop_used: dict, freight: float,
+                   prefer_cheap: bool = True) -> list:
+    """被动件优先「已经买过的店」，运费按店算而不是按行算。
+
+    有效花费 = 本行料钱 + （这家店还没买过 ? 一次运费 : 0）。
+    这样「同店贵 4 毛」会赢「新店便宜 4 毛」，但「同店贵 30 块」不会 ——
+    合并是为了省钱，不是为了合并。
+    """
+    if not cands or not freight or not _same_shop_enabled():
+        return cands
+    if (line.get("category") or "") != "passive":
+        return cands
+
+    def eff(c):
+        cost = c.get("cost")
+        if cost is None:
+            return None
+        key = _shop_key(c.get("shop"))
+        return float(cost) + (0.0 if (key and shop_used.get(key)) else freight)
+
+    if prefer_cheap:
+        return sorted(
+            cands,
+            key=lambda c: (
+                not c.get("mpn_hit", True),
+                eff(c) if eff(c) is not None else 1e9,
+                c.get("over_ratio") or 1.0,
+            ),
+        )
+    # 评分优先的模式只把同店当「平分时的加时赛」，不让它压过分数
+    return sorted(
+        cands,
+        key=lambda c: (
+            not c.get("mpn_hit", True),
+            -(c.get("score") or 0),
+            eff(c) if eff(c) is not None else 1e9,
+            c.get("over_ratio") or 1.0,
+        ),
+    )
+
+
 def session_env() -> dict:
     """执行层子进程的环境变量。
 
@@ -1242,6 +1329,9 @@ class SessionRunner:
         self._guard = None  # 前台守卫：跑批时别让浏览器盖住用户正在用的软件
         self._guard_lock = threading.RLock()
         self._browser_gone = False
+        # 同店合并：本批已经买过的店（店名 → 行数）。被动件选店时优先复购，
+        # 让十行阻容落在同一两家店里，运费只付一次。
+        self._shop_used: dict[str, int] = {}
         self._batch = {
             "running": False,
             "total": 0,
@@ -2035,6 +2125,10 @@ class SessionRunner:
                     "sales": it.get("sales_count"),
                     "rating": it.get("rating"),
                     "shop_type": "",
+                    # 店铺名 + 包邮标记：同店合并（省运费）要用。读不到就是空，
+                    # 空店名不参与合并，行为跟以前完全一样。
+                    "shop": it.get("shop") or "",
+                    "free_shipping": bool(it.get("free_shipping")),
                     "is_tmall": bool(it.get("is_tmall")),
                     "real_photo": False,
                     "index": it.get("index"),
@@ -2764,6 +2858,13 @@ class SessionRunner:
                 "finished_at": None,
                 "stopped_reason": None,
             }
+            # 同店合并的账本跟着本批走：续跑时上一轮已经买过的店也要算「买过」，
+            # 否则续跑会把同一家店重新当新店，从头再摊一次运费。
+            self._shop_used = {}
+            for _r in results:
+                _s = _shop_key((_r.get("candidate") or {}).get("shop"))
+                if _s and _r.get("status") == "ok":
+                    self._shop_used[_s] = self._shop_used.get(_s, 0) + 1
         threading.Thread(
             target=self._run_batch,
             args=(list(lines), bool(prefer_cheap), max(1, int(max_candidates)), bool(dry_run)),
@@ -3270,6 +3371,11 @@ class SessionRunner:
                         if r["status"] == "pending":
                             r["status"] = "skipped"
                             r["message"] = self._batch["stopped_reason"]
+                # 店铺分布放在锁里算：_shop_summary 读的是 results，和上面的降级同一份快照
+                try:
+                    self._batch["shops"] = self._shop_summary()
+                except Exception as exc:  # noqa: BLE001 —— 统计失败不能拖垮跑批收尾
+                    _log(f"[batch] shop summary skipped: {exc}")
             if not dry_run:
                 self._save_progress()
             # 收尾对账（P0-1）：把 ok 行逐条跟购物车实际行比对。ok 判定再严，
@@ -3445,6 +3551,40 @@ class SessionRunner:
             _log(f"[batch] reconcile: {checked} ok 行全部在购物车核对到")
         if uncertain_found:
             _log(f"[batch] reconcile: {len(uncertain_found)} 个 uncertain 行确认已在购物车: {uncertain_found}")
+
+    def _shop_summary(self) -> dict:
+        """本批的店铺分布与运费估算（只统计真加购成功的行）。
+
+        说清两件事：货散在几家店、这么散要付几次运费。同店合并有没有生效，
+        看这个数字就够了 —— 「12 行 / 2 家店」比「12 行 / 12 家店」省 10 次运费。
+        """
+        rows = [r for r in (self._batch.get("results") or []) if r.get("status") == "ok"]
+        agg: dict[str, dict] = {}
+        unknown = 0
+        for r in rows:
+            shop = _shop_key(r.get("shop") or (r.get("candidate") or {}).get("shop"))
+            if not shop:
+                unknown += 1
+                continue
+            a = agg.setdefault(shop, {"shop": shop, "lines": 0, "cost": 0.0})
+            a["lines"] += 1
+            if isinstance(r.get("cost"), (int, float)):
+                a["cost"] = round(a["cost"] + float(r["cost"]), 2)
+        used = sorted(agg.values(), key=lambda x: (-x["lines"], x["shop"]))
+        freight = _shipping_cost()
+        n_shop, n_line = len(used), sum(x["lines"] for x in used)
+        return {
+            "used": used[:12],
+            "shop_count": n_shop,
+            "line_count": n_line,
+            "unknown": unknown,
+            "freight_per_shop": round(freight, 2),
+            "freight_est": round(n_shop * freight, 2),
+            # 不做合并（每行一家店）时的运费，用来告诉用户省了多少
+            "freight_if_split": round(n_line * freight, 2),
+            "freight_saved": round(max(0, n_line - n_shop) * freight, 2),
+            "enabled": _same_shop_enabled(),
+        }
 
     def _save_run_metrics(self):
         """把本轮每行耗时落盘到 runs/metrics-<时间>.json，供多轮对比。"""
@@ -3630,6 +3770,13 @@ class SessionRunner:
             )
         else:
             cands.sort(key=lambda c: (not c.get("mpn_hit", True), -(c.get("score") or 0)))
+        # 同店合并：被动件优先已经买过的店，运费按「店」算而不是按「行」算。
+        # 放在切片之前 —— _try_list 只开前 N 家，晚一步调序等于没调。
+        _freight = _shipping_cost()
+        cands = same_shop_rank(line, cands, self._shop_used, _freight, prefer_cheap=prefer_cheap)
+        # 候选里读到几家店：一行都没读到店名时，前端会提示「同店合并没生效」，
+        # 而不是让人以为系统偷偷合并了。
+        base["shops_seen"] = len({_shop_key(c.get("shop")) for c in cands if _shop_key(c.get("shop"))})
         base["price_from"] = cands[0].get("price") if cands else None
         if not cands:
             base.update(status="failed", message="没有通过硬门槛的候选")
@@ -4003,6 +4150,20 @@ class SessionRunner:
                 continue
 
             attempt["ok"] = True
+            # 同店合并记账：这家店本批已经买过几行，运费就摊在那几行上。
+            _shop_now = _shop_key(cand.get("shop"))
+            _same_shop = bool(_shop_now and self._shop_used.get(_shop_now))
+            if _shop_now:
+                with self._state_lock:
+                    self._shop_used[_shop_now] = self._shop_used.get(_shop_now, 0) + 1
+                    _shop_n = self._shop_used[_shop_now]
+                base["shop"] = _shop_now
+                base["same_shop"] = _same_shop
+                base["shop_note"] = (
+                    f"与前面 {_shop_n - 1} 行同一家店，只算一次运费"
+                    if _same_shop
+                    else f"这家店本批第一次买，预计多一次运费（约 ¥{_freight:g}）"
+                )
             # 金额：final_price 是「选完 SKU 后页面显示的每份单价」，cost 由 add_to_cart 算好
             _final = added.get("final_price")
             _sent = added.get("qty_sent") or qty
@@ -4016,6 +4177,7 @@ class SessionRunner:
                     "price": cand.get("price"),
                     "url": cand.get("url"),
                     "score": cand.get("score"),
+                    "shop": cand.get("shop") or "",
                 },
                 detail_price=opened.get("detail_price"),
                 qty=qty,

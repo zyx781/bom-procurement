@@ -484,6 +484,9 @@
       ln.package ? `<span>封装 <b>${esc(ln.package)}</b></span>` : "",
       ln.refs ? `<span>位号 <b>${esc(ln.refs)}</b></span>` : "",
       ln.brand ? `<span>品牌 <b>${esc(ln.brand)}</b></span>` : "",
+      rec && (rec.shop || (rec.candidate && rec.candidate.shop))
+        ? `<span>店铺 <b>${esc(rec.shop || rec.candidate.shop)}</b></span>`
+        : "",
       `<span>替代 <b>${ln.substitution_allowed ? "允许（须 G2）" : "不允许"}</b></span>`,
     ]
       .filter(Boolean)
@@ -1286,7 +1289,7 @@
           <span class="title">${esc(c.title)}<br>
             <span class="cand-meta">销量 ${fmtNum(c.sales)}，好评 ${
           c.rating != null ? Math.round(c.rating * 100) + "%" : "—"
-        }，${c.is_tmall ? "天猫" : "店铺未知"}${
+        }，${c.shop ? esc(c.shop) : c.is_tmall ? "天猫" : "店铺未知"}${
           c.pack_size ? `，${c.pack_size}只/份` : ""
         }${c.actual_pcs ? `，到手 ${c.actual_pcs} 只` : ""}</span>${
           over ? `<span class="cand-flag">超量 ${over >= 10 ? Math.round(over) : over.toFixed(1)} 倍</span>` : ""
@@ -1902,6 +1905,17 @@
       const money = st.cost_total
         ? `，合计 ${fmtMoney(st.cost_total)}${st.cost_lines ? `（${st.cost_lines} 行有实付价）` : ""}`
         : "";
+      // 同店合并的战果：货散在几家店、运费算了几个。合并生效时直接报省了多少，
+      // 没读到店名也要说出来，别让人以为「系统已经帮你合并过了」。
+      const shops = st.shops || {};
+      let shopNote = "";
+      if (!isDry && shops.shop_count) {
+        shopNote =
+          `；货在 ${shops.shop_count} 家店（${shops.line_count} 行），预计运费 ${fmtMoney(shops.freight_est)}` +
+          (shops.freight_saved > 0 ? `，同店合并省了约 ${fmtMoney(shops.freight_saved)}` : "");
+      } else if (!isDry && shops.unknown) {
+        shopNote = "；没读到店铺名，同店合并这次没生效";
+      }
       // 单行执行过：进度条上的 1/53 是「这一行定局了」，别让人当成整批跑完
       const sl = st.single_line && st.single_line.line_no != null ? st.single_line : null;
       const slNote = sl
@@ -1910,7 +1924,7 @@
           }）；`
         : "";
       $("#batch-note").textContent =
-        `${warn}${slNote}${sl ? "整批" : "上次批量"}：已加购 ${okn} 行${money}${aside ? `，${aside}` : ""}` +
+        `${warn}${slNote}${sl ? "整批" : "上次批量"}：已加购 ${okn} 行${money}${shopNote}${aside ? `，${aside}` : ""}` +
         `${st.stopped_reason ? "（" + st.stopped_reason + "）" : ""}${tail}`;
     } else if (st.progress && st.progress.ok_count > 0) {
       const money = st.cost_total ? `，合计 ${fmtMoney(st.cost_total)}` : "";

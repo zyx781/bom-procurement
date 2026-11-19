@@ -318,12 +318,15 @@
    "desc": "32.768kHz",
    "category": "passive",
    "subtype": "crystal",
-   "status": "needs_user",
+   "status": "ready",
    "code": "C620155",
    "q": [
-    "X321532768KGD2SI 晶振"
+    "X321532768KGD2SI 晶振",
+    "32.768kHz 贴片晶振"
    ],
-   "params": {},
+   "params": {
+    "frequency": "32.768kHz"
+   },
    "conflict": false
   }
  ],

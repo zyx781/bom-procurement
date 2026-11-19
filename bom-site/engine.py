@@ -776,7 +776,11 @@ def analyze_line(row: dict, fallback_no: int, options: dict | None = None) -> di
             # 晶振不认阻容感值，只认频率：抓到频率（BOM 名称或立创参数）就放行。
             if "frequency" not in params:
                 missing.append("频率")
-                blocking.append("晶振必须有频率，否则无法区分同系列的 8MHz / 50MHz")
+                blocking.append(
+                    "晶振要有频率才敢买（8MHz / 50MHz 是两颗料）。"
+                    "名称或型号里写 32.768kHz、32K768、32768 都能识别；"
+                    "这行两种写法都没读到，请补一下频率或立创编号"
+                )
         elif not any(k in params for k in ("resistance_ohm", "capacitance_f", "inductance_h")):
             missing.append("阻值/容值/感值")
             blocking.append("缺少关键参数，无法锁定规格")
@@ -1040,10 +1044,58 @@ def connector_part(*texts) -> str:
     return ""
 
 
+_FREQ_UNIT_SCALE = {"": 1.0, "k": 1e3, "m": 1e6, "g": 1e9}
+_FREQ_UNIT_LABEL = {"": "Hz", "k": "kHz", "m": "MHz", "g": "GHz"}
+
+
+def _hz_label(hz):
+    """32768 -> '32.768kHz'。只在「原文没写单位」时才需要它做规范化。"""
+    if hz >= 1e9:
+        return f"{hz / 1e9:g}GHz"
+    if hz >= 1e6:
+        return f"{hz / 1e6:g}MHz"
+    if hz >= 1e3:
+        return f"{hz / 1e3:g}kHz"
+    return f"{hz:g}Hz"
+
+
 def _parse_freq_label(text):
-    """'8MHz ABM3' -> '8MHz'（晶振只认频率，型号可有可无）。"""
-    m = re.search(r"(\d+(?:\.\d+)?)\s*MHz", str(text or ""), re.I)
-    return f"{m.group(1)}MHz" if m else ""
+    """从名称/型号里读晶振频率，认这些写法（以前只认 MHz，全漏）：
+
+    `8MHz` / `50 MHz` / `32.768kHz` / `32.768KHZ` / `32768Hz` / `8GHz`
+    `32K768`（丝印写法，K 当小数点）/ `32.768K` / `8M`（省略 Hz）
+    `32768`（裸数字，仅 5 位以上，避免 3225/5032 这类封装尺寸误判）
+
+    返回统一写法：有单位就保留数字原样（'8.000MHz' 不变成 '8MHz'，报告里
+    和 BOM 同名更好核对），无单位的换算成最合适的单位（'32.768kHz'）。
+    """
+    s = str(text or "")
+    # 1) 带 Hz：32.768kHz / 8 MHz / 20MHZ / 32768Hz
+    m = re.search(r"(?<![\d.])(\d+(?:\.\d+)?)\s*(g|m|k)?\s*hz(?![a-z0-9])", s, re.I)
+    if m:
+        unit = str(m.group(2) or "").lower()
+        return f"{m.group(1)}{_FREQ_UNIT_LABEL[unit]}"
+    # 2) 丝印 32K768 / 8M000：字母当小数点，值 = 32 + 768/1000
+    m = re.search(r"(?<![\d.])(\d{1,3})([kKmM])(\d{2,3})(?![\d.])", s)
+    if m:
+        frac = m.group(3)
+        base = float(f"{m.group(1)}.{frac}")
+        hz = base * _FREQ_UNIT_SCALE[m.group(2).lower()]
+        if 1e3 <= hz <= 1e9:
+            return _hz_label(hz)
+    # 3) 省略 Hz：32.768K / 8M（晶振行里 K/M 只可能是频率）
+    m = re.search(r"(?<![\d.])(\d+(?:\.\d+)?)\s*([kKmM])(?![\w.])", s)
+    if m:
+        hz = float(m.group(1)) * _FREQ_UNIT_SCALE[m.group(2).lower()]
+        if 1e3 <= hz <= 1e9:
+            return _hz_label(hz)
+    # 4) 裸数字 32768：只在 5 位以上时认，3225/5032 这类封装尺寸不能当频率
+    m = re.search(r"(?<![\d.])(\d{5,9})(?![\d.])", s)
+    if m:
+        hz = float(m.group(1))
+        if 1e4 <= hz <= 1e9:
+            return _hz_label(hz)
+    return ""
 
 
 def _parse_amp_label(text):
@@ -2096,6 +2148,9 @@ def score_candidates(line, csv_text=None, candidates=None, execution=False) -> d
                 "sales": c.get("sales"),
                 "rating": c.get("rating"),
                 "shop_type": c.get("shop_type"),
+                # 店铺名 / 包邮：调序层（同店合并省运费）要用，评分本身不看它
+                "shop": c.get("shop") or "",
+                "free_shipping": bool(c.get("free_shipping")),
                 "is_tmall": c.get("is_tmall"),
                 "real_photo": c.get("real_photo"),
                 "note": c.get("note"),

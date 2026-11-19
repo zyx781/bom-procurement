@@ -23,6 +23,8 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
+import history_cleaner
+
 # 采购规则 / SKU 决策（纯函数簇，见 rules.py）。
 # 这里把规则层入口全部 re-export：测试、脚本、服务端都按 `tr.suggest_sku` 这样用，
 # 拆分模块不应该改动调用方看到的接口。
@@ -855,6 +857,30 @@ def load_settings() -> dict:
         return {}
 
 
+# ---------------- 淘宝历史清理 ----------------
+# 单窗口（不开无痕）的代价：搜索词和商品页会写进 .cdp-profile 的浏览器历史。
+# 用户真的会打开历史面板看（2026-11-19 反馈「历史里还是能看到」），所以：
+# 启动前清一次、会话期间每十几秒清一次、结束再清一次。只删淘宝相关的行，
+# 同一个 profile 里顺手打开的别的页面不动。
+HISTORY_CLEAN_INTERVAL = 10.0
+
+
+def history_cleanup_enabled() -> bool:
+    """默认开。想保留历史（自己排查用）就在 settings.json 里设 false。"""
+    try:
+        return bool(load_settings().get("clear_taobao_history", True))
+    except Exception:  # noqa: BLE001
+        return True
+
+
+def history_clean_interval() -> float:
+    try:
+        val = float(load_settings().get("history_cleanup_interval") or HISTORY_CLEAN_INTERVAL)
+    except (TypeError, ValueError):
+        return HISTORY_CLEAN_INTERVAL
+    return min(120.0, max(3.0, val))
+
+
 # ---------------- 同店合并（省运费） ----------------
 # 实测痛点：电阻电容这种几分钱的东西，一行一个店 → 每店一次运费，
 # 十行阻容比料钱还贵。所以被动件选店时把「已经买过的店」往前排，
@@ -960,6 +986,10 @@ def session_env() -> dict:
 # 所以这里在拉会话之前，先按同一个 profile 把带调试端口的浏览器拉起来。
 
 CDP_PROFILE_DIR = BASE / ".cdp-profile"
+# 随浏览器加载的扩展：用 chrome.history 接口一边跑一边删淘宝记录。
+# 为什么不从外面删：Chromium 打开 History 库时用独占锁，别的进程连只读
+# 都打不开（database is locked），只有浏览器自己删得掉。
+HISTORY_GUARD_EXT = BASE / "browser_ext" / "history_guard"
 
 
 def cdp_endpoint_ok(cdp_url: str, timeout: float = 1.2) -> bool:
@@ -999,6 +1029,25 @@ def find_browser_exe() -> str | None:
     return None
 
 
+def history_guard_status(cdp_url: str, timeout: float = 1.0) -> str:
+    """扩展到底加载上了没有：看 /json/list 里有没有我们的 service worker。
+
+    Edge 企业策略可以禁用未打包扩展（``ExtensionInstallBlocklist``）。那时浏览
+    器不会实时删历史，只剩「关窗后清库」这一层 —— 至少要让人在日志里看见，
+    而不是以为一定干净。
+    """
+    url = str(cdp_url or "").rstrip("/") + "/json/list"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            targets = json.loads(resp.read().decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001
+        return "unknown"
+    for t in targets if isinstance(targets, list) else []:
+        if t.get("type") == "service_worker" and str(t.get("url", "")).endswith("/sw.js"):
+            return "on"
+    return "off"
+
+
 def ensure_debug_browser(cdp_url: str, wait_seconds: float = 25.0, log=None) -> None:
     """确保 cdp_url 可连；连不上就按同一 profile 拉起调试版浏览器。"""
     if cdp_endpoint_ok(cdp_url):
@@ -1011,10 +1060,25 @@ def ensure_debug_browser(cdp_url: str, wait_seconds: float = 25.0, log=None) -> 
         )
     port = cdp_port(cdp_url)
     CDP_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    # 标记「这个 profile 归本程序管」：历史清理只动带标记的目录，
+    # 万一有人把路径指到自己的 Edge 主 profile，那边没有标记，清理会拒绝。
+    try:
+        (CDP_PROFILE_DIR / history_cleaner.MARKER_NAME).write_text("bom", encoding="utf-8")
+    except OSError:
+        pass
+    ext_args: list[str] = []
+    if (HISTORY_GUARD_EXT / "manifest.json").is_file():
+        # 只加载这一个扩展（--disable-extensions-except），不碰 profile 里别的；
+        # 扩展只做一件事：把淘宝/天猫的历史记录删掉。
+        ext_args = [
+            f"--load-extension={HISTORY_GUARD_EXT}",
+            f"--disable-extensions-except={HISTORY_GUARD_EXT}",
+        ]
     args = [
         exe,
         f"--remote-debugging-port={port}",
         f"--user-data-dir={CDP_PROFILE_DIR}",
+        *ext_args,
         "--no-first-run",
         "--no-default-browser-check",
         # 窗口必须一出来就在屏幕内：登录、过验证都要人盯着这个窗口。
@@ -1055,6 +1119,15 @@ def ensure_debug_browser(cdp_url: str, wait_seconds: float = 25.0, log=None) -> 
             if ensure_browser_visible(cdp_url):
                 if log:
                     log("[site] 浏览器窗口之前在屏幕外，已移回屏幕内（登录要看得见）")
+            state = history_guard_status(cdp_url)
+            if log:
+                if state == "on":
+                    log("[site] 淘宝历史清理扩展已加载：访问后自动删记录")
+                elif state == "off":
+                    log(
+                        "[site] 淘宝历史清理扩展没起来（可能被企业策略禁用）："
+                        "改为关掉浏览器后清库，期间历史里可能短暂可见"
+                    )
             return
     raise SessionError(
         f"调试浏览器起来了但 {wait_seconds:g} 秒内没监听端口 {port}。"
@@ -1328,6 +1401,8 @@ class SessionRunner:
         self._last_error = None
         self._guard = None  # 前台守卫：跑批时别让浏览器盖住用户正在用的软件
         self._guard_lock = threading.RLock()
+        # 淘宝历史清理线程：会话期间定时把淘宝记录从浏览器历史里删掉
+        self._history_watch: history_cleaner.HistoryWatcher | None = None
         self._browser_gone = False
         # 同店合并：本批已经买过的店（店名 → 行数）。被动件选店时优先复购，
         # 让十行阻容落在同一两家店里，运费只付一次。
@@ -1439,6 +1514,9 @@ class SessionRunner:
             cdp_url = os.environ.get("TAOBAO_CDP_URL") or settings.get("cdp_url")
             if cdp_url:
                 cdp_url = str(cdp_url).strip()
+                # 上一轮留下的淘宝记录先清干净：用户很可能刚翻过历史面板，
+                # 新会话一开又会有新记录，但旧的不能一直堆着。
+                self._clean_history("启动前")
                 # 页面点“启动”时调试版 Edge 常常没开着：先自动拉起，否则必然秒退
                 if not cdp_endpoint_ok(cdp_url):
                     self._append_log(f"[site] {cdp_url} 未就绪，正在自动启动调试浏览器 …")
@@ -1495,6 +1573,7 @@ class SessionRunner:
             threading.Thread(target=self._read_stderr, args=(self._proc,), daemon=True).start()
             self._append_log(f"[site] session process started pid={self._proc.pid}")
             self._start_guard()
+            self._start_history_watch()
             return self.status()
 
     # ---------------- 窗口 / 焦点（别盖住用户正在用的软件） ----------------
@@ -1526,6 +1605,58 @@ class SessionRunner:
         if guard is not None:
             try:
                 guard.stop_guard()
+            except Exception:  # noqa: BLE001
+                pass
+
+    # ---------------- 淘宝历史清理 ----------------
+    def _clean_history(self, reason: str) -> dict:
+        """删掉淘宝记录；失败只记一行日志，绝不影响会话。"""
+        if not history_cleanup_enabled():
+            return {}
+        try:
+            result = history_cleaner.purge(CDP_PROFILE_DIR)
+        except Exception as exc:  # noqa: BLE001
+            self._append_log(f"[site] 清理淘宝历史失败（{reason}，不影响跑批）：{exc}")
+            return {}
+        if result.get("urls"):
+            self._append_log(
+                f"[site] 已清掉浏览器历史里的淘宝记录 {result['urls']} 条"
+                f"（{reason}，访问 {result.get('visits', 0)} 次）"
+            )
+        elif not result.get("ok") and result.get("skipped") not in ("locked", "no-db", "not-app-profile"):
+            self._append_log(f"[site] 淘宝历史这次没清成（{reason}）：{result.get('error') or result.get('skipped')}")
+        return result
+
+    def _start_history_watch(self) -> None:
+        """浏览器关掉的那一刻把库里剩下的淘宝记录收干净。
+
+        运行中的删除由浏览器里的扩展负责（见 browser_ext/history_guard）：
+        Chromium 把 History 库锁成独占，外部进程连只读都打不开。这里只在
+        「端口不通 = 浏览器已退出」时才动库，避免每 10 秒撞一次锁。
+        """
+        if not history_cleanup_enabled():
+            self._append_log("[site] 淘宝历史清理已关闭（settings.json: clear_taobao_history）")
+            return
+        self._stop_history_watch()
+        try:
+            interval = history_clean_interval()
+            cdp_url = str(os.environ.get("TAOBAO_CDP_URL") or load_settings().get("cdp_url") or "").strip()
+            probe = (lambda: not cdp_endpoint_ok(cdp_url)) if cdp_url else None
+            self._history_watch = history_cleaner.HistoryWatcher(
+                CDP_PROFILE_DIR, interval=interval, log=self._append_log, probe=probe
+            ).start()
+            self._append_log(
+                f"[site] 历史清理就绪：浏览器里由扩展实时删除，关窗后每 {interval:g} 秒兜底清库"
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._history_watch = None
+            self._append_log(f"[site] 淘宝历史清理没起来（不影响跑批）：{exc}")
+
+    def _stop_history_watch(self) -> None:
+        watcher, self._history_watch = self._history_watch, None
+        if watcher is not None:
+            try:
+                watcher.stop()
             except Exception:  # noqa: BLE001
                 pass
 
@@ -1630,6 +1761,9 @@ class SessionRunner:
         with self._cmd_lock:
             proc = self._proc
             if proc is None:
+                # 会话早就不在了，但浏览器可能是最后才关的：历史里剩下的记录照清
+                self._stop_history_watch()
+                self._clean_history("会话已结束")
                 return self.status()
             if proc.poll() is None:
                 try:
@@ -1651,10 +1785,13 @@ class SessionRunner:
             self._reset_state()
             # 会话收工也照旧只留本批证据图：下一批开跑前要对着这些图核对「上次买了什么」
             self.cleanup_screenshots()
+            # 浏览器刚被关掉，这会儿清历史没有写锁竞争，最干净
+            self._clean_history("会话结束")
             return self.status()
 
     def _reset_state(self):
         self._stop_guard()  # 会话都停了，守卫也别再动人家窗口
+        self._stop_history_watch()
         self._browser_gone = False
         self._proc = None
         self._ready = False
@@ -1784,6 +1921,7 @@ class SessionRunner:
                 "started_at": self._started_at,
                 "last_error": self._last_error,
                 "repo": str(self._repo),
+                "history": history_cleaner.last_result(),
                 "logs": list(self._logs)[-60:],
             }
 

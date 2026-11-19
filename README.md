@@ -67,7 +67,7 @@ pip install -r requirements-dev.txt
 启动器挑解释器的顺序：**包内自带运行时**（`runtime\python`，便携版才有）→ 根目录 `.venv`
 （`安装环境.bat` 建的，会先验证它真能跑，拷来的坏 venv 会被跳过）→ 系统 PATH 里依赖齐全的 Python。
 
-两个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.13.6）。
+两个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.13.7）。
 
 打开 <http://127.0.0.1:8765/>。
 
@@ -117,10 +117,15 @@ cp settings.example.json settings.json
 
 - 登录态照常保留：登录 cookie 存在专用调试 profile（`.cdp-profile`）和 `taobao-session.json` 里，不用重新扫码。
 - 需要人工过验证 / 登录时，弹出的就是这个窗口，操作方式不变。
-- **搜索历史会写进这个专用 profile 的浏览器历史**，但它只留在本机、发布包不会带走；你日常用的 Edge  profile 完全不受影响。
-- 如果你希望工作窗口不写历史：设环境变量 `TAOBAO_PRIVATE_WINDOW=1` 启用无痕工作区。注意这会在原窗口之外**再开一个无痕窗口**，"显示淘宝窗口"时会同时看到两个——这是无痕的实现方式（Chromium 的 `new_context()` 就是另开窗口），不是故障。
+- **淘宝搜索记录不会留在浏览器历史里**，两层保证：
+  1. **浏览器内实时删**：`bom-site/browser_ext/history_guard` 扩展随调试浏览器加载（`--load-extension`），用浏览器自己的 `chrome.history` 接口，在每次访问淘宝系页面后一秒多就把那条记录删掉。实测导航到淘宝 1 秒后历史里就查不到了。
+  2. **关窗后兜底清库**：Chromium 打开 `History` 库时是**独占锁**，外部进程连只读都打不开（`database is locked`），所以只有在浏览器退出后（点「结束会话」/关窗口/下次启动前）才直接清 SQLite。扩展被企业策略禁用、或手动关掉时，靠这一层收尾。
+  - 只删 URL 命中 `taobao.com` / `tmall.com` / `taobao.net`，或标题带「淘宝 / 天猫」的行；同一个 profile 里顺手打开的别的网页（DeepSeek、本机 8765 等）一条不动。
+  - 只动项目自己的 `.cdp-profile`（带 `.bom-managed` 标记）。指到别处会直接拒绝，不会误删你日常 Edge 的历史。
+  - 想留着历史自己排查：`settings.json` 里设 `"clear_taobao_history": false`；兜底清库的轮询间隔用 `"history_cleanup_interval"`（默认 10 秒，最小 3 秒）。
+  - 历史面板是实时查库的，删完就查不到了；已经开着的面板重新点一下「刷新」即可。
 
-> 无痕只清「本机浏览器历史」。淘宝账号自己记的「搜索历史 / 我的足迹」是网站存在服务器上的，浏览器这层管不到——要清得去淘宝 App/网页里删。另外那些**已经**产生的旧记录不会被这次改动追溯删除，需要的话手动在 Edge 历史里按 `s.taobao.com` 搜一下删掉即可。
+> 浏览器这层只清「本机历史」。淘宝账号自己记的「搜索历史 / 我的足迹」是网站存在服务器上的，浏览器管不到——要清得去淘宝 App/网页里删。
 
 ### 2.2 自动过滑块（可选）
 
@@ -301,10 +306,10 @@ python runtests.py
 输出形如：
 
 ```text
-Python 3.14.4 · 37 个脚本 · UTF-8 输出
+Python 3.14.4 · 38 个脚本 · UTF-8 输出
   [PASS] test_engine.py                              0.4s
   ...
-37/37 套通过，共 1790 项断言，总耗时 42.7s
+38/38 套通过，共 1832 项断言，总耗时 49.1s
 ```
 
 `runtests.py` 做三件事，都是为了不再出现「测试没跑起来却以为挂了」：
@@ -355,6 +360,7 @@ python test_cart_view_ui.py           # 购物车维护区块的前端结构
 python test_cart_quick_clear.py       # 常驻清空按钮（没选商品也能清车）
 python test_same_shop.py              # 同店合并（阻容去同一家店，运费只算一次）
 python test_crystal_freq.py           # 晶振频率识别（32.768kHz / 32K768 / 32768）
+python test_history_cleaner.py        # 淘宝历史清理（只删淘宝、只动专用 profile）
 python test_buy_guard.py              # 加购三态确认与金额闸门
 python test_query_fallback.py         # 搜索词回退（词 1 全被门槛拒时换词）
 python test_private_window.py         # 无痕工作窗口与登录 cookie 回写
@@ -363,7 +369,7 @@ python test_settings.py               # 配置回落 example、登录态目录�
 python test_integration.py            # 假会话端到端（批量→对账→删车；HTTP 路由/同源/导出）
 ```
 
-以上 37 套（含 1 套端到端）纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
+以上 38 套（含 1 套端到端）纯 Python、不需要浏览器；涉及真实淘宝的路径需要调试版 Edge + 已登录会话。
 另有 `python test_http.py`：需要服务**已经在 8765 跑着**，只做 HTTP 冒烟打印，不断言，故不进 CI。
 所有测试都把批量进度隔离到临时目录，不会碰到 `runs/` 里的真实进度。
 

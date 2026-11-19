@@ -124,6 +124,15 @@
       var errNode = row("最近错误", s.last_error, "bad");
       errNode.forEach(function (n) { frag.appendChild(n); });
     }
+    var h = data.history || {};
+    var hl = h.last || {};
+    var htext = hl.at
+      ? "扩展实时删；关窗后兜底 " + hl.at.slice(11) + " 清 " + (Number(hl.urls) || 0) + " 条"
+      : "扩展实时删除（关窗后再兜底清库）";
+    if (h.enabled === false) htext = "已关闭（settings.json: clear_taobao_history）";
+    row("淘宝历史", htext, h.enabled === false ? "warn" : "").forEach(function (n) {
+      frag.appendChild(n);
+    });
 
     frag.appendChild(group("日志"));
     var runs = data.runs || {};

@@ -259,6 +259,23 @@ def _session_info() -> dict[str, Any]:
     }
 
 
+def _history_info() -> dict[str, Any]:
+    """淘宝历史清理状态。用户问「历史里怎么还有」时，这行就是答案。"""
+    try:
+        import history_cleaner
+
+        last = history_cleaner.last_result()
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    try:
+        import taobao_runner as tr
+
+        enabled: bool | None = bool(tr.history_cleanup_enabled())
+    except Exception:  # noqa: BLE001
+        enabled = None
+    return {"enabled": enabled, "last": last}
+
+
 def _runs_info() -> dict[str, Any]:
     rd = runs_dir()
     files = [p for p in rd.glob("*") if p.is_file()]
@@ -340,6 +357,7 @@ def summary(include_logs: bool = True) -> dict[str, Any]:
         "deps": _deps_info(),
         "browser": _browser_info(),
         "session": _session_info(),
+        "history": _history_info(),
         "runs": _runs_info(),
         "disk": _disk_info(),
         "logs": log_files(),

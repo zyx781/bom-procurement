@@ -75,6 +75,15 @@ check("仍带独立 profile", any(a.startswith("--user-data-dir=") for a in args
 check("窗口位置在屏幕内", "--window-position=100,60" in args, repr(args))
 check("不再把窗口放到屏幕外", not any(a == "--window-position=-2000,0" for a in args), repr(args))
 
+# ---- 淘宝历史清理由浏览器里的扩展实时完成（外部进程打不开独占锁） ----
+check("带历史清理扩展", any(a.startswith("--load-extension=") and "history_guard" in a for a in args), repr(args))
+check("只加载这一个扩展",
+      any(a.startswith("--disable-extensions-except=") and "history_guard" in a for a in args), repr(args))
+ext_dir = BASE / "browser_ext" / "history_guard"
+check("扩展文件随包存在", (ext_dir / "manifest.json").is_file() and (ext_dir / "sw.js").is_file())
+check("扩展在淘宝启动页之前（URL 必须是最后一个实参）",
+      args.index("https://www.taobao.com") == len(args) - 1, repr(args[-3:]))
+
 # ---- 默认单窗口：无痕工作区默认关，显式开才生效 ----
 adapter_src = (SKILL := BASE.parent / "Taobao-Search-Skill" / "scripts" / "browser_adapter.py").read_text(encoding="utf-8")
 check("无痕默认关闭", 'os.environ.get("TAOBAO_PRIVATE_WINDOW") or "0"' in adapter_src)
@@ -90,6 +99,8 @@ check("launcher 带一个淘宝启动页", "https://www.taobao.com" in line, lin
 check("launcher 保留防还原气泡参数", "--hide-crash-restore-bubble" in line, line)
 check("launcher 窗口开在屏幕内", "--window-position=100,60" in line, line)
 check("launcher 不再把窗口放到屏幕外", "--window-position=-2000" not in line, line)
+check("launcher 手动入口也带历史清理扩展",
+      "--load-extension" in ps1 and "--disable-extensions-except" in ps1 and "{2}" in line, line)
 
 print(f"\nRESULT: {PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

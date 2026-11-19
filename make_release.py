@@ -8,7 +8,7 @@
 
 包内结构（顶层带版本号，解压不会散一地）：
 
-    BOM采购台-v0.13.6/
+    BOM采购台-v0.13.7/
       VERSION  README.md  使用说明.md  LICENSE
       requirements*.txt
       安装环境.bat  启动BOM选型台.bat  打开调试版Edge.bat  检查电脑环境.bat
@@ -206,7 +206,9 @@ def verify(zip_path: Path) -> list[str]:
         base = tmp / APP_NAME
         app = base / "bom-site"
         for need in ("server.py", "engine.py", "static/index.html", "launcher.ps1",
-                     "doctor.ps1", "settings.example.json"):
+                     "doctor.ps1", "settings.example.json",
+                     "browser_ext/history_guard/manifest.json",
+                     "browser_ext/history_guard/sw.js"):
             if not (app / need).exists():
                 problems.append(f"解压后缺文件：bom-site/{need}")
         if not (base / ".venv").exists():

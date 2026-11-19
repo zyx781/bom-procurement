@@ -6,6 +6,8 @@
   "screenshot_keep": 0,
   "same_shop_grouping": true,
   "shipping_cost_per_shop": 6,
+  "clear_taobao_history": true,
+  "history_cleanup_interval": 10,
   "max_line_cost": {
     "passive": 200,
     "connector": 300,

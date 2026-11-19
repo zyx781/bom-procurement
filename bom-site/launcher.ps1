@@ -575,7 +575,14 @@ function Start-DebugEdge {
     # 以前这里传 --window-position=-2000,0，窗口开在屏幕外 —— 用户看到的是
     # 「界面一开始就是隐藏的，我该怎么登录」。现在不自动藏了：窗口开在屏幕内，
     # 不想看就点页面里的「藏起来」，比程序替用户猜时机好讲。
-    $argLine = '--remote-debugging-port={0} --user-data-dir="{1}" --no-first-run --no-default-browser-check --window-position=100,60 --window-size=1440,940 --hide-crash-restore-bubble https://www.taobao.com' -f $CdpPort, $ProfileDir
+    # 淘宝历史清理扩展：Chromium 的 History 库开着时是独占锁，外部进程删不了，
+    # 只有浏览器自己能删（chrome.history）。扩展只删淘宝/天猫，其他网页不动。
+    $extDir = Join-Path $PSScriptRoot 'browser_ext\history_guard'
+    $extArgs = ''
+    if (Test-Path (Join-Path $extDir 'manifest.json')) {
+        $extArgs = '--load-extension="{0}" --disable-extensions-except="{0}"' -f $extDir
+    }
+    $argLine = '--remote-debugging-port={0} --user-data-dir="{1}" {2} --no-first-run --no-default-browser-check --window-position=100,60 --window-size=1440,940 --hide-crash-restore-bubble https://www.taobao.com' -f $CdpPort, $ProfileDir, $extArgs
     $startedEdgeAt = Get-Date
     $already = @(Get-DebugEdgeProcesses)
     if ($already.Count -gt 0) {

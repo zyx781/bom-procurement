@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "BOM 采购台 · 淘宝历史清理",
+  "version": "1.0.0",
+  "description": "只删淘宝/天猫的本地浏览记录，其他网页不动。由 BOM 采购台随调试浏览器一起加载。",
+  "permissions": ["history", "alarms", "tabs"],
+  "background": {
+    "service_worker": "sw.js"
+  }
+}

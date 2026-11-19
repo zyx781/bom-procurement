@@ -161,6 +161,47 @@ try:
     prog2 = json.loads(tr.PROGRESS_FILE.read_text(encoding="utf-8"))
     check("失败原因落盘", "没有可用结果" in (prog2["lines"]["1"].get("message") or ""), prog2["lines"]["1"])
 
+    print("== 单行跑完：批次计数与阶段必须同步（复测 P1） ==")
+    r5 = make_runner()
+    r5._batch["results"] = []
+    r5._batch["done"] = 0
+    r5._batch["total"] = 0
+    r5._batch["phase"] = "未开始"
+    r5._add_line_to_cart = lambda line, prefer_cheap, max_candidates, dry_run=False: {
+        "line_no": line.get("line_no"),
+        "headline": line["decision"]["headline"],
+        "qty": line.get("qty"),
+        "status": "ok",
+        "message": "已加入购物车",
+        "final_price": 3.5,
+        "cost": 28.0,
+        "sku": [{"label": "阻值", "value": "1kΩ"}],
+        "attempts": [{"ok": True}],
+    }
+    r5.run_line(line_no=1)
+    st = r5.batch_status()
+    check("done 不再是 0", st.get("done") == 1, st.get("done"))
+    check("total 对齐当前 BOM", st.get("total") == len(LINES), st.get("total"))
+    check("phase 不是「未开始」", (st.get("phase") or "") != "未开始", st.get("phase"))
+    check("phase 明写单行执行", "单行执行" in (st.get("phase") or ""), st.get("phase"))
+    check("phase 说清还差几行", "还差" in (st.get("phase") or ""), st.get("phase"))
+    check("单行标记带行号与状态", (st.get("single_line") or {}).get("line_no") == 1
+          and (st.get("single_line") or {}).get("status") == "ok", st.get("single_line"))
+    check("整批没跑完就不写 finished_at", not st.get("finished_at"), st.get("finished_at"))
+
+    print("== 全部行都定局：单行重跑后可以收尾 ==")
+    r6 = make_runner()
+    r6._batch["results"] = [
+        {"line_no": 1, "status": "failed", "attempts": []},
+        {"line_no": 2, "status": "ok", "attempts": []},
+    ]
+    r6._add_line_to_cart = r5._add_line_to_cart
+    r6.run_line(line_no=1)
+    st6 = r6.batch_status()
+    check("done 追平 total", st6.get("done") == st6.get("total") == 2, (st6.get("done"), st6.get("total")))
+    check("全部定局 → 已结束", (st6.get("phase") or "").startswith("已结束"), st6.get("phase"))
+    check("finished_at 有值", bool(st6.get("finished_at")), st6.get("finished_at"))
+
     print("== 异常：SessionError 转成 failed 结果而不是抛给前端 ==")
     r3 = make_runner()
     r3._batch["results"] = []

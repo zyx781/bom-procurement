@@ -978,6 +978,10 @@ CART_LIMIT_STOP = max(1, int(os.environ.get("TAOBAO_CART_STOP", "190")))
 UNCERTAIN_COOL_BASE_S = int(os.environ.get("TAOBAO_UNC_COOL", "60"))
 UNCERTAIN_COOL_MAX_S = int(os.environ.get("TAOBAO_UNC_COOL_MAX", "300"))
 
+# 一行「已定局」的状态：进度条和 done 计数都只认这几个。
+# 单行执行也要按同一口径算，否则会出现「第 1 行已加购」但进度 0/1 未开始。
+SETTLED_STATUS = ("ok", "failed", "uncertain", "skipped", "removed")
+
 # 撞验证的处置顺序（2026-11-08 规则变更）：
 #   ① 先自己扛 —— 执行层在下一次 search 前会刷新页面自恢复，这里立刻重试同一行；
 #   ② 自动重试用完还是被拦（= 刷新后仍然出不来商品），才等人工。
@@ -1246,7 +1250,7 @@ class SessionRunner:
             )
         # removed 也是定局：这一行本来加购成功，被「删最近一批」从车里删掉了。
         # 不算定局的话，重启装载时会把整批当成「没跑完」，页面挂「服务重启」文案。
-        settled = ("ok", "failed", "uncertain", "skipped", "removed")
+        settled = SETTLED_STATUS
         has_pending = any(r["status"] not in settled for r in results)
         # P2-4：上一轮已经跑完（没有 pending 行）就不要说「服务重启」——
         # 那是中断态文案，会误导人以为有一批没跑完。
@@ -2792,7 +2796,53 @@ class SessionRunner:
                 if not self._batch.get("total"):
                     self._batch["total"] = len(lines)
         self._save_single_result(res, total_lines=len(lines))
+        self._sync_single_line_state(res, total_lines=len(lines))
         return res
+
+    def _sync_single_line_state(self, res: dict, total_lines: int = 0) -> None:
+        """单行跑完，把批次计数器一起改对（复测 P1）。
+
+        以前只往 results 里塞一条，done 还是 0、phase 还是「未开始」：
+        页面同一屏写着「第 1 行已加购」和 0/1 未开始，刷新后更没法判断进度。
+        单行 ≠ 整批完成，所以：
+        - done 按「已定局行数」算（与跑批同一口径），total 跟当前 BOM 行数对齐；
+        - phase 明写「单行执行」，并置 single_line 标记给前端；
+        - 只有所有行都定局才写 finished_at / 「已结束」，否则保持未完成态。
+        """
+        ln = res.get("line_no")
+        status = str(res.get("status") or "")
+        settled_set = set(SETTLED_STATUS)
+        with self._state_lock:
+            results = list(self._batch.get("results") or [])
+            done = sum(1 for r in results if str(r.get("status") or "") in settled_set)
+            total = max(int(total_lines or 0), int(self._batch.get("total") or 0), len(results))
+            all_done = total > 0 and done >= total
+            label = {
+                "ok": "已加购",
+                "failed": "失败",
+                "uncertain": "待核对",
+                "skipped": "跳过",
+                "removed": "已删车",
+            }.get(status, status or "已执行")
+            self._batch["total"] = total
+            self._batch["done"] = done
+            self._batch["single_line"] = {
+                "line_no": ln,
+                "status": status,
+                "at": datetime.now().isoformat(timespec="seconds"),
+            }
+            if all_done:
+                self._batch["phase"] = f"已结束（单行重跑第 {ln} 行：{label}）"
+                self._batch["finished_at"] = self._batch.get("finished_at") or datetime.now().isoformat(
+                    timespec="seconds"
+                )
+            else:
+                # 还剩行没跑完：不许说「已结束」，否则用户以为整批完成了
+                self._batch["phase"] = (
+                    f"单行执行：第 {ln} 行{label}（整批还差 {max(0, total - done)} 行）"
+                )
+                self._batch["finished_at"] = None
+            self._batch["stopped_reason"] = None
 
     def _save_single_result(self, res: dict, total_lines: int = 0) -> None:
         """单行结果并入进度文件（只覆盖这一行）。"""
@@ -2839,7 +2889,7 @@ class SessionRunner:
             for r in self._batch.get("results") or []:
                 # skipped 也落盘：不买/无搜索词是**人工定局**，不写的话刷新后
                 # 这两行又变回「没跑过」，用户以为漏了（14/28 行实测）。
-                if r.get("status") not in ("ok", "failed", "uncertain", "removed", "skipped"):
+                if r.get("status") not in SETTLED_STATUS:
                     continue
                 ln = r.get("line_no")
                 if ln is None:
@@ -3133,7 +3183,7 @@ class SessionRunner:
                         for r in self._batch["results"]
                         # skipped 也算「处理过了」：无搜索词的残缺行和用户中途
                         # 停止后剩下的行都是 skipped，不算进去的话进度条永远差几行。
-                        if r["status"] in ("ok", "failed", "uncertain", "skipped", "removed")
+                        if r["status"] in SETTLED_STATUS
                     )
                 # 每行都落盘：随时暂停/关机都不丢进度，下次接着跑
                 # 演练模式不写进度：否则假的「ok 无金额」会覆盖真实进度

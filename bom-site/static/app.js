@@ -273,6 +273,9 @@
     renderIntakeBar();
     renderSummary();
     renderLineList();
+    // 分析结果到位后要重判一次进度条：批次状态往往先于清单到达，
+    // 那时 batchFits() 算不出「是不是这份清单」，会一直挂着「上一批（另一份清单）」。
+    if (state.batch) renderBatch(state.batch);
     renderScoreSelect();
     renderExecSelect();
     const idx = state.activeIndex >= 0 ? state.activeIndex : 0;
@@ -1685,6 +1688,8 @@
       ? st.phase || "准备中"
       : stale
       ? "上一批（另一份清单）的记录，不写进这张表"
+      : st.single_line && st.single_line.line_no != null
+      ? `单行执行 #${st.single_line.line_no}${BATCH_LABEL[st.single_line.status] ? " " + BATCH_LABEL[st.single_line.status] : ""}`
       : "已停止";
     box.innerHTML = `<span class="rail-num">${done}/${total}</span>
       <span class="rail-track"><span class="rail-fill" style="width:${pct}%"></span></span>
@@ -1883,8 +1888,15 @@
       const money = st.cost_total
         ? `，合计 ${fmtMoney(st.cost_total)}${st.cost_lines ? `（${st.cost_lines} 行有实付价）` : ""}`
         : "";
+      // 单行执行过：进度条上的 1/53 是「这一行定局了」，别让人当成整批跑完
+      const sl = st.single_line && st.single_line.line_no != null ? st.single_line : null;
+      const slNote = sl
+        ? `单行执行：第 ${sl.line_no} 行${BATCH_LABEL[sl.status] || ""}（进度 ${st.done}/${st.total}${
+            st.done < st.total ? "，整批未跑完" : ""
+          }）；`
+        : "";
       $("#batch-note").textContent =
-        `${warn}上次批量：已加购 ${okn} 行${money}${aside ? `，${aside}` : ""}` +
+        `${warn}${slNote}${sl ? "整批" : "上次批量"}：已加购 ${okn} 行${money}${aside ? `，${aside}` : ""}` +
         `${st.stopped_reason ? "（" + st.stopped_reason + "）" : ""}${tail}`;
     } else if (st.progress && st.progress.ok_count > 0) {
       const money = st.cost_total ? `，合计 ${fmtMoney(st.cost_total)}` : "";
@@ -2249,6 +2261,11 @@
       $("#exec-detail").innerHTML = '<div class="empty">选一个候选打开，SKU 会按 BOM 参数自动匹配。</div>';
     });
   }
+
+  // 页脚地址跟着实际访问地址走：服务可以用 --port 8768 起，写死 8765 会让人照着去排查。
+  // 复测 P2：8768 上跑着，页脚还写着 127.0.0.1:8765。
+  const footLocal = $("#foot-local");
+  if (footLocal && location.host) footLocal.textContent = `本地运行 · ${location.host}`;
 
   wire();
   // 截图会在批量结束后自动清掉，旧图 404 时直接收起，别在页面上留个裂图

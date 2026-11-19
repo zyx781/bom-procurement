@@ -149,7 +149,7 @@ try:
 finally:
     runner.stop(timeout=3)
 
-print("\n== 3. 已登录：就绪后自动藏窗口 ==")
+print("\n== 3. 已登录：就绪后也不自动藏（窗口留给用户自己决定） ==")
 runner, hidden = make_runner("ready_logged_in")
 try:
     runner.start()
@@ -157,12 +157,12 @@ try:
     check("会话就绪", ok)
     st = runner.status()
     check("login_state 识别为 ok", st["login_state"] == "ok", st["login_state"])
-    check("就绪后触发隐藏", wait_for(lambda: bool(hidden), timeout=3.0), hidden)
+    check("就绪后不自动藏窗口", hidden == [], hidden)
     check("就绪后不报卡住", st["stalled"] is False)
 finally:
     runner.stop(timeout=3)
 
-print("\n== 4. 就绪但没登录：绝不藏窗口 ==")
+print("\n== 4. 就绪但没登录：同样不藏窗口 ==")
 runner, hidden = make_runner("ready_login_failed")
 try:
     runner.start()
@@ -171,7 +171,7 @@ try:
     st = runner.status()
     check("login_state 是 failed", st["login_state"] == "failed", st["login_state"])
     time.sleep(1.0)
-    check("没登录成功就不藏窗口（否则人还没扫码浏览器就没了）", hidden == [], hidden)
+    check("没登录成功也不藏窗口（登录页要一直看得见）", hidden == [], hidden)
     check("就绪之后不再报卡住", st["stalled"] is False)
 finally:
     runner.stop(timeout=3)

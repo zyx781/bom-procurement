@@ -70,6 +70,10 @@ check("淘宝启动页恰好一个",
 check("保留防还原气泡参数", "--hide-crash-restore-bubble" in args, repr(args))
 check("仍带调试端口", any(a.startswith("--remote-debugging-port=") for a in args), repr(args))
 check("仍带独立 profile", any(a.startswith("--user-data-dir=") for a in args), repr(args))
+# 窗口必须开在屏幕内：登录/过验证都要人看得见（2026-11-19 现场：窗口开在 -2000，
+# 用户只看到「界面一开始就是隐藏的，我该怎么登录」）。
+check("窗口位置在屏幕内", "--window-position=100,60" in args, repr(args))
+check("不再把窗口放到屏幕外", not any(a == "--window-position=-2000,0" for a in args), repr(args))
 
 # ---- 默认单窗口：无痕工作区默认关，显式开才生效 ----
 adapter_src = (SKILL := BASE.parent / "Taobao-Search-Skill" / "scripts" / "browser_adapter.py").read_text(encoding="utf-8")
@@ -84,6 +88,8 @@ line = arg_lines[0] if arg_lines else ""
 check("launcher 不恢复上次标签", "--restore-last-session" not in line, line)
 check("launcher 带一个淘宝启动页", "https://www.taobao.com" in line, line)
 check("launcher 保留防还原气泡参数", "--hide-crash-restore-bubble" in line, line)
+check("launcher 窗口开在屏幕内", "--window-position=100,60" in line, line)
+check("launcher 不再把窗口放到屏幕外", "--window-position=-2000" not in line, line)
 
 print(f"\nRESULT: {PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

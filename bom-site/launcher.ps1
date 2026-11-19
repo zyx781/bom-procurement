@@ -281,15 +281,19 @@ function Invoke-Loopback {
     $req.Method = $Method
     $req.Timeout = $TimeoutSec * 1000
     $req.ReadWriteTimeout = $TimeoutSec * 1000
-    if ($null -ne $Body) {
+    # 坑：参数声明成 [string]$Body = $null 时，PowerShell 会把 $null 转成空字符串，
+    # 于是 `$null -ne $Body` 恒为真，GET 请求也会去 GetRequestStream()，
+    # 抛 "Cannot send a content-body with this verb-type"。
+    # 后果不是报错那么明显：Test-Cdp 里被 catch 吞掉，永远返回 null ——
+    # 浏览器明明开着，启动器却说「CDP 没有响应」，体检也永远显示「未运行」。
+    if (-not [string]::IsNullOrEmpty($Body)) {
         $bytes = [Text.Encoding]::UTF8.GetBytes($Body)
         $req.ContentType = "application/json"
         $req.ContentLength = $bytes.Length
         $stream = $req.GetRequestStream()
         $stream.Write($bytes, 0, $bytes.Length)
         $stream.Close()
-    }
-    if ($Method -eq "POST" -and $null -eq $Body) {
+    } elseif ($Method -eq "POST") {
         $req.ContentLength = 0
     }
     $resp = $req.GetResponse()
@@ -566,32 +570,72 @@ function Start-DebugEdge {
     # 重新打开，叠加成一片重复页面）。但保留一个淘宝 URL：默认窗口一出来就是
     # 淘宝，否则会多一个「新建标签页」空白窗口。无痕工作区默认已关，全程一个画面。
     # --hide-crash-restore-bubble 防止「还原页面」气泡在主窗口藏起来后露一条在屏幕边缘。
-    $argLine = '--remote-debugging-port={0} --user-data-dir="{1}" --no-first-run --no-default-browser-check --window-position=-2000,0 --window-size=1500,1000 --hide-crash-restore-bubble https://www.taobao.com' -f $CdpPort, $ProfileDir
-    try {
-        Start-Process -FilePath $edge -ArgumentList $argLine | Out-Null
-    } catch {
-        Fail "无法启动 Edge" $_.Exception.Message
+    #
+    # 窗口位置必须落在屏幕内：这个入口的用途就是「打开浏览器给人登录/过验证」。
+    # 以前这里传 --window-position=-2000,0，窗口开在屏幕外 —— 用户看到的是
+    # 「界面一开始就是隐藏的，我该怎么登录」。现在不自动藏了：窗口开在屏幕内，
+    # 不想看就点页面里的「藏起来」，比程序替用户猜时机好讲。
+    $argLine = '--remote-debugging-port={0} --user-data-dir="{1}" --no-first-run --no-default-browser-check --window-position=100,60 --window-size=1440,940 --hide-crash-restore-bubble https://www.taobao.com' -f $CdpPort, $ProfileDir
+    $startedEdgeAt = Get-Date
+    $already = @(Get-DebugEdgeProcesses)
+    if ($already.Count -gt 0) {
+        # 已经有调试版 Edge 在跑：再 Start-Process 只是把参数「转发」给已有实例，
+        # 新进程立刻退出、端口还是原来那个 —— 看起来就是「点了没反应 / 等半天没 CDP」。
+        Write-Row "调试 Edge 进程" "已有 $($already.Count) 个，直接复用" $C_Warn
+    } else {
+        try {
+            Start-Process -FilePath $edge -ArgumentList $argLine | Out-Null
+        } catch {
+            Fail "无法启动 Edge" $_.Exception.Message
+        }
     }
-    Write-Row "启动" "已发出，等待 CDP 就绪" $C_Dim
+    Write-Row "启动" "已发出，等待调试端口就绪" $C_Dim
 
+    # 每 5 秒报一次进度：冷启动（Edge 刚更新完 / 机械硬盘 / 杀软首次扫描）
+    # 可能等十几秒，只转圈不说话，用户会以为卡死了。
     $cdp = $null
-    $deadline = (Get-Date).AddSeconds(20)
+    $deadline = (Get-Date).AddSeconds(45)
+    $nextNote = (Get-Date).AddSeconds(5)
     while ((Get-Date) -lt $deadline) {
         Start-Sleep -Milliseconds 500
         $cdp = Test-Cdp
         if ($cdp) { break }
+        if ((Get-Date) -ge $nextNote) {
+            Write-Row "等待调试端口" "已等 $([int]((Get-Date) - $startedEdgeAt).TotalSeconds) 秒" $C_Dim
+            $nextNote = (Get-Date).AddSeconds(5)
+        }
     }
     if (-not $cdp) {
-        Fail "Edge 已启动，但 $CdpPort 没有给出 CDP 响应" `
-            "确认没有别的 Edge 实例占用该 profile；详细原因见淘宝会话状态。"
+        # 浏览器窗口开出来了、只是调试端口没响应：不要报「失败」吓人。
+        # 会话启动时会再连一次；真被组策略/安全软件挡住，检查电脑环境.bat 会指明。
+        $edgeProcs = @(Get-DebugEdgeProcesses)
+        if ($edgeProcs.Count -gt 0) {
+            Write-Row "CDP $CdpPort" "暂未响应（浏览器已打开）" $C_Warn
+            Write-Footer "下一步：双击 启动BOM选型台.bat，点「启动淘宝会话」；连上后它会自己把窗口摆到屏幕内。" $C_Dim
+            Write-Footer "如果一直连不上，跑「检查电脑环境.bat」，看调试端口是不是被拦了。" $C_Dim
+            Write-Host ""
+            Start-Sleep -Seconds 4
+            return
+        }
+        Fail "Edge 没有起来，$CdpPort 也没有给出 CDP 响应" `
+            "跑「检查电脑环境.bat」看 Edge 与调试端口状态。"
     }
     Write-Row "CDP $CdpPort" "就绪" $C_Ok
     Write-Row "浏览器" ([string]$cdp.Browser) $C_Ok
 
+    # Chromium 会从 profile 里恢复上次的窗口摆放（用户点过「藏起来」就是 -2000, 0），
+    # 命令行 --window-position 不一定盖得住。用户点开这个 bat 只听到声音、
+    # 看不到窗口，自然也就没法登录。这里主动摆一次（不激活）。
+    $pyWin = Resolve-Python
+    if ($pyWin.Exe) {
+        Push-Location $AppDir
+        try { & $pyWin.Exe "window_pos.py" "show" 2>$null | Out-Null } catch { } finally { Pop-Location }
+    }
+
     Write-Host ""
     Write-Host ("  " + ("-" * 60)) -ForegroundColor $C_Dim
     Write-Footer "首次使用：在浏览器里手动登录淘宝，登录态会留在这个独立 profile 里。" $C_Warn
-    Write-Footer "窗口默认停在屏幕外，不抢前台；网页里可点「显示淘宝窗口」。" $C_Dim
+    Write-Footer "窗口已开在屏幕内，可直接登录；不想看就点页面里的「藏起来」。" $C_Dim
     Write-Footer "下一步：双击 启动BOM选型台.bat" $C_Ok
     Write-Host ""
     Write-Footer "本窗口 4 秒后自动关闭。" $C_Dim

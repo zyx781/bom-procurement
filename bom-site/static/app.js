@@ -1076,7 +1076,9 @@
     text.textContent = label;
     task.textContent = st.task_id ? `${st.task_id}  pid ${st.pid || "-"}` : "";
     warn.textContent = st.verification
-      ? "请在浏览器里手动完成验证，完成后点右侧按钮（或等它自动恢复）。"
+      ? "请在浏览器里手动完成验证，完成后点右侧按钮（或等它自动恢复）。窗口看不见就点上方「显示淘宝窗口」。"
+      : st.waiting_login
+      ? "登录页就在那个调试版 Edge 窗口里（不是新窗口）。找不到窗口就点上方「显示淘宝窗口」把它移回屏幕内。"
       : st.stalled
       ? `会话进程还在，但浏览器 ${
           Math.round(st.startup_timeout || 45)

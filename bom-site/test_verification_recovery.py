@@ -266,11 +266,11 @@ with SliderSolver._tight_timeout(NoTimeoutPage(), 2000):
     _tight_ok = True
 check("假 Page 无 set_default_timeout → 跳过且不炸", _tight_ok)
 
-# auto-hide：用户主动显示后，本会话不再自动藏回。
+# 窗口策略（2026-11-19 简化）：不自动藏，点「显示淘宝窗口」就是一次显式操作。
 _runner_src = (BASE / "taobao_runner.py").read_text(encoding="utf-8")
 _show_body = _runner_src.split("def show_browser", 1)[1].split("def ", 1)[0]
-check("用户点显示 → 标记 _autohide_done（不再被自动藏）",
-      "_autohide_done = True" in _show_body, _show_body[:300])
+check("显示窗口不抢前台（window_pos.show）", "window_pos.show(" in _show_body, _show_body[:300])
+check("不再有「自动藏」标记", "_autohide_done" not in _runner_src)
 
 print(f"\nRESULT: {PASS} passed, {FAIL} failed")
 raise SystemExit(1 if FAIL else 0)

@@ -930,6 +930,12 @@ def ensure_debug_browser(cdp_url: str, wait_seconds: float = 25.0, log=None) -> 
         f"--user-data-dir={CDP_PROFILE_DIR}",
         "--no-first-run",
         "--no-default-browser-check",
+        # 窗口必须一出来就在屏幕内：登录、过验证都要人盯着这个窗口。
+        # 以前这里不给位置，profile 又记着上次「藏到屏幕外」时的坐标 (-2000,0)，
+        # 新会话开出来就是一个屏幕外的窗口 —— 用户看到的是「界面一开始就是隐藏的，
+        # 我该怎么登录」。显式给位置，别让上次的坐标决定这次登录页在哪。
+        "--window-position=100,60",
+        "--window-size=1440,940",
         # 上次会话是被 taskkill 收掉的（结束会话就是这么关的），Chromium 会认定
         # 「上次异常退出」并在窗口右下角弹「还原页面」气泡。那个气泡依附主窗口，
         # 主窗口藏到屏幕外时它会被夹回桌面左上角——用户看到的就是屏幕边上露一条。
@@ -959,6 +965,9 @@ def ensure_debug_browser(cdp_url: str, wait_seconds: float = 25.0, log=None) -> 
         if cdp_endpoint_ok(cdp_url):
             if log:
                 log(f"[site] 调试浏览器已就绪 {cdp_url}")
+            if ensure_browser_visible(cdp_url):
+                if log:
+                    log("[site] 浏览器窗口之前在屏幕外，已移回屏幕内（登录要看得见）")
             return
     raise SessionError(
         f"调试浏览器起来了但 {wait_seconds:g} 秒内没监听端口 {port}。"
@@ -966,6 +975,33 @@ def ensure_debug_browser(cdp_url: str, wait_seconds: float = 25.0, log=None) -> 
         "先全部关掉再点一次“启动淘宝服务”。",
         "CDP_NOT_READY",
     )
+
+
+def ensure_browser_visible(cdp_url: str) -> bool:
+    """把调试浏览器窗口摆回屏幕内；本来就在屏幕内就返回 False。
+
+    为什么需要主动摆：Chromium 会从 profile 里恢复上次的窗口摆放。上一个会话
+    自动把窗口藏到 (-2000, 0)，下次启动即使命令行给了 --window-position，
+    也可能仍旧恢复成屏幕外 —— 用户看到的是「登录页开了，但我找不到窗口」。
+    这里只移动窗口，不激活（window_pos.show 用 SW_SHOWNOACTIVATE）。
+    """
+    if _window_pos is None:
+        return False
+    try:
+        pids = _window_pos.debug_edge_pids_for(cdp_port(cdp_url))
+        if not pids:
+            return False
+        rects = _window_pos.windows_of(pids)
+        if not rects:
+            return False
+        # 只看「像窗口的」矩形：窗口还没真正显示时 Chromium 会报
+        # (-21333, -21333, …) 这种几十像素的占位矩形，面积比较没有意义。
+        real = [r for r in rects.values() if (r[2] - r[0]) >= 200 and (r[3] - r[1]) >= 200]
+        if any(_window_pos.on_screen(r) for r in real):
+            return False
+        return _window_pos.show(pids, _window_pos.SCREEN_POS)
+    except Exception:  # noqa: BLE001 —— 摆窗口失败不该影响会话启动
+        return False
 
 # 节奏参数：淘宝的验证码是按「短时间内的页面导航次数」触发的，
 # 调行间隔只能拖长到某个点，真正管用的是周期性停一段让风控计数回落。
@@ -1205,7 +1241,6 @@ class SessionRunner:
         self._last_error = None
         self._guard = None  # 前台守卫：跑批时别让浏览器盖住用户正在用的软件
         self._guard_lock = threading.RLock()
-        self._autohide_done = False
         self._browser_gone = False
         self._batch = {
             "running": False,
@@ -1318,6 +1353,10 @@ class SessionRunner:
                 if not cdp_endpoint_ok(cdp_url):
                     self._append_log(f"[site] {cdp_url} 未就绪，正在自动启动调试浏览器 …")
                     ensure_debug_browser(cdp_url, log=self._append_log)
+                elif ensure_browser_visible(cdp_url):
+                    # 浏览器早就在跑（可能是上一个会话留的，或被用户点过「藏起来」）：
+                    # 启动会话时摆回屏幕内，否则登录页/验证码都在屏幕外。
+                    self._append_log("[site] 浏览器窗口之前在屏幕外，已移回屏幕内")
                 env["TAOBAO_CDP_URL"] = cdp_url
 
             # Pace profile: "fast" trims the simulated human pauses, the
@@ -1472,11 +1511,7 @@ class SessionRunner:
         return ok
 
     def show_browser(self, pos: tuple[int, int] | None = None) -> bool:
-        """把调试浏览器移回屏幕内（人工过验证 / 用户主动看），不抢前台。
-
-        用户主动点过「显示」= 接管窗口显示权：本会话之后 status() 不再自动
-        藏回屏幕外（否则启动期间点显示，ready 一到就被藏，看着像「闪一下就没」）。
-        """
+        """把调试浏览器移回屏幕内，不抢前台。"""
         if _window_pos is None:
             return False
         guard = self._guard
@@ -1486,13 +1521,10 @@ class SessionRunner:
             except Exception:  # noqa: BLE001
                 pass
         try:
-            ok = _window_pos.show(self._guard_pids(), pos or _window_pos.SCREEN_POS)
+            return _window_pos.show(self._guard_pids(), pos or _window_pos.SCREEN_POS)
         except Exception as exc:  # noqa: BLE001
             self._append_log(f"[site] 显示浏览器窗口失败：{exc}")
             return False
-        if ok:
-            self._autohide_done = True  # 用户已主动接管，别再自动藏
-        return ok
 
     def stop(self, timeout: float = 8.0) -> dict:
         # UI 承诺「结束会话会关闭淘宝浏览器窗口」——只 quit 会话进程的话
@@ -1533,7 +1565,6 @@ class SessionRunner:
 
     def _reset_state(self):
         self._stop_guard()  # 会话都停了，守卫也别再动人家窗口
-        self._autohide_done = False
         self._browser_gone = False
         self._proc = None
         self._ready = False
@@ -1621,22 +1652,10 @@ class SessionRunner:
         # 不用重启会话，也不用点任何按钮。
         if auto_probe and running and self._should_probe_verification():
             self.recheck_verification()
-        # 会话就绪（登录都好了）就把浏览器藏到屏幕外：调试版 Edge 是用户自己的
-        # 窗口，开着不动也会盖住别人正在用的软件。等登录/验证期间不藏，那时候
-        # 用户本来就要看这个窗口。每个会话只自动藏一次，之后用户点「显示」就不再抢。
-        #
-        # 必须**确认登录成功**才藏。以前只看 ready：新用户登录超时后会话也算
-        # 「就绪」，窗口当场被挪到屏幕外，人还没扫码就先看不见浏览器了。
-        if (
-            running
-            and self._ready
-            and not self._waiting_login
-            and not self._verification
-            and self._login_state == "ok"
-            and not self._autohide_done
-        ):
-            self._autohide_done = True
-            threading.Thread(target=self.hide_browser, daemon=True).start()
+        # 窗口策略（2026-11-19 简化）：**不自动藏**。会话一开始窗口就在屏幕内，
+        # 登录、过验证都看得见；不想看就点页面上的「藏起来」，程序不再替用户决定。
+        # 以前「登录成功就自动藏到屏幕外」在真机上很难解释：用户刚扫码，窗口就没了；
+        # 换个 profile 又开始「一启动就看不见」。显式操作比自动行为好讲。
         # 浏览器被手动关掉时，会话进程还活着但已经没法干活了：这里探一下端口，
         # 明确告诉界面「浏览器没了」，别等用户点了加购才报错。
         if running and _window_pos is not None and not self._verification:

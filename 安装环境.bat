@@ -33,24 +33,36 @@ for /f "delims=" %%i in ('py -3 -c "import sys;print(sys.executable)" 2^>nul') d
 )
 
 rem 退而求其次：PATH 里的 python，但跳过应用商店的占位别名（WindowsApps）
+set "STORE="
 if not defined PY (
     for /f "delims=" %%i in ('where python 2^>nul') do (
         if not defined PY (
             echo %%i | find /i "WindowsApps" >nul
-            if errorlevel 1 set "PY=%%i"
+            if errorlevel 1 (
+                set "PY=%%i"
+            ) else (
+                set "STORE=1"
+            )
         )
     )
 )
 
 if not defined PY (
     echo.
-    echo   [失败] 没找到可用的 Python。
+    if defined STORE (
+        echo   [失败] 只找到 Windows 应用商店的占位 Python，它还没真正安装。
+        echo.
+        echo          系统里的 python.exe 只是个跳转链接，执行它会打开 Microsoft Store。
+    ) else (
+        echo   [失败] 没找到可用的 Python。
+    )
     echo.
-    echo          装一个 3.10 或更高版本，安装时务必勾选
+    echo          装一个 3.10 或更高版本，装官方版最稳，安装第一屏务必勾选
     echo          "Add python.exe to PATH"：
     echo.
     echo            https://www.python.org/downloads/
     echo.
+    echo          从 Microsoft Store 装也可以，但要确认装完（不只是打开商店页面）。
     echo          装完关掉这个窗口，重新双击本文件。
     echo.
     pause

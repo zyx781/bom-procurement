@@ -103,6 +103,18 @@ function Fail([string]$Message, [string]$Hint = "") {
 }
 
 # ---------- 探测 ----------
+
+# Windows 10/11 自带一个「假 python.exe」：%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe，
+# 0 字节、ReparsePoint 类型。Get-Command 能找到它，Test-Path 也返回真，但一执行就被
+# 拉去 Microsoft Store 装应用。
+# 不把它剔出去，「这台机器根本没装 Python」会被误报成「Python 缺依赖」，
+# 用户照提示去装依赖，装到一半才发现连解释器都没有。
+$script:StoreAliasSeen = $false
+
+function Test-StoreAlias([string]$Path) {
+    return [bool]($Path -and ($Path -match '\\WindowsApps\\'))
+}
+
 function Test-Health {
     try {
         # 必须显式绕开系统代理：代理开着时 127.0.0.1 也会被丢给代理，
@@ -155,14 +167,24 @@ function Resolve-Python {
     $cands = @()
     $seen = @{}
     foreach ($name in @("python.exe", "pythonw.exe")) {
-        $c = Get-Command $name -ErrorAction SilentlyContinue
-        if (-not $c) { continue }
-        $dir = Split-Path $c.Source
-        $exe = Join-Path $dir "python.exe"
-        $win = Join-Path $dir "pythonw.exe"
-        if ((Test-Path $exe) -and -not $seen.ContainsKey($exe)) {
-            $seen[$exe] = $true
-            $cands += @{ Exe = $exe; Window = $(if (Test-Path $win) { $win } else { $exe }) }
+        # 必须用 -All 取满：PATH 上可能同时有应用商店占位符和真 Python，
+        # 谁排在前面不一定（用户级 PATH 里 WindowsApps 常常更靠前）。
+        # 只取第一个命中，就会出现「明明装了 Python，启动器说没装」。
+        $hits = @(Get-Command $name -All -ErrorAction SilentlyContinue)
+        foreach ($c in $hits) {
+            if (-not $c -or -not $c.Source) { continue }
+            $dir = Split-Path $c.Source
+            $exe = Join-Path $dir "python.exe"
+            $win = Join-Path $dir "pythonw.exe"
+            if (Test-StoreAlias $exe) {
+                # 应用商店占位符，不是可用的解释器；记下来好在报错时把话说准
+                $script:StoreAliasSeen = $true
+                continue
+            }
+            if ((Test-Path $exe) -and -not $seen.ContainsKey($exe)) {
+                $seen[$exe] = $true
+                $cands += @{ Exe = $exe; Window = $(if (Test-Path $win) { $win } else { $exe }) }
+            }
         }
     }
     # py 启动器兜底：某些安装（含 Store 版）PATH 里根本没有 python.exe
@@ -368,6 +390,12 @@ function Start-App {
 
     $py = Resolve-Python
     if (-not $py.Window) {
+        if ($script:StoreAliasSeen) {
+            # 这台机器只有应用商店占位符。如果说成「缺依赖」，用户会去装依赖、
+            # 装完还是起不来；必须直接点明「这不是真的 Python」。
+            Fail "没有找到真正的 Python（只有应用商店的占位链接）" `
+                "系统里的 python.exe 只是一个跳转链接，执行它只会打开 Microsoft Store。`n         请到 https://www.python.org/downloads/ 装官方版（3.10+），安装第一屏勾选 Add python.exe to PATH，装完先双击「安装环境.bat」。"
+        }
         Fail "没有找到 Python" "请安装 Python 3.10 或更高版本，并勾选 Add to PATH。下载：https://www.python.org/downloads/"
     }
     $pyVer = if ($py.Exe) { Get-PythonVersion $py.Exe } else { $null }
@@ -537,7 +565,8 @@ function Show-Diagnose {
         Write-Row "依赖库" $(if ($depsOk) { "playwright / openpyxl 已安装" } else { "缺少依赖，先跑「安装环境.bat」" }) `
             $(if ($depsOk) { $C_Ok } else { $C_Warn })
     } else {
-        Write-Row "Python" "未找到，请先安装 Python 3.10+" $C_Bad
+        $pyNote = if ($script:StoreAliasSeen) { "只有应用商店占位链接，需装官方版 3.10+" } else { "未找到，请先安装 Python 3.10+" }
+        Write-Row "Python" $pyNote $C_Bad
     }
     $edge = Resolve-Edge
     Write-Row "Edge" $(if ($edge) { $edge } else { "未找到" }) $(if ($edge) { $C_Ok } else { $C_Warn })

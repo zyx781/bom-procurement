@@ -44,9 +44,10 @@ _archive/
 Thumbs.db
 desktop.ini
 
-# ---- 根目录的个人报告（只保留 README）----
+# ---- 根目录的个人报告（只保留 README 与交付说明）----
 /*.md
 !/README.md
+!/使用说明.md
 
 # ---- 其它浏览器 profile（含缓存与登录态）----
 bom-site/.browser-profile/
@@ -74,3 +75,6 @@ taobao-bom-procurement/蒸馏方案.md
 
 # 前端截图/冒烟脚本（本机 playwright）
 bom-site/_shots/
+
+# ---- 发布包（make_release.py 的产物，按需重新生成，不入库）----
+dist/

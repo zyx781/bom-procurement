@@ -36,6 +36,11 @@
 - Python 3.10+（开发环境实测 3.14）
 - Microsoft Edge
 
+**拿到发布包的人**：双击 `安装环境.bat`，它会建 `.venv`、装依赖、做自检，一步到位；
+逐步说明见 [`使用说明.md`](使用说明.md)。
+
+开发机上也可以手动装：
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -52,6 +57,8 @@ pip install -r requirements-dev.txt
 打开调试版Edge.bat     ← 第 1 步：独立 profile + CDP 9222
 启动BOM选型台.bat      ← 第 2 步：自检 → 后台起服务 → 打开界面
 ```
+
+启动器优先用根目录的 `.venv`（`安装环境.bat` 建的）；没有才去系统 PATH 里挑依赖齐全的 Python。
 
 两个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.13.0）。
 

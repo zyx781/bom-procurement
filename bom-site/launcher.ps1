@@ -136,6 +136,18 @@ function Resolve-Python {
     # python.exe 用来跑 -c 检查（有控制台，能拿到 stdout）；
     # pythonw.exe 用来起服务（GUI 子系统，不留黑框）。
     #
+    # 0) 发布包自带的 .venv 优先。它是「安装环境.bat」建的，路径固定、依赖齐全；
+    #    装了却还去系统 Python 里按 PATH 顺序挑，用户会怀疑自己刚才装到哪去了。
+    #    这里不做依赖探测：venv 在就直接用，缺依赖交给下面的统一检查报错，
+    #    免得悄悄换成另一个解释器、报出对不上号的症状。
+    $venvDir = Join-Path (Split-Path -Parent $AppDir) ".venv\Scripts"
+    $venvExe = Join-Path $venvDir "python.exe"
+    if (Test-Path $venvExe) {
+        $venvWin = Join-Path $venvDir "pythonw.exe"
+        if (-not (Test-Path $venvWin)) { $venvWin = $venvExe }
+        return @{ Exe = $venvExe; Window = $venvWin }
+    }
+    #
     # 机器上可能装着多个 Python，PATH 上第一个不一定装了依赖。踩过的坑：
     # 从 Git Bash 里调启动器时，PATH 上 3.13 排在前面、它没装 openpyxl，
     # 服务照常起来，但一上传 xlsx 就 500「No module named 'openpyxl'」。
@@ -376,7 +388,7 @@ function Start-App {
         # 缺依赖还硬起，用户只会看到「上传 xlsx 报服务端异常」，比直接拦住更难查
         Write-Row "依赖库" "缺少依赖，服务无法正常启动" $C_Warn
         Fail "Python 缺依赖（playwright / openpyxl）" `
-            "在这个 Python 下执行：`"$($py.Exe)`" -m pip install -r requirements.txt"
+            "先双击发布包里的「安装环境.bat」（只需一次）；手工装也行：`"$($py.Exe)`" -m pip install -r requirements.txt"
     }
 
     $conn = Get-Listener
@@ -522,7 +534,7 @@ function Show-Diagnose {
         $pyVer = if ($py.Exe) { Get-PythonVersion $py.Exe } else { $null }
         Write-Row "Python" $(if ($pyVer) { $pyVer } else { $py.Window }) $C_Ok
         $depsOk = if ($py.Exe) { Test-PythonDeps $py.Exe } else { $false }
-        Write-Row "依赖库" $(if ($depsOk) { "playwright / openpyxl 已安装" } else { "缺少依赖，需 pip install -r requirements.txt" }) `
+        Write-Row "依赖库" $(if ($depsOk) { "playwright / openpyxl 已安装" } else { "缺少依赖，先跑「安装环境.bat」" }) `
             $(if ($depsOk) { $C_Ok } else { $C_Warn })
     } else {
         Write-Row "Python" "未找到，请先安装 Python 3.10+" $C_Bad

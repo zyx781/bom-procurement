@@ -171,7 +171,10 @@ def main():
         restore(a)
 
         # 3. capture_session 把新鲜 cookie 回写默认 context
-        default_ctx = FakeContext(cookies=[])
+        # 默认 profile 里得有 unb 才会开无痕窗口（没登录态时故意退回默认窗口，
+        # 否则登录页会跑到第二个窗口里，新用户找不到入口 —— 见
+        # test_session_startup.py）。这里给默认 profile 一份完整登录态。
+        default_ctx = FakeContext(cookies=[dict(c) for c in LOGIN_COOKIES])
         private_ctx = FakeContext(cookies=LOGIN_COOKIES)
         a = make_adapter(default_ctx, private_ctx)
         a.open()
@@ -186,7 +189,7 @@ def main():
         restore(a)
 
         # 4. 回写异常不影响主流程
-        default_ctx = FakeContext(cookies=[], fail_add=True)
+        default_ctx = FakeContext(cookies=[dict(LOGIN_COOKIES[-1])], fail_add=True)
         private_ctx = FakeContext(cookies=LOGIN_COOKIES)
         a = make_adapter(default_ctx, private_ctx)
         a.open()

@@ -1186,6 +1186,16 @@ class SessionRunner:
         self._verify_probe_at = 0.0
         self._desynced = False
         self._started_at = None
+        self._started_mono: float | None = None
+        # 启动卡住的判定阈值：从拉起会话进程算起，既没就绪、也没进入「等待登录」
+        # 超过这个秒数，就当它卡住了（正常运行 10 秒内一定会有其中一个信号）。
+        # 新机器上 Playwright 驱动被杀软拦、浏览器被对话框挡住，都会坐在这里不动，
+        # 前端原来只会一直显示「启动中」，用户不知道是慢还是死了。
+        try:
+            self._startup_timeout = max(5.0, float(os.environ.get("BOM_STARTUP_TIMEOUT") or 45))
+        except (TypeError, ValueError):
+            self._startup_timeout = 45.0
+        self._stall_logged = False
         self._log_path = None
         self._last_error = None
         self._guard = None  # 前台守卫：跑批时别让浏览器盖住用户正在用的软件
@@ -1346,6 +1356,7 @@ class SessionRunner:
                 raise SessionError(f"无法启动会话进程：{exc}", "SESSION_START_FAILED") from exc
 
             self._started_at = datetime.now().isoformat(timespec="seconds")
+            self._started_mono = time.monotonic()
             threading.Thread(target=self._read_stdout, args=(self._proc,), daemon=True).start()
             threading.Thread(target=self._read_stderr, args=(self._proc,), daemon=True).start()
             self._append_log(f"[site] session process started pid={self._proc.pid}")
@@ -1521,6 +1532,8 @@ class SessionRunner:
         self._browser_gone = False
         self._proc = None
         self._ready = False
+        self._started_mono = None
+        self._stall_logged = False
         self._waiting_login = False
         self._login_state = "unknown"
         self._verification = False
@@ -1606,11 +1619,15 @@ class SessionRunner:
         # 会话就绪（登录都好了）就把浏览器藏到屏幕外：调试版 Edge 是用户自己的
         # 窗口，开着不动也会盖住别人正在用的软件。等登录/验证期间不藏，那时候
         # 用户本来就要看这个窗口。每个会话只自动藏一次，之后用户点「显示」就不再抢。
+        #
+        # 必须**确认登录成功**才藏。以前只看 ready：新用户登录超时后会话也算
+        # 「就绪」，窗口当场被挪到屏幕外，人还没扫码就先看不见浏览器了。
         if (
             running
             and self._ready
             and not self._waiting_login
             and not self._verification
+            and self._login_state == "ok"
             and not self._autohide_done
         ):
             self._autohide_done = True
@@ -1629,6 +1646,14 @@ class SessionRunner:
             elif not gone and self._browser_gone:
                 self._browser_gone = False
                 self._append_log("[site] 调试浏览器已恢复")
+        stalled = self._startup_stalled(running)
+        if stalled and not self._stall_logged:
+            self._stall_logged = True
+            self._append_log(
+                f"[site] 启动卡住了：{self._startup_timeout:g} 秒内既没就绪、也没进入登录等待。"
+                "多半是 Playwright 驱动或浏览器被安全软件拦住 / 还卡在对话框上。"
+                "点「结束会话」再「启动淘宝会话」；反复卡住就先把杀毒软件对这个目录的拦截关掉。"
+            )
         with self._state_lock:
             return {
                 "running": running,
@@ -1638,6 +1663,8 @@ class SessionRunner:
                 "verification": self._verification,
                 "browser_gone": self._browser_gone,
                 "desynced": self._desynced,
+                "stalled": stalled,
+                "startup_timeout": self._startup_timeout,
                 "task_id": self._task_id,
                 "pid": proc.pid if running else None,
                 "started_at": self._started_at,
@@ -1645,6 +1672,21 @@ class SessionRunner:
                 "repo": str(self._repo),
                 "logs": list(self._logs)[-60:],
             }
+
+    def _startup_stalled(self, running: bool) -> bool:
+        """会话进程活着，却迟迟不给「就绪」或「等待登录」信号。
+
+        正常路径 10 秒内必有一声（本机实测 7~15 秒）。超过阈值还一声不响，
+        基本就是驱动没起来 / 浏览器被挡，而不是「再等等就好」。
+        """
+        if not running or self._ready or self._waiting_login:
+            return False
+        if self._verification or self._browser_gone:
+            return False
+        started = self._started_mono
+        if started is None:
+            return False
+        return (time.monotonic() - started) >= self._startup_timeout
 
     # ---------------- 输出读取 ----------------
     def _read_stdout(self, proc):
@@ -1688,6 +1730,10 @@ class SessionRunner:
                         if self._login_state != "ok":
                             self._login_state = "waiting"
                     if "login successful" in low or "登录成功" in line:
+                        self._login_state = "ok"
+                    if "check login status => logged in" in low:
+                        # 本来就有登录态的机器：一开始就是 ok。留成 unknown 的话
+                        # 「确认登录了才把窗口藏起来」那条判断永远不成立。
                         self._login_state = "ok"
                     if "login failed or timed out" in low or "登录失败" in line:
                         self._login_state = "failed"

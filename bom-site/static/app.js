@@ -1055,6 +1055,10 @@
       } else if (st.waiting_login) {
         label = "等待你在浏览器中登录…";
         dot.classList.add("warn");
+      } else if (st.stalled) {
+        // 进程活着但一直没就绪、也没进登录等待：这是卡住，不是慢
+        label = "启动卡住了（浏览器没响应）";
+        dot.classList.add("bad");
       } else if (!st.ready) {
         label = "启动中（打开浏览器 / 加载页面）…";
         dot.classList.add("warn");
@@ -1073,10 +1077,18 @@
     task.textContent = st.task_id ? `${st.task_id}  pid ${st.pid || "-"}` : "";
     warn.textContent = st.verification
       ? "请在浏览器里手动完成验证，完成后点右侧按钮（或等它自动恢复）。"
+      : st.stalled
+      ? `会话进程还在，但浏览器 ${
+          Math.round(st.startup_timeout || 45)
+        } 秒内没有响应。点「结束会话」再点「启动淘宝会话」重试；如果每次都卡在这里，先关掉杀毒软件对本目录的拦截（它可能拦了 Playwright 的 node.exe）。`
       : st.browser_gone
       ? "淘宝浏览器已关闭：点「结束会话」再「启动淘宝会话」即可恢复（也可以直接点启动）。"
       : st.desynced
       ? "请结束会话后重新启动。"
+      : st.running && !st.ready && !st.waiting_login
+      ? `正在打开 Edge 并加载淘宝，一般十几秒。超过 ${Math.round(
+          st.startup_timeout || 45
+        )} 秒窗口还没动静会自动提示「卡住了」——浏览器在别的窗口后面时，可以用任务栏找一下。`
       : st.running
       ? ""
       : st.last_error || "";

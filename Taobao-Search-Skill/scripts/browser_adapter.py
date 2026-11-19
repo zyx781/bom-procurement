@@ -186,27 +186,45 @@ class BrowserAdapter:
                 # 无痕工作区：搜索/加购全在这里跑，URL 不写进磁盘 History。
                 # 登录态从默认 profile 注入（含 httpOnly 的关键 cookie）；
                 # 失败一律回退默认 context，隐私增强绝不变成跑批故障。
+                #
+                # 例外：**浏览器里还没有登录态时不建无痕窗口**。new_context 在
+                # Chromium 里等于另开一个窗口，登录页会跑到第二个窗口里，而用户
+                # 盯着的是原来那个——新用户第一次点「启动淘宝」，看到的就是一个
+                # 停在淘宝首页的窗口，怎么都找不到登录入口。
                 if PRIVATE_WINDOW:
-                    try:
+                    state = None
+                    with suppress(Exception):
                         state = default_ctx.storage_state()
-                        self._context = self._browser.new_context(
-                            storage_state=state,
-                            viewport={"width": 1920, "height": 1080},
-                            locale="zh-CN",
-                            timezone_id="Asia/Shanghai",
-                            ignore_https_errors=True,
-                        )
-                        self._context.set_default_timeout(15000)
-                        self._page = self._context.new_page()
-                        self._private = True
+                    has_login = any(
+                        cookie.get("name") in LOGIN_COOKIE_NAMES and cookie.get("value")
+                        for cookie in ((state or {}).get("cookies") or [])
+                    )
+                    if not has_login:
                         print(
-                            "[browser] private window on: 采购搜索不写入浏览器历史 "
-                            f"(seeded {len(state.get('cookies') or [])} cookies from default profile)",
+                            "[browser] 浏览器里没有登录态（首次使用）：不开无痕窗口，"
+                            "直接在当前窗口登录，登录页不会跑到第二个窗口里",
                             file=sys.stderr,
                         )
-                    except Exception as exc:  # noqa: BLE001
-                        print(f"[browser] private window failed, fall back to default: {exc}", file=sys.stderr)
-                        self._private = False
+                    else:
+                        try:
+                            self._context = self._browser.new_context(
+                                storage_state=state,
+                                viewport={"width": 1920, "height": 1080},
+                                locale="zh-CN",
+                                timezone_id="Asia/Shanghai",
+                                ignore_https_errors=True,
+                            )
+                            self._context.set_default_timeout(15000)
+                            self._page = self._context.new_page()
+                            self._private = True
+                            print(
+                                "[browser] private window on: 采购搜索不写入浏览器历史 "
+                                f"(seeded {len((state or {}).get('cookies') or [])} cookies from default profile)",
+                                file=sys.stderr,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            print(f"[browser] private window failed, fall back to default: {exc}", file=sys.stderr)
+                            self._private = False
 
                 if not self._private:
                     self._context = default_ctx
@@ -503,12 +521,19 @@ class BrowserAdapter:
         # first: if the user logged in from a new tab, the original Playwright
         # page can still show the guest navigation ("亲，请登录"), and the old
         # order returned a false negative before ever reaching the cookie check.
+        #
+        # 只认 unb（登录后才有的用户编号）。游客打开首页同样会拿到 cookie2 与
+        # _tb_token_，把它们当证据会在点完「登录」页面跳转的那一瞬间误判成
+        # 「登录成功」——新用户还没扫码，站点就把浏览器藏走了。
         with suppress(Exception):
             for cookie in page.context.cookies():
-                if cookie.get("name") == "unb" and cookie.get("value"):
+                if cookie.get("name") in LOGIN_COOKIE_NAMES and cookie.get("value"):
                     return True
         url = page.url.lower()
+        # 已经落在登录页：没扫码就是没登录，别再拿页面元素猜。
         if any(signal in url for signal in LOGIN_PAGE_URL_SIGNALS):
+            return False
+        if "login" in url and "taobao.com" in url:
             return False
         with suppress(Exception):
             for sel in NOT_LOGGED_IN_TEXT:
@@ -518,12 +543,6 @@ class BrowserAdapter:
             with suppress(Exception):
                 if page.locator(selector).first.is_visible(timeout=2000):
                     return True
-        with suppress(Exception):
-            cookies = page.context.cookies()
-            for cookie in cookies:
-                if cookie.get("name") in LOGIN_COOKIE_NAMES and cookie.get("value"):
-                    if "login" not in url:
-                        return True
         return False
 
     def _wait_for_user_login(self, page: Page) -> None:
@@ -537,6 +556,10 @@ class BrowserAdapter:
             if login_link.is_visible():
                 self._human_click(page, login_link)
                 page.wait_for_timeout(2000)
+                # 点完立刻查会被跳转中的半成品页面骗到（登录页还没加载完，
+                # 首页的「亲，请登录」已经消失）。等这一次跳转落地再判。
+                with suppress(Exception):
+                    page.wait_for_load_state("domcontentloaded", timeout=8000)
 
         check_interval = 30
         max_checks = 7  # up to ~3.5 min

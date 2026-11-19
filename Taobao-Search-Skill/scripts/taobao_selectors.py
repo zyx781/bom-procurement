@@ -86,7 +86,12 @@ LOGGED_IN_INDICATORS = [
     ".site-nav-login-info-nick",
 ]
 
-LOGIN_COOKIE_NAMES = {"_tb_token_", "cookie2", "unb"}
+# 只有 unb 能证明「登录过」：它是登录后写进 .taobao.com 的用户编号。
+# cookie2 / _tb_token_ 游客一进首页就有（实测 2026-11-19：全新 profile 打开
+# www.taobao.com 后 cookie2、_tb_token_ 都在，unb 没有）。把这两个算成登录
+# 证据，点完「登录」页面一跳转就判成「登录成功」——新用户还没扫码就被宣布
+# 登录完成，站点随即把浏览器藏起来，人连码都扫不到。
+LOGIN_COOKIE_NAMES = {"unb"}
 
 # ──────────────────────────────────────────────
 # Access Control / Risk Detection

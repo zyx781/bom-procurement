@@ -18,9 +18,31 @@ echo   这一步只做一次：在本目录建独立环境 .venv，装好 playwr
 echo   装完之后双击「启动BOM选型台.bat」即可，日常使用不再需要联网。
 echo.
 
+rem 免安装便携版：解释器和依赖都在包里，这一步没必要跑。
+if exist "%~dp0runtime\python\python.exe" (
+    "%~dp0runtime\python\python.exe" -c "import playwright, openpyxl, sys; print('          Python ' + sys.version.split()[0] + ' · playwright / openpyxl 已就绪')" 2>nul
+    if not errorlevel 1 (
+        echo   [1/1] 检测到内置运行时，环境已就绪，无需安装。
+        echo.
+        echo   下一步：双击「启动BOM选型台.bat」。
+        echo.
+        pause
+        exit /b 0
+    )
+    echo   [提示] 内置运行时缺依赖，继续按标准流程安装 ...
+)
+
 if exist "%VPY%" (
-    echo   [1-2/4] 检测到已有 .venv，跳过创建。
-    goto :deps
+    rem 拷来的 .venv 里记着原电脑的 Python 路径，在这台机器上一执行就退出。
+    rem 不先验证的话，下一步 pip 会报「No Python at D:\...」，看着像网络问题。
+    "%VPY%" -c "import sys" >nul 2>&1
+    if errorlevel 1 (
+        echo   [1-2/4] 现有 .venv 在这台电脑上不可用（多半是从别的电脑拷来的），删掉重建 ...
+        rd /s /q "%VENV%"
+    ) else (
+        echo   [1-2/4] 检测到已有 .venv，跳过创建。
+        goto :deps
+    )
 )
 
 rem ---------------- 找 Python ----------------

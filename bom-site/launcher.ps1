@@ -148,16 +148,32 @@ function Resolve-Python {
     # python.exe 用来跑 -c 检查（有控制台，能拿到 stdout）；
     # pythonw.exe 用来起服务（GUI 子系统，不留黑框）。
     #
-    # 0) 发布包自带的 .venv 优先。它是「安装环境.bat」建的，路径固定、依赖齐全；
+    # 0) 便携版自带的运行时（runtime\python）最优先。
+    #    解释器和依赖都跟着包走，目标机器装没装 Python 都不影响 —— 这是
+    #    「拷到别人电脑就能跑」的关键，不能被机器上的 PATH / .venv 顶掉。
+    $rtExe = Join-Path $RootDir "runtime\python\python.exe"
+    if (Test-Path $rtExe) {
+        $rtWin = Join-Path $RootDir "runtime\python\pythonw.exe"
+        if (-not (Test-Path $rtWin)) { $rtWin = $rtExe }
+        return @{ Exe = $rtExe; Window = $rtWin }
+    }
+    #
+    # 1) 源码版的 .venv（安装环境.bat 建的）。它路径固定、依赖齐全，
     #    装了却还去系统 Python 里按 PATH 顺序挑，用户会怀疑自己刚才装到哪去了。
-    #    这里不做依赖探测：venv 在就直接用，缺依赖交给下面的统一检查报错，
-    #    免得悄悄换成另一个解释器、报出对不上号的症状。
+    #    但要先验证它真能跑：从别的电脑拷过来的 .venv 一执行就退出。
     $venvDir = Join-Path (Split-Path -Parent $AppDir) ".venv\Scripts"
     $venvExe = Join-Path $venvDir "python.exe"
     if (Test-Path $venvExe) {
-        $venvWin = Join-Path $venvDir "pythonw.exe"
-        if (-not (Test-Path $venvWin)) { $venvWin = $venvExe }
-        return @{ Exe = $venvExe; Window = $venvWin }
+        # .venv 里记着「建它时用的那个 Python 在哪」（pyvenv.cfg 的 home）。
+        # 把整个文件夹拷到另一台电脑，那个路径不存在，python.exe 一执行就退出
+        # （No Python at 'D:\...'）。这种 venv 不能直接用；也不能悄悄换成系统
+        # Python 却不吭声 —— 记下来，一个能用的解释器都找不到时把话说清楚。
+        if (Test-PythonRuns $venvExe) {
+            $venvWin = Join-Path $venvDir "pythonw.exe"
+            if (-not (Test-Path $venvWin)) { $venvWin = $venvExe }
+            return @{ Exe = $venvExe; Window = $venvWin }
+        }
+        $script:BrokenVenv = $venvExe
     }
     #
     # 机器上可能装着多个 Python，PATH 上第一个不一定装了依赖。踩过的坑：
@@ -214,6 +230,17 @@ function Get-PythonVersion([string]$exe) {
         if ($LASTEXITCODE -eq 0 -and $v) { return ($v | Select-Object -First 1).Trim() }
     } catch { }
     return $null
+}
+
+function Test-PythonRuns([string]$exe) {
+    # 只验证「解释器本身能起来」。拷来的 .venv 会在这一步直接退出，
+    # 而 -m pip / 依赖检测报出来的是另一回事（No Python at ...），容易看歪。
+    try {
+        & $exe -c "import sys" 2>$null | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    }
 }
 
 function Test-PythonDeps([string]$exe) {
@@ -390,6 +417,12 @@ function Start-App {
 
     $py = Resolve-Python
     if (-not $py.Window) {
+        if ($script:BrokenVenv) {
+            # 从别的电脑连 .venv 一起拷过来最常见。用户照着「缺依赖」去装依赖，
+            # 装完还是起不来 —— 必须点明是 .venv 失效，不是没装。
+            Fail "这个 .venv 在这台电脑上用不了（是从别的电脑拷过来的）" `
+                "删掉发布包根目录的 .venv 文件夹，再双击「安装环境.bat」重建；`n         或者直接用免安装版（自带 Python，什么都不用装）。"
+        }
         if ($script:StoreAliasSeen) {
             # 这台机器只有应用商店占位符。如果说成「缺依赖」，用户会去装依赖、
             # 装完还是起不来；必须直接点明「这不是真的 Python」。
@@ -417,6 +450,17 @@ function Start-App {
         Write-Row "依赖库" "缺少依赖，服务无法正常启动" $C_Warn
         Fail "Python 缺依赖（playwright / openpyxl）" `
             "先双击发布包里的「安装环境.bat」（只需一次）；手工装也行：`"$($py.Exe)`" -m pip install -r requirements.txt"
+    }
+
+    # 解压到 Program Files / 只读位置时，服务能起来但写不了 runs/，
+    # 用户看到的是「跑了没结果」。提前拦一下，说清楚换个地方。
+    try {
+        New-Item -ItemType Directory -Force -Path $RunsDir | Out-Null
+        $probe = Join-Path $RunsDir ".write-test"
+        Set-Content -Path $probe -Value "ok" -Encoding ascii -ErrorAction Stop
+        Remove-Item $probe -Force -ErrorAction SilentlyContinue
+    } catch {
+        Fail "这个目录不能写（$RunsDir）" "把整个文件夹解压到桌面或 D 盘再启动；Program Files 下面没有写权限。"
     }
 
     $conn = Get-Listener
@@ -563,12 +607,16 @@ function Show-Diagnose {
     $py = Resolve-Python
     if ($py.Window) {
         $pyVer = if ($py.Exe) { Get-PythonVersion $py.Exe } else { $null }
-        Write-Row "Python" $(if ($pyVer) { $pyVer } else { $py.Window }) $C_Ok
+        $pyBundled = $py.Exe -and $py.Exe.StartsWith((Join-Path $RootDir "runtime"))
+        Write-Row $(if ($pyBundled) { "内置运行时" } else { "Python" }) `
+            $(if ($pyVer) { if ($pyBundled) { "$pyVer（runtime\python，免安装）" } else { $pyVer } } else { $py.Window }) $C_Ok
         $depsOk = if ($py.Exe) { Test-PythonDeps $py.Exe } else { $false }
         Write-Row "依赖库" $(if ($depsOk) { "playwright / openpyxl 已安装" } else { "缺少依赖，先跑「安装环境.bat」" }) `
             $(if ($depsOk) { $C_Ok } else { $C_Warn })
     } else {
-        $pyNote = if ($script:StoreAliasSeen) { "只有应用商店占位链接，需装官方版 3.10+" } else { "未找到，请先安装 Python 3.10+" }
+        $pyNote = if ($script:BrokenVenv) { "现有 .venv 在这台机器上跑不起来：删掉 .venv 重装，或改用免安装版" }
+            elseif ($script:StoreAliasSeen) { "只有应用商店占位链接，需装官方版 3.10+" }
+            else { "未找到，请先安装 Python 3.10+" }
         Write-Row "Python" $pyNote $C_Bad
     }
     $edge = Resolve-Edge
@@ -627,6 +675,7 @@ function Show-Usage {
     Write-Footer "  启动BOM选型台.bat            自检环境 → 后台起服务 → 打开界面"
     Write-Footer "  启动BOM选型台.bat status     只看运行状态"
     Write-Footer "  启动BOM选型台.bat diag       只读体检（环境 / 端口 / 日志）"
+    Write-Footer "  检查电脑环境.bat             淘宝打不开时先跑它，报告可发给维护者"
     Write-Footer "  启动BOM选型台.bat restart   重启服务"
     Write-Footer "  启动BOM选型台.bat stop       停服务 + 关调试 Edge"
     Write-Host ""

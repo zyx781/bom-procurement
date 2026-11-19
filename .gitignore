@@ -76,5 +76,8 @@ taobao-bom-procurement/蒸馏方案.md
 # 前端截图/冒烟脚本（本机 playwright）
 bom-site/_shots/
 
-# ---- 发布包（make_release.py 的产物，按需重新生成，不入库）----
+# ---- 发布包（make_release.py / tools/build_portable.py 的产物，按需重新生成，不入库）----
 dist/
+
+# ---- 打包原料缓存（python.org 嵌入式包 + 依赖 wheel，约 50 MB）----
+.cache/

@@ -32,12 +32,18 @@
 
 ### 1. 环境
 
-- Windows 10/11
-- Python 3.10+（开发环境实测 3.14）
+- Windows 10/11（64 位）
 - Microsoft Edge
+- Python 3.10+ —— **只有源码版需要**（免安装便携版自带运行时，不用装）
 
-**拿到发布包的人**：双击 `安装环境.bat`，它会建 `.venv`、装依赖、做自检，一步到位；
-逐步说明见 [`使用说明.md`](使用说明.md)。
+**拿到发布包的人**，先看包名选一种：
+
+| 包 | 怎么用 | 适合谁 |
+|---|---|---|
+| `BOM采购台-v*-便携版.zip` | 解压 → 双击 `启动BOM选型台.bat`。自带 Python 和依赖，不联网、不装任何东西 | **推荐**，尤其是「别人电脑」 |
+| `BOM采购台-v*.zip`（源码版） | 解压 → `安装环境.bat` 建 `.venv` 装依赖 → `启动BOM选型台.bat` | 要改代码 / 自己管环境 |
+
+逐步说明见 [`使用说明.md`](使用说明.md)。便携版的自检工具是 `检查电脑环境.bat`（淘宝打不开时先跑它）。
 
 开发机上也可以手动装：
 
@@ -58,7 +64,8 @@ pip install -r requirements-dev.txt
 启动BOM选型台.bat      ← 第 2 步：自检 → 后台起服务 → 打开界面
 ```
 
-启动器优先用根目录的 `.venv`（`安装环境.bat` 建的）；没有才去系统 PATH 里挑依赖齐全的 Python。
+启动器挑解释器的顺序：**包内自带运行时**（`runtime\python`，便携版才有）→ 根目录 `.venv`
+（`安装环境.bat` 建的，会先验证它真能跑，拷来的坏 venv 会被跳过）→ 系统 PATH 里依赖齐全的 Python。
 
 两个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.13.5）。
 
@@ -230,6 +237,7 @@ curl "http://127.0.0.1:8765/api/diagnostics?line=7&limit=80"
 ```
 bom-site/                     本地网站与调度
   launcher.ps1                启动 / 停止 / 状态 / 体检 / 调试 Edge 的统一入口
+  doctor.ps1                  环境自检：运行时 / Edge / 组策略 / 调试端口 / 淘宝可达性
   server.py                   HTTP 服务（127.0.0.1:8765）
   engine.py                   BOM 解析 + 候选打分 + 单行分析
   bom_params.py               参数解析（封装归一化、阻容感/电压/引脚抽取、目录归类）
@@ -237,19 +245,22 @@ bom-site/                     本地网站与调度
   taobao_runner.py            批量调度、会话、购物车、加购确认、对账
   errors.py                   错误分类（重试 / 人工 / 程序异常）与日志脱敏
   diagnostics.py              执行诊断流水（按行号记「搜到几条、卡在哪一步」）
+  diag.py                     运行日志页后端：收集日志、环境快照并打码
   lcsc.py                     立创商城器件查询（编号/型号 → 权威规格）
-  window_pos.py               调试浏览器窗口显隐（跑批时不抢前台）
+  window_pos.py               调试浏览器窗口焦点与位置（跑批时不抢前台）
   static/                     前端（无框架）
   settings.example.json       本机配置模板（settings.json 本身不进仓库）
-  test_*.py                   27 套、约 1500 项断言的纯 Python 测试
+  test_*.py                   33 套、约 1650 项断言的纯 Python 测试
   runtests.py                 测试总入口：一条命令跑全部（UTF-8 输出）
   mypy.ini                    类型检查范围（渐进式，先覆盖新模块）
   samples/                    示例 BOM / 候选
 Taobao-Search-Skill/scripts/  淘宝执行层（Playwright over CDP）
 taobao-bom-procurement/       决策层 SKILL 文档
+tools/                        打包脚本（fetch_runtime.ps1 / build_portable.py）
+make_release.py               打源码发布包（不含运行时）
 ruff.toml                     静态检查规则（只查会藏 bug 的，不做全库格式化）
 requirements-dev.txt          开发/CI 依赖（ruff + mypy）
-*.bat                         三个 Windows 入口（UTF-8 / CRLF）
+*.bat                         四个 Windows 入口（UTF-8 / CRLF）
 VERSION                       当前版本号
 ```
 
@@ -257,6 +268,23 @@ VERSION                       当前版本号
 「这个候选能不能买」和「这家店的 SKU 选哪一档」。`bom_params.py` 只依赖 `re`，是纯粹的
 字符串解析层。调度器与引擎把规则入口 re-export 回去（`tr.suggest_sku`、`engine.parse_params`
 这类老写法照常能用），所以拆分不改变任何调用方。
+
+## 发布打包
+
+两份产物，按「给谁用」选：
+
+| 命令 | 产物 | 特点 |
+|---|---|---|
+| `python tools/build_portable.py` | `dist/BOM采购台-v*-便携版.zip` | **自带 Python 运行时 + 依赖**（约 52 MB），解压双击就能跑，不联网、不用装 Python |
+| `python make_release.py` | `dist/BOM采购台-v*.zip` | 纯源码（约 1.7 MB），对方自己 `安装环境.bat` 建 `.venv` |
+
+便携版的运行时来自 python.org 的 embeddable 包，依赖用 wheelhouse 离线装进去；打包时会
+**换到带空格和中文的临时路径再起一次服务**，专门验证「换台电脑、换个目录解压」不会因为
+绝对路径失效——这正是「目录拷过去就跑不起来」最常见的两个原因（拷了旧的 `.venv`、或对方
+没装 Python）。
+
+两份包都会扫一遍文件名，登录 profile（`.cdp-profile`/`.browser-profile`）、跑批记录
+（`runs/`）、本机 `settings.json`、真实 BOM 与复测报告一律不许进包。
 
 ## 测试
 

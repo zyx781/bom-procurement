@@ -11,9 +11,12 @@
     BOM采购台-v0.13.5/
       VERSION  README.md  使用说明.md  LICENSE
       requirements*.txt
-      安装环境.bat  启动BOM选型台.bat  打开调试版Edge.bat
+      安装环境.bat  启动BOM选型台.bat  打开调试版Edge.bat  检查电脑环境.bat
       bom-site/...
       Taobao-Search-Skill/...
+
+这是**源码版**（约 1.7 MB，对方要自己装 Python）。要「解压就能跑」的包用
+tools/build_portable.py，它会把 Python 运行时和依赖一起带上（约 52 MB）。
 
 **只打代码**。登录 profile、跑批记录、会话日志、截图、本机配置、真实 BOM
 和测试报告全在排除清单里；打完还会扫一遍 zip 内的文件名，命中就报错。
@@ -53,6 +56,7 @@ ROOT_FILES = [
     "安装环境.bat",
     "启动BOM选型台.bat",
     "打开调试版Edge.bat",
+    "检查电脑环境.bat",
 ]
 ROOT_DIRS = ["bom-site", "Taobao-Search-Skill"]
 
@@ -201,13 +205,15 @@ def verify(zip_path: Path) -> list[str]:
             z.extractall(tmp)
         base = tmp / APP_NAME
         app = base / "bom-site"
-        for need in ("server.py", "engine.py", "static/index.html", "launcher.ps1", "settings.example.json"):
+        for need in ("server.py", "engine.py", "static/index.html", "launcher.ps1",
+                     "doctor.ps1", "settings.example.json"):
             if not (app / need).exists():
                 problems.append(f"解压后缺文件：bom-site/{need}")
         if not (base / ".venv").exists():
             pass  # 正常：.venv 由安装脚本现建
-        if not (base / "安装环境.bat").exists():
-            problems.append("解压后缺 安装环境.bat")
+        for need in ("安装环境.bat", "检查电脑环境.bat"):
+            if not (base / need).exists():
+                problems.append(f"解压后缺 {need}")
 
         # 1) 语法：包里所有 .py 都要能编译
         pys = sorted(base.rglob("*.py"))

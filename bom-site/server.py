@@ -22,6 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+import diag
 import diagnostics
 import engine
 import errors
@@ -116,18 +117,21 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
-    def _download(self, code, data: bytes, ctype: str, filename: str):
-        """带 Content-Disposition 的下载响应（导出 CSV 用）。"""
+    def _download(self, code, data: bytes, ctype: str, filename: str, ascii_name: str = "export.csv"):
+        """带 Content-Disposition 的下载响应（导出 CSV / 日志包用）。
+
+        中文文件名用 RFC 5987 的 filename*；ascii_name 给不认 filename* 的
+        老客户端兜底，避免它把文件名写成 `%E6%97%A5...` 这种。
+        """
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
-        # 中文文件名用 RFC 5987 的 filename*，老浏览器回退到 ASCII 名
         from urllib.parse import quote
 
         self.send_header(
             "Content-Disposition",
-            f"attachment; filename=\"export.csv\"; filename*=UTF-8''{quote(filename)}",
+            f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}",
         )
         self.end_headers()
         try:
@@ -288,6 +292,28 @@ class Handler(BaseHTTPRequestHandler):
             return self._download(200, body, "text/csv; charset=utf-8", name)
         if path == "/favicon.ico":
             return self._send(204, b"")
+        if path in ("/diag", "/diag.html"):
+            # 运行日志页：出问题时用户从这里导出日志包。独立页面，
+            # 主界面不受影响（主站 JS 崩了这页也能开）。
+            return self._file(STATIC / "diag.html")
+        if path == "/api/diag/summary":
+            # 只含环境与状态摘要，没有任何凭据；页面自己也要显示这些
+            return self._send(200, diag.summary())
+        if path == "/api/diag/log":
+            qs = parse_qs(urlparse(self.path).query)
+            name = (qs.get("name") or [""])[0]
+            target = diag.resolve_log(name)
+            if not target:
+                return self._send(404, {"error": "没有这个日志文件"})
+            # 预览只给小段：页面是给人扫一眼的，整份在导出包里
+            return self._send(
+                200,
+                {
+                    "name": target.name,
+                    "text": diag.redact(diag.tail_text(target, max_lines=800)),
+                    "size": target.stat().st_size if target.is_file() else 0,
+                },
+            )
         if path.startswith("/static/"):
             target = self._safe(STATIC, path[len("/static/") :])
             return self._file(target) if target else self._send(404, {"error": "路径非法"})
@@ -387,6 +413,26 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/maintenance/clean-screenshots":
                 # 手动清截图（批量结束/会话停止时会自动清，这里是兜底）
                 return self._send(200, tr.RUNNER.cleanup_screenshots())
+
+            if path == "/api/diag/bundle":
+                # 诊断包：白名单 + 脱敏在 diag 里做，这里只负责把 note 传进去。
+                # 用 POST 而不是 GET：GET 可以被任意网页用 <img>/<a> 触发下载，
+                # 虽然读不到内容，但没必要给这种口子。
+                note = str(body.get("note") or "")[:4000]
+                include_bom = bool(body.get("include_bom", True))
+                filename, data = diag.build_bundle(note=note, include_bom=include_bom)
+                print(
+                    f"[site] diag bundle exported: {len(data)} bytes, include_bom={include_bom}",
+                    flush=True,
+                )
+                return self._download(
+                    200, data, "application/zip", filename, ascii_name="bom-logs.zip"
+                )
+
+            if path == "/api/diag/client":
+                # 浏览器端错误上报：只落盘一条，不回显（避免被当成查询接口）
+                diag.append_client_log(body if isinstance(body, dict) else {})
+                return self._send(200, {"ok": True})
 
             if path == "/api/taobao/cart":
                 return self._send(200, tr.RUNNER.cart_view())

@@ -1,0 +1,164 @@
+/* 运行日志页（/diag）
+   主站样式全部沿用 style.css，这里只补这页特有的排版。
+   原则：一屏之内能完成「写一句 → 导出 → 发人」，不要把用户留在说明里。 */
+
+.diag-wrap{max-width:1180px}
+
+/* ---------- 引导 ---------- */
+.diag-lead{
+  margin-bottom:12px;padding:16px 18px;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+}
+.diag-lead h2{
+  margin:0 0 12px;font-size:14px;font-weight:650;letter-spacing:.01em;color:var(--ink);
+}
+.diag-steps{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;
+  margin:0;padding:0;list-style:none;counter-reset:step;
+}
+.diag-steps li{
+  position:relative;display:flex;flex-direction:column;gap:2px;
+  padding:10px 12px 10px 34px;
+  background:var(--panel-2);border:1px solid var(--line-soft);border-radius:var(--r-sm);
+  counter-increment:step;
+}
+.diag-steps li::before{
+  content:counter(step);
+  position:absolute;left:11px;top:11px;
+  width:16px;height:16px;border-radius:50%;
+  display:grid;place-items:center;
+  background:var(--accent-wash);color:var(--accent-deep);
+  font-family:var(--font-mono);font-size:10px;font-weight:700;
+}
+.diag-steps b{font-size:12px;font-weight:650;color:var(--ink)}
+.diag-steps span{font-size:11px;color:var(--ink-3);line-height:1.45}
+
+.diag-privacy{
+  display:flex;align-items:flex-start;gap:6px;
+  margin:12px 0 0;padding-top:10px;border-top:1px dashed var(--line);
+  font-size:11px;line-height:1.55;color:var(--ink-3);
+}
+.diag-privacy svg{width:14px;height:14px;flex:0 0 auto;margin-top:1px;color:var(--ok)}
+
+/* ---------- 导出卡 ---------- */
+.diag-card{
+  padding:14px 16px;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+}
+.diag-export{margin-bottom:12px}
+
+.diag-field{display:flex;flex-direction:column;gap:5px}
+.diag-field label{font-size:12px;font-weight:600;color:var(--ink)}
+.diag-field label .opt{margin-left:6px;font-weight:400;font-size:10.5px;color:var(--ink-4)}
+.diag-field textarea{
+  width:100%;min-height:66px;resize:vertical;
+  padding:8px 10px;
+  font:inherit;font-size:12px;line-height:1.55;color:var(--ink);
+  background:var(--panel-2);border:1px solid var(--line-strong);border-radius:var(--r-sm);
+}
+.diag-field textarea:focus{
+  outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-ring);background:var(--panel);
+}
+.diag-field textarea::placeholder{color:var(--ink-4)}
+
+.diag-check{
+  display:flex;align-items:flex-start;gap:7px;
+  margin:10px 0 0;font-size:11.5px;color:var(--ink-2);cursor:pointer;
+}
+.diag-check input{margin:2px 0 0;width:14px;height:14px;accent-color:var(--accent);flex:0 0 auto}
+.diag-check em{display:block;font-style:normal;font-size:10.5px;color:var(--ink-4);margin-top:1px}
+
+.diag-actions{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft);
+}
+.diag-actions button svg{width:15px;height:15px}
+.diag-hint{font-size:11.5px;color:var(--ink-3);min-height:16px;overflow-wrap:anywhere}
+.diag-hint.bad{color:var(--bad)}
+.diag-hint.ok{color:var(--ok)}
+
+/* ---------- 两栏 ---------- */
+.diag-grid{
+  display:grid;grid-template-columns:minmax(280px,372px) minmax(0,1fr);gap:12px;
+  align-items:stretch;
+}
+
+.diag-card-head{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin:-2px 0 10px;
+}
+.diag-card-head h3{margin:0;font-size:12.5px;font-weight:650;color:var(--ink)}
+
+/* ---------- 环境表 ---------- */
+.diag-env{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:0}
+.diag-env dt{
+  padding:5px 10px 5px 0;
+  font-size:11px;color:var(--ink-4);white-space:nowrap;vertical-align:top;
+}
+.diag-env dd{
+  margin:0;padding:5px 0;
+  font-family:var(--font-mono);font-size:11px;color:var(--ink-2);
+  overflow-wrap:anywhere;border-bottom:1px solid var(--line-soft);
+}
+.diag-env dt + dd{border-bottom:1px solid var(--line-soft)}
+.diag-env dd:last-of-type{border-bottom:0}
+.diag-env .grp{
+  grid-column:1/-1;margin-top:6px;padding:8px 0 3px;
+  font-family:var(--font-ui);font-size:10px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-4);
+  border-bottom:1px solid var(--line);
+}
+.diag-env .grp:first-child{margin-top:0}
+.diag-env .ok{color:var(--ok)}
+.diag-env .warn{color:var(--warn)}
+.diag-env .bad{color:var(--bad)}
+.diag-env .muted{color:var(--ink-4)}
+.diag-loading{grid-column:1/-1;padding:8px 0;font-size:11.5px;color:var(--ink-4)}
+.diag-env-note{margin:10px 0 0;font-size:10.5px;line-height:1.5;color:var(--ink-4)}
+
+/* ---------- 日志 ---------- */
+.diag-card-log{min-width:0;display:flex;flex-direction:column}
+.diag-tabs{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.diag-tabs button{
+  min-height:24px;padding:0 8px;
+  font-family:var(--font-mono);font-size:10.5px;
+  color:var(--ink-3);background:var(--panel-2);
+  border:1px solid var(--line);border-radius:var(--r-xs);
+}
+.diag-tabs button:hover{border-color:var(--line-strong);color:var(--ink)}
+.diag-tabs button.active{
+  color:var(--accent-deep);background:var(--accent-wash);border-color:var(--accent-soft);
+  font-weight:600;
+}
+.diag-tabs .empty{font-size:10.5px;color:var(--ink-4)}
+
+.diag-log{
+  margin:0;padding:10px 12px;
+  flex:1 1 auto;
+  max-height:min(64vh,600px);min-height:180px;overflow:auto;
+  background:var(--panel-3);border:1px solid var(--line-soft);border-radius:var(--r-sm);
+  font-family:var(--font-mono);font-size:11px;line-height:1.6;color:var(--ink-2);
+  white-space:pre-wrap;word-break:break-word;tab-size:2;
+}
+.diag-log:focus{outline:2px solid var(--accent-ring);outline-offset:1px}
+.diag-log-note{margin:8px 0 0;font-size:10.5px;color:var(--ink-4);line-height:1.5}
+
+.diag-fallback{
+  margin:14px 0 0;font-size:11px;color:var(--ink-4);line-height:1.6;
+}
+.diag-fallback code{
+  padding:1px 5px;border:1px solid var(--line);border-radius:var(--r-xs);
+  background:var(--panel-2);font-family:var(--font-mono);font-size:10.5px;color:var(--ink-2);
+}
+
+@media (max-width:900px){
+  .diag-grid{grid-template-columns:1fr}
+  .diag-steps{grid-template-columns:1fr}
+  .diag-log{max-height:46vh}
+}
+@media (max-width:560px){
+  .diag-wrap{padding:12px 12px 32px}
+  .diag-tabs{justify-content:flex-start;margin-top:6px}
+  .diag-card-head{flex-wrap:wrap}
+}

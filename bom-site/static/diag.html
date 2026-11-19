@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#14161a">
+<meta name="robots" content="noindex">
+<title>运行日志 · BOM 采购台</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/diag.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 28 28" aria-hidden="true" focusable="false">
+      <rect x="8.5" y="8.5" width="11" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.7"/>
+      <path d="M11 8.5V4.5M17 8.5V4.5M11 23.5v-4M17 23.5v-4M8.5 11h-4M8.5 17h-4M23.5 11h-4M23.5 17h-4"
+            stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <div class="brand-text">
+      <div class="brand-line">
+        <h1>运行日志</h1>
+        <span class="env">DIAG</span>
+      </div>
+      <p>出问题时把日志包发给维护者，比截图和口头描述都管用</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <a class="ghost small" href="/">← 返回选型台</a>
+    <span class="engine-sep" aria-hidden="true"></span>
+    <span class="engine">版本 <b id="ver">…</b></span>
+  </div>
+</header>
+
+<main class="wrap diag-wrap">
+
+  <section class="diag-lead">
+    <h2>三步把现场交出来</h2>
+    <ol class="diag-steps">
+      <li><b>写一句</b><span>当时点了什么、看到什么</span></li>
+      <li><b>导出</b><span>点下面的按钮，下载一个 zip</span></li>
+      <li><b>发送</b><span>把 zip 发给维护者</span></li>
+    </ol>
+    <p class="diag-privacy">
+      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <path d="M8 1.6 3 3.6v4.1c0 3 2.1 5.7 5 6.7 2.9-1 5-3.7 5-6.7V3.6L8 1.6Z"
+              fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+        <path d="M5.8 8.1 7.3 9.6l3-3" fill="none" stroke="currentColor" stroke-width="1.4"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      导出时自动打码：cookie、密码、手机号、邮箱都不会进包，也不含收货地址、订单号、支付信息。不放心可以先解压看一眼。
+    </p>
+  </section>
+
+  <section class="diag-card diag-export">
+    <div class="diag-field">
+      <label for="note">当时在做什么？<span class="opt">选填，但很有帮助</span></label>
+      <textarea id="note" rows="3" maxlength="1200"
+        placeholder="例：点「启动淘宝会话」，顶栏一直显示「启动中」，等了五分钟没变化。"></textarea>
+    </div>
+
+    <label class="diag-check">
+      <input type="checkbox" id="with-bom" checked>
+      <span>
+        附带 BOM 明细
+        <em>行号、型号、状态、失败原因；不含商品链接、价格、收货地址</em>
+      </span>
+    </label>
+
+    <div class="diag-actions">
+      <button class="cta" id="btn-export" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <path d="M8 2v8.4M4.8 7.2 8 10.4l3.2-3.2M2.6 12.6h10.8"
+                fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        导出日志包
+      </button>
+      <button class="ghost" id="btn-copy" type="button">复制环境信息</button>
+      <span class="diag-hint" id="hint" role="status" aria-live="polite"></span>
+    </div>
+  </section>
+
+  <div class="diag-grid">
+
+    <section class="diag-card">
+      <header class="diag-card-head">
+        <h3>运行环境</h3>
+        <button class="ghost small" id="btn-refresh" type="button">刷新</button>
+      </header>
+      <dl class="diag-env" id="env">
+        <div class="diag-loading">读取中…</div>
+      </dl>
+      <p class="diag-env-note">这些信息也会写进日志包，维护者不用再问「你装的什么版本」。</p>
+    </section>
+
+    <section class="diag-card diag-card-log">
+      <header class="diag-card-head">
+        <h3>日志</h3>
+        <div class="diag-tabs" id="tabs" role="tablist"></div>
+      </header>
+      <pre class="diag-log" id="log" tabindex="0">正在读取…</pre>
+      <p class="diag-log-note" id="log-note"></p>
+    </section>
+
+  </div>
+
+  <p class="diag-fallback">
+    如果这页打不开、或者服务根本起不来：把 <code>bom-site\runs</code> 文件夹整个压缩发过去，效果一样。
+  </p>
+
+</main>
+
+<script src="/static/errlog.js" defer></script>
+<script src="/static/diag.js" defer></script>
+</body>
+</html>

@@ -188,6 +188,15 @@ input[type=file]{display:none}
   background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.3);color:#fff;
 }
 .topbar .ghost:disabled{opacity:.4}
+/* 顶栏里的链接按钮（「日志」）——button 的 ghost 样式不作用于 a，单列一条 */
+.topbar a.ghost{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:28px;padding:0 9px;
+  border:1px solid rgba(255,255,255,.16);border-radius:var(--r-sm);
+  font-size:11.5px;line-height:1;text-decoration:none;color:#d6dbe4;
+  white-space:nowrap;transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease);
+}
+.topbar a.ghost:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.3);color:#fff}
 .topbar .cta{background:var(--accent);border-color:var(--accent);color:#fff}
 .topbar .cta:hover:not(:disabled){background:var(--accent-deep);border-color:var(--accent-deep)}
 
@@ -920,6 +929,11 @@ input[type=file]{display:none}
 }
 .foot-brand{font-weight:600;color:var(--ink-3)}
 .foot-sep{color:var(--line-strong)}
+.foot a.foot-link{
+  color:var(--ink-3);text-decoration:none;
+  border-bottom:1px dotted var(--line-strong);padding-bottom:1px;
+}
+.foot a.foot-link:hover{color:var(--accent-deep);border-bottom-color:var(--accent-soft)}
 .foot-grow{flex:1 1 auto}
 .foot-local{font-family:var(--font-mono);font-size:10px}
 .foot-note{position:relative}

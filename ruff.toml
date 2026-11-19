@@ -42,6 +42,7 @@ known-first-party = [
     "bom_params",
     "errors",
     "diagnostics",
+    "diag",
     "lcsc",
     "rules",
     "taobao_runner",

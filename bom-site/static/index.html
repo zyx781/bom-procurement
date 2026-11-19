@@ -42,6 +42,7 @@
     </div>
     <span class="engine-sep" aria-hidden="true"></span>
     <span class="engine">引擎 <b id="engine-ver">…</b></span>
+    <a class="ghost small" href="/diag" title="出问题时在这里导出日志包">日志</a>
     <button class="ghost small" id="btn-shutdown" title="关闭本地服务与淘宝浏览器；下次使用需重新双击启动脚本">退出服务</button>
   </div>
 </header>
@@ -274,11 +275,14 @@
     </div>
   </details>
   <span class="foot-grow"></span>
+  <a class="foot-link" href="/diag">运行日志</a>
+  <span class="foot-sep">·</span>
   <span class="foot-local" id="foot-local">本地运行</span>
 </footer>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+<script src="/static/errlog.js" defer></script>
 <script src="/static/app.js" defer></script>
 </body>
 </html>

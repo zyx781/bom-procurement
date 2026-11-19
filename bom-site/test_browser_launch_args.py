@@ -63,10 +63,18 @@ finally:
 args = captured.get("args") or []
 check("捕获到启动命令", bool(args), repr(args))
 check("不恢复上次标签", "--restore-last-session" not in args, repr(args))
-check("不传独立淘宝 URL", not any("taobao.com" in a for a in args), repr(args))
+check("带一个淘宝启动页（避免空白新建标签页）",
+      any("taobao.com" in a for a in args), repr(args))
+check("淘宝启动页恰好一个",
+      sum("taobao.com" in a for a in args) == 1, repr(args))
 check("保留防还原气泡参数", "--hide-crash-restore-bubble" in args, repr(args))
 check("仍带调试端口", any(a.startswith("--remote-debugging-port=") for a in args), repr(args))
 check("仍带独立 profile", any(a.startswith("--user-data-dir=") for a in args), repr(args))
+
+# ---- 默认单窗口：无痕工作区默认关，显式开才生效 ----
+adapter_src = (SKILL := BASE.parent / "Taobao-Search-Skill" / "scripts" / "browser_adapter.py").read_text(encoding="utf-8")
+check("无痕默认关闭", 'os.environ.get("TAOBAO_PRIVATE_WINDOW") or "0"' in adapter_src)
+check("无痕仍可显式开启", '"0", "false", "off", "no"' in adapter_src)
 
 # ---- launcher.ps1 的手动 edge 入口同样不能开两个 ----
 ps1 = (BASE / "launcher.ps1").read_text(encoding="utf-8")
@@ -74,7 +82,7 @@ arg_lines = [ln for ln in ps1.splitlines() if "$argLine" in ln and "remote-debug
 check("launcher 有启动参数行", len(arg_lines) == 1, repr(arg_lines))
 line = arg_lines[0] if arg_lines else ""
 check("launcher 不恢复上次标签", "--restore-last-session" not in line, line)
-check("launcher 不传独立淘宝 URL", "taobao.com" not in line, line)
+check("launcher 带一个淘宝启动页", "https://www.taobao.com" in line, line)
 check("launcher 保留防还原气泡参数", "--hide-crash-restore-bubble" in line, line)
 
 print(f"\nRESULT: {PASS} passed, {FAIL} failed")

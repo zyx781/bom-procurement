@@ -518,11 +518,11 @@ function Start-DebugEdge {
         New-Item -ItemType Directory -Force -Path $ProfileDir | Out-Null
     }
 
-    # 只起浏览器，不恢复上次标签、也不传淘宝 URL：两者叠加会开出两个淘宝页，
-    # 而且恢复出来的旧标签可能是验证页/搜索结果，干扰新会话挑页。
-    # 淘宝页统一由会话的 navigate_to_taobao() 打开。保留 --hide-crash-restore-bubble
-    # 防止 Chromium 的「还原页面」气泡在主窗口藏起来后露一条在屏幕边缘。
-    $argLine = '--remote-debugging-port={0} --user-data-dir="{1}" --no-first-run --no-default-browser-check --window-position=-2000,0 --window-size=1500,1000 --hide-crash-restore-bubble' -f $CdpPort, $ProfileDir
+    # 只起浏览器，不恢复上次标签（--restore-last-session 会把上次所有淘宝标签
+    # 重新打开，叠加成一片重复页面）。但保留一个淘宝 URL：默认窗口一出来就是
+    # 淘宝，否则会多一个「新建标签页」空白窗口。无痕工作区默认已关，全程一个画面。
+    # --hide-crash-restore-bubble 防止「还原页面」气泡在主窗口藏起来后露一条在屏幕边缘。
+    $argLine = '--remote-debugging-port={0} --user-data-dir="{1}" --no-first-run --no-default-browser-check --window-position=-2000,0 --window-size=1500,1000 --hide-crash-restore-bubble https://www.taobao.com' -f $CdpPort, $ProfileDir
     try {
         Start-Process -FilePath $edge -ArgumentList $argLine | Out-Null
     } catch {

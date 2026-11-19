@@ -76,8 +76,13 @@ BROWSE_SIM = (os.environ.get("TAOBAO_BROWSE_SIM") or "1").strip().lower() not in
 # 任何采购搜索词。登录态用 storage_state 从默认 profile 注入、退出时写回
 # taobao-session.json，所以不用重新扫码。
 # 隐私是增强项，任何异常都回退到默认 context，绝不让跑批因此失败。
-# TAOBAO_PRIVATE_WINDOW=0 可显式关掉、回到旧行为。
-PRIVATE_WINDOW = (os.environ.get("TAOBAO_PRIVATE_WINDOW") or "1").strip().lower() not in (
+#
+# 默认关掉：CDP 下 new_context() 等于**另开一个浏览器窗口**。原来默认开无痕，
+# 用户点「显示淘宝窗口」时会看到两个：一个是 Chromium 启动时的新建标签页，
+# 一个是无痕淘宝。既然默认窗口本来就是专用 profile（.cdp-profile），历史写
+# 进去也只留在本机、发布包不会带走，就没必要为了隐私多开一个窗口。
+# 想要工作区不写浏览器历史的，显式设 TAOBAO_PRIVATE_WINDOW=1 即可。
+PRIVATE_WINDOW = (os.environ.get("TAOBAO_PRIVATE_WINDOW") or "0").strip().lower() not in (
     "0", "false", "off", "no",
 )
 

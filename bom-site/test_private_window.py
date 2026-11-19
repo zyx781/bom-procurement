@@ -221,6 +221,8 @@ def main():
         src = (SKILL / "browser_adapter.py").read_text(encoding="utf-8")
         check("PRIVATE_WINDOW 开关有默认值且可配",
               'TAOBAO_PRIVATE_WINDOW' in src and 'PRIVATE_WINDOW =' in src)
+        check("无痕默认关闭（单窗口优先）",
+              'os.environ.get("TAOBAO_PRIVATE_WINDOW") or "0"' in src)
         check("私有 context 用 new_context 创建",
               'self._browser.new_context(' in src and 'storage_state=state' in src)
         check("close 只关私有 context", 'if self._private and self._context is not None' in src)

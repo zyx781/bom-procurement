@@ -934,11 +934,13 @@ def ensure_debug_browser(cdp_url: str, wait_seconds: float = 25.0, log=None) -> 
         # 「上次异常退出」并在窗口右下角弹「还原页面」气泡。那个气泡依附主窗口，
         # 主窗口藏到屏幕外时它会被夹回桌面左上角——用户看到的就是屏幕边上露一条。
         "--hide-crash-restore-bubble",
-        # 绝不要 --restore-last-session，也绝不要在这里传 https://www.taobao.com：
-        # 前者把上次留下的淘宝标签恢复出来，后者又新开一个，两个叠加就是
-        # 「一启动出现两个淘宝页」。而且恢复出来的旧标签可能是登录页/验证页/搜索
-        # 结果，会干扰新会话挑页。淘宝页统一由 navigate_to_taobao() 在选定 context
-        # 里打开，从启动到就绪全程只有一个。
+        # 不恢复 --restore-last-session：它会把上次留下的所有淘宝标签重新打开，
+        # 和下面这个启动页叠加成一堆重复页面。
+        # 但要保留一个淘宝 URL：浏览器一启动，默认窗口就直接落在淘宝上，
+        # 否则 Chromium 会自己开一个「新建标签页」，用户点「显示」时会看到
+        # 一个空白窗口 + 一个淘宝窗口，两个画面。无痕窗口默认已关，所以这里
+        # 不会再多出一个淘宝页 —— 全程只有一个。
+        "https://www.taobao.com",
     ]
     kwargs: dict = {"close_fds": True}
     if os.name == "nt":

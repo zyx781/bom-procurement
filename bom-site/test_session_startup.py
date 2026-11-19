@@ -199,15 +199,26 @@ try:
         finally:
             tpw.restore(a)
 
-        # 有登录态时照旧用无痕窗口（隐私增强不能回退）
+        # 有登录态 + 显式开启无痕 → 才用无痕工作区（默认单窗口，隐私可选）
         logged = guest + [{"name": "unb", "value": "123", "domain": ".taobao.com", "path": "/"}]
         default_ctx = tpw.FakeContext(cookies=logged)
         private_ctx = tpw.FakeContext(cookies=logged)
-        a = tpw.make_adapter(default_ctx, private_ctx)
+        a = tpw.make_adapter(default_ctx, private_ctx, private_flag=True)
         try:
             a.open()
-            check("已登录仍用无痕工作区", len(a._fake["browser"].new_context_calls) == 1)
+            check("显式开启且已登录时用无痕工作区", len(a._fake["browser"].new_context_calls) == 1)
             check("工作 page 在无痕 context", a._context is private_ctx)
+        finally:
+            tpw.restore(a)
+
+        # 有登录态但默认设置 → 不另开窗口，只有一个淘宝画面
+        default_ctx = tpw.FakeContext(cookies=logged)
+        a = tpw.make_adapter(default_ctx, tpw.FakeContext(cookies=logged), private_flag=False)
+        try:
+            a.open()
+            check("默认设置下已登录也不建第二个窗口",
+                  len(a._fake["browser"].new_context_calls) == 0)
+            check("默认设置下工作 page 在默认 context", a._context is default_ctx)
         finally:
             tpw.restore(a)
     finally:

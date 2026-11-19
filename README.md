@@ -60,7 +60,7 @@ pip install -r requirements-dev.txt
 
 启动器优先用根目录的 `.venv`（`安装环境.bat` 建的）；没有才去系统 PATH 里挑依赖齐全的 Python。
 
-两个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.13.3）。
+两个 `.bat` 只是薄入口，逻辑都在 [`bom-site/launcher.ps1`](bom-site/launcher.ps1)：Python / 依赖 / Edge 自检、端口冲突检查、后台起服务、健康检查、CDP 就绪探测；失败会给出原因和日志路径。服务用 `pythonw.exe` 跑，不留黑框；启动窗口显示完结果会自动收起。横幅版本号读自根目录 `VERSION`（当前 v0.13.4）。
 
 打开 <http://127.0.0.1:8765/>。
 
@@ -102,13 +102,14 @@ cp settings.example.json settings.json
 
 三处都在 `.gitignore` 里。**分享项目时只给代码，别把这两个 profile 目录一起拷走** —— 里面的 cookie 等同于登录凭证。需要换位置（比如放加密盘）可以用环境变量 `TAOBAO_PROFILE_DIR`，默认值就是项目内的 `.browser-profile`。
 
-### 2.1 搜索记录不写进浏览器历史
+### 2.1 浏览器窗口与搜索历史
 
-用调试版 Edge（配了 `cdp_url`）跑批时，执行层会**另开一个无痕窗口**做所有搜索和加购：这些页面地址只存在于内存，窗口一关就没了，**不会出现在 Edge 的「历史记录」里**。你日常在那个 Edge 里上网留下的记录（bing / github 等）完全不受影响。
+启动后屏幕上只有**一个淘宝窗口**：调试版 Edge 一启动就直接落在淘宝页，会话在这个窗口里登录、搜索、加购。这样不会多出一个空白的"新建标签页"窗口。
 
-- 登录态照常保留：启动时从调试 profile 注入 cookie，退出时把刷新过的登录 cookie 写回 profile 和 `taobao-session.json`，不用重新扫码。
-- 需要人工过验证 / 登录时，弹出的窗口是那个无痕工作窗口，操作方式不变。
-- 想关掉无痕、退回旧行为（历史会写盘）：设环境变量 `TAOBAO_PRIVATE_WINDOW=0`。
+- 登录态照常保留：登录 cookie 存在专用调试 profile（`.cdp-profile`）和 `taobao-session.json` 里，不用重新扫码。
+- 需要人工过验证 / 登录时，弹出的就是这个窗口，操作方式不变。
+- **搜索历史会写进这个专用 profile 的浏览器历史**，但它只留在本机、发布包不会带走；你日常用的 Edge  profile 完全不受影响。
+- 如果你希望工作窗口不写历史：设环境变量 `TAOBAO_PRIVATE_WINDOW=1` 启用无痕工作区。注意这会在原窗口之外**再开一个无痕窗口**，"显示淘宝窗口"时会同时看到两个——这是无痕的实现方式（Chromium 的 `new_context()` 就是另开窗口），不是故障。
 
 > 无痕只清「本机浏览器历史」。淘宝账号自己记的「搜索历史 / 我的足迹」是网站存在服务器上的，浏览器这层管不到——要清得去淘宝 App/网页里删。另外那些**已经**产生的旧记录不会被这次改动追溯删除，需要的话手动在 Edge 历史里按 `s.taobao.com` 搜一下删掉即可。
 

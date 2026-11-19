@@ -34,6 +34,7 @@ import diag  # noqa: E402
 
 PASS = 0
 FAIL = 0
+FAILED_NAMES: list[str] = []
 
 
 def check(name, cond, extra=""):
@@ -43,6 +44,7 @@ def check(name, cond, extra=""):
         print(f"  ok  {name}")
     else:
         FAIL += 1
+        FAILED_NAMES.append(name)
         print(f"  FAIL {name} {extra}")
 
 
@@ -196,6 +198,10 @@ for key in ("app_version", "engine_version", "python", "os", "deps", "browser", 
     check(f"摘要含 {key}", key in s)
 check("摘要不含 profile 路径", ".cdp-profile" not in json.dumps(s, ensure_ascii=False))
 check("依赖探测齐全", {"playwright", "openpyxl", "ddddocr", "opencv"} <= set(s["deps"]))
+
+# CI 只保留失败脚本末尾 25 行，失败断言被截掉过一次，这里再汇总一遍
+if FAILED_NAMES:
+    print("失败项汇总: " + "、".join(FAILED_NAMES))
 
 print(f"\nRESULT: {PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

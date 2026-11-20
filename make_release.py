@@ -8,7 +8,7 @@
 
 包内结构（顶层带版本号，解压不会散一地）：
 
-    BOM采购台-v0.13.7/
+    BOM采购台-v0.13.8/
       VERSION  README.md  使用说明.md  LICENSE
       requirements*.txt
       安装环境.bat  启动BOM选型台.bat  打开调试版Edge.bat  检查电脑环境.bat

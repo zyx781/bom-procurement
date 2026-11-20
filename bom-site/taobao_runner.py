@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""淘宝执行层：管理 Taobao-Search-Skill v4 的常驻 session 子进程。
+"""淘宝执行层：管理 skills/taobao-search v4 的常驻 session 子进程。
 
 协议：stdin 逐行 JSON，stdout 返回 JSON 信封（缩进格式，因此按 JSON 流解析）。
 不做登录、不碰验证码、不结算付款；只执行 search / open / select-sku / cart-add / cart-view。
@@ -83,7 +83,7 @@ except Exception:  # noqa: BLE001  pragma: no cover
     _window_pos = None
 
 BASE = Path(__file__).resolve().parent
-REPO = Path(os.environ.get("TAOBAO_SKILL_REPO") or (BASE.parent / "Taobao-Search-Skill")).resolve()
+REPO = Path(os.environ.get("TAOBAO_SKILL_REPO") or (BASE.parent / "skills" / "taobao-search")).resolve()
 ARTIFACTS = (REPO / "scripts" / ".cache" / "taobao-search-skill" / "artifacts").resolve()
 # 测试/演练可通过 TAOBAO_RUNS_DIR 把批量进度隔离到临时目录，
 # 否则集成测试会把用户真实的 batch-progress.json 覆盖成 1 行假数据。

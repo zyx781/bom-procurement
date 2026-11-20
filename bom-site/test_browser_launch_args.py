@@ -85,7 +85,7 @@ check("扩展在淘宝启动页之前（URL 必须是最后一个实参）",
       args.index("https://www.taobao.com") == len(args) - 1, repr(args[-3:]))
 
 # ---- 默认单窗口：无痕工作区默认关，显式开才生效 ----
-adapter_src = (SKILL := BASE.parent / "Taobao-Search-Skill" / "scripts" / "browser_adapter.py").read_text(encoding="utf-8")
+adapter_src = (SKILL := BASE.parent / "skills" / "taobao-search" / "scripts" / "browser_adapter.py").read_text(encoding="utf-8")
 check("无痕默认关闭", 'os.environ.get("TAOBAO_PRIVATE_WINDOW") or "0"' in adapter_src)
 check("无痕仍可显式开启", '"0", "false", "off", "no"' in adapter_src)
 

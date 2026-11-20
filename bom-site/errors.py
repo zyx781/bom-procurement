@@ -88,7 +88,7 @@ class ErrorInfo:
 
 
 # 已知错误码 → (大类, 可否重试, 是否要人工)
-# 码表来自执行层（Taobao-Search-Skill）与 runner 自己抛的 SessionError。
+# 码表来自执行层（skills/taobao-search）与 runner 自己抛的 SessionError。
 _KNOWN_CODES: dict[str, tuple[str, bool, bool]] = {
     # 会话/进程
     "SESSION_START_FAILED": (KIND_INTERNAL, True, False),

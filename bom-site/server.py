@@ -3,7 +3,7 @@
 
     python server.py            # http://127.0.0.1:8765
 
-只监听回环地址；执行层复用本地已登录的 Taobao-Search-Skill v4 session，
+只监听回环地址；执行层复用本地已登录的 taobao-search v4 session，
 只做搜索/选 SKU/加购物车，不登录、不绕验证、不结算付款。
 """
 

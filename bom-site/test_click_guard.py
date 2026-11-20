@@ -9,7 +9,7 @@
 import pathlib
 import sys
 
-SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent / "Taobao-Search-Skill" / "scripts"
+SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent / "skills" / "taobao-search" / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 
 PASS = FAIL = 0

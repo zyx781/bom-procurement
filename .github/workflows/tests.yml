@@ -28,7 +28,7 @@ jobs:
       # 静态检查：能藏 bug 的规则（未使用导入/未定义名字/可疑异常处理）；
       # 不做全库格式化，避免一次重排上千行掩盖真实改动。
       - name: Ruff
-        run: python -m ruff check bom-site Taobao-Search-Skill/scripts
+        run: python -m ruff check bom-site skills/taobao-search/scripts
 
       # 类型检查是渐进式的：只覆盖边界清晰的新模块（见 bom-site/mypy.ini）。
       - name: Mypy (core modules)

@@ -1,12 +1,14 @@
 ---
-name: Taobao-Search-Skill
+name: taobao-search
 description: "Search Taobao/Tmall, inspect products, select SKUs, add to cart. Persistent browser session with stdin/stdout JSON protocol. AI decides, script executes."
 version: "4.0.0"
 allowed-tools: [Bash, Read]
 model: "多模态（默认假设支持视觉）"
 ---
 
-# Taobao-Search-Skill v4
+# 淘宝搜索执行层（taobao-search）v4
+
+> 原项目名 `Taobao-Search-Skill`，在本仓库中收进 `skills/taobao-search/`，代码与命令协议未改。
 
 > **合规声明：** 本 Skill 仅用于自动化你自己的淘宝/天猫账号操作。不得绕过平台安全控制、不得用于批量注册/刷单/爬虫等违反淘宝服务条款的行为。使用者对自身操作承担全部责任。
 

@@ -1,11 +1,11 @@
 ---
-name: taobao-bom-procurement
+name: bom-procurement
 description: 把硬件 BOM（CSV/Excel：型号、数量、封装、参数、位号）蒸馏为逐行采购意图，驱动本地已登录的淘宝会话（Taobao-Search-Skill v4 session 模式）完成搜索、候选评估、SKU 匹配与加购；结算与付款永远由人工完成。当用户上传 BOM 并要求「按 BOM 采购 / 配单 / 询价 / 比价 / 加购物车 / 找替代料」，或提到阻容感、MCU、功率器件、连接器等电子元器件采购时使用。禁止自动支付、模拟登录、Cookie 劫持与平台风控规避；滑块验证可先本地自动尝试（可选组件，见 §0.2），图片点选 / 人脸 / 短信只走人工。
 ---
 
 # 淘宝 BOM 采购（决策层 Skill）v0.11.1
 
-> **绑定实现**：执行层 Taobao-Search-Skill v4.0.0（`scripts/taobao.py` session 模式）
+> **绑定实现**：执行层 `skills/taobao-search/scripts/taobao.py`（v4.0.0 session 模式）
 > ＋ 决策引擎 `bom-site/engine.py`（`ENGINE_VERSION = "0.1.0"`）
 > ＋ 参数解析 `bom-site/bom_params.py`（封装归一化、阻容感/电压/引脚抽取、目录归类；只依赖 `re`）
 > ＋ 采购规则 / SKU 决策 `bom-site/rules.py`（纯函数，不碰浏览器/网络/文件）

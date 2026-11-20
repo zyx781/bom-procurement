@@ -13,7 +13,7 @@
       requirements*.txt
       安装环境.bat  启动BOM选型台.bat  打开调试版Edge.bat  检查电脑环境.bat
       bom-site/...
-      Taobao-Search-Skill/...
+      skills/...
 
 这是**源码版**（约 1.7 MB，对方要自己装 Python）。要「解压就能跑」的包用
 tools/build_portable.py，它会把 Python 运行时和依赖一起带上（约 52 MB）。
@@ -58,12 +58,12 @@ ROOT_FILES = [
     "打开调试版Edge.bat",
     "检查电脑环境.bat",
 ]
-ROOT_DIRS = ["bom-site", "Taobao-Search-Skill"]
+ROOT_DIRS = ["bom-site", "skills"]
 
 # 目录名命中就整棵剪掉
 SKIP_DIR_NAMES = {
     "__pycache__",
-    ".cache",          # Taobao-Search-Skill/scripts/.cache：profile + 缓存，含 cookie
+    ".cache",          # skills/taobao-search/scripts/.cache：profile + 缓存，含 cookie
     "runs",            # 分析结果、跑批进度、日志、截图、真实订单
     ".cdp-profile",    # 调试版 Edge 的登录态
     ".browser-profile",
@@ -76,6 +76,9 @@ SKIP_DIR_NAMES = {
 # 相对路径前缀（用 / 分隔）命中就跳过
 SKIP_REL_PREFIX = {
     "bom-site/tests/artifacts",
+    # 内部笔记，不对外发布
+    "skills/taobao-search/README.md",
+    "skills/bom-procurement/蒸馏方案.md",
 }
 SKIP_FILE_NAMES = {
     "settings.json",      # 本机调参，只发 settings.example.json
@@ -211,6 +214,10 @@ def verify(zip_path: Path) -> list[str]:
                      "browser_ext/history_guard/sw.js"):
             if not (app / need).exists():
                 problems.append(f"解压后缺文件：bom-site/{need}")
+        for need in ("skills/bom-procurement/SKILL.md",
+                     "skills/taobao-search/scripts/taobao.py"):
+            if not (base / need).exists():
+                problems.append(f"解压后缺文件：{need}")
         if not (base / ".venv").exists():
             pass  # 正常：.venv 由安装脚本现建
         for need in ("安装环境.bat", "检查电脑环境.bat"):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """BOM 选型规则引擎（纯离线）。
 
-规则来源：taobao-bom-procurement/SKILL.md v0.3
+规则来源：skills/bom-procurement/SKILL.md v0.3
   - §3 输入契约 / §4 搜索词 / §6 硬门槛 H01-H08 与品类权重 / §8 风险规则
   - §10 人工门 / §11 留痕
 

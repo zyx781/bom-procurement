@@ -21,7 +21,7 @@ import tempfile
 import time
 
 BASE = pathlib.Path(__file__).parent
-SKILL = pathlib.Path(os.environ.get("TAOBAO_SKILL_DIR") or (BASE.parent / "Taobao-Search-Skill" / "scripts"))
+SKILL = pathlib.Path(os.environ.get("TAOBAO_SKILL_DIR") or (BASE.parent / "skills" / "taobao-search" / "scripts"))
 sys.path.insert(0, str(BASE))
 sys.path.insert(0, str(SKILL))
 

@@ -1,83 +1,85 @@
-# ---- 凭据 / 浏览器 profile：绝对不能提交 ----
+# =====================================================================
+# .gitignore —— 一句话原则：能反推「这台电脑上买过什么、登录过谁」的都不进仓库
+# =====================================================================
+
+# ---- 1. 凭据 / 浏览器 profile：绝对不能提交 ----
 bom-site/.cdp-profile/
 **/cdp-profile/
+bom-site/.browser-profile/
+**/.browser-profile/
+**/Default/Cache/
+**/Default/Code Cache/
 *.cookie
 *.cookies
 
-# ---- 本机配置：模板在 settings.example.json，实际用的这份不进仓库 ----
-# 里面是本机的调试端口、跑批节奏、单行金额上限；进仓库会让别人继承
-# 我的调参（比如把拟人停顿压到 0.2 更容易撞风控），也容易日后写进敏感项。
+# ---- 2. 本机配置 ----
+# 模板是 settings.example.json；实际这份含本机调试端口、跑批节奏、单行金额上限，
+# 进仓库会让别人继承我的调参（比如把拟人停顿压到 0.2 更容易撞风控）。
 bom-site/settings.json
 
-# ---- 运行数据（含真实商品、价格、会话日志、截图）----
+# ---- 3. 运行数据：真实商品、价格、会话日志、截图 ----
 bom-site/runs/
 runs/
+bom-site/tests/artifacts/
 bom-site/_b.json
 bom-site/_batch.json
 bom-site/_cart.json
 bom-site/_tmp*
 bom-site/_probe_collect*.py
-bom-site/tests/artifacts/
+bom-site/_shots/
+bom-site/采购统计-*.html
 *.log
 
-# ---- 抓取缓存与备份 ----
-Taobao-Search-Skill/scripts/.cache/
-*.bak-*
+# ---- 4. 抓取缓存 / 备份 / 旧启动器 ----
+skills/taobao-search/scripts/.cache/
 *.bak
+*.bak-*
+bom-site/launcher.old.ps1
+bom-site/run.bat
 
-# ---- Python ----
+# ---- 5. 内部笔记：只在本机看，不对外发布（发布脚本也会排除）----
+skills/taobao-search/README.md
+skills/bom-procurement/蒸馏方案.md
+
+# ---- 6. Python ----
 __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
 venv/
 
-# ---- 开发期草稿 / 个人笔记 / 报告 ----
+# ---- 7. 本机资料区：docs/ 整棵都不入库（复测报告、真实 BOM、图片、归档）----
+#      仓库里只保留根 README 的目录说明；回归用的 BOM 副本在 bom-site/tests/fixtures/
+docs/reports/
+docs/samples/
+docs/figures/
+docs/archive/
+
+# ---- 8. 与本项目无关的素材 ----
+mech-images/
+.mech-cards/
+probe.txt
 _tmp/
 _p0*/
 _acceptance/
 _archive/
+
+# ---- 9. 开发工具产生的目录 ----
 .workbuddy/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
 
-# ---- 系统 ----
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# ---- 根目录的个人报告（只保留 README 与交付说明）----
+# ---- 10. 根目录只留两份说明，其余个人报告不入库 ----
 /*.md
 !/README.md
 !/使用说明.md
 
-# ---- 其它浏览器 profile（含缓存与登录态）----
-bom-site/.browser-profile/
-.browser-profile/
-**/Default/Cache/
-**/Default/Code Cache/
-
-# ---- 与本项目无关的素材 ----
-mech-images/
-figures/
-probe.txt
-
-# ---- 内部说明文档（不对外发布）----
-Taobao-Search-Skill/README.md
-
-# ---- 个人数据 / 旧启动器 / 内部笔记 ----
-bom-site/采购统计-*.html
-bom-site/launcher.old.ps1
-bom-site/run.bat
-taobao-bom-procurement/蒸馏方案.md
-.mech-cards/
-
-# ---- 用户投喂的原始 BOM（回归用的副本在 tests/fixtures/boms/，别在根目录留两份）----
-/BOM_*.xlsx
-
-# 前端截图/冒烟脚本（本机 playwright）
-bom-site/_shots/
-
-# ---- 发布包（make_release.py / tools/build_portable.py 的产物，按需重新生成，不入库）----
+# ---- 11. 发布产物与打包原料（按需重新生成）----
 dist/
-
-# ---- 打包原料缓存（python.org 嵌入式包 + 依赖 wheel，约 50 MB）----
 .cache/
+
+# ---- 12. 系统文件 ----
+.DS_Store
+Thumbs.db
+desktop.ini

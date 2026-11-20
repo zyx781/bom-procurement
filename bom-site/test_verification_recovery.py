@@ -13,9 +13,9 @@ import sys
 import time
 
 BASE = pathlib.Path(__file__).parent
-# 执行层脚本在同仓库的 Taobao-Search-Skill/scripts（以前这里写死 D:\测试\…，
+# 执行层脚本在同仓库的 skills/taobao-search/scripts（以前这里写死 D:\测试\…，
 # 换机器/CI 直接 ModuleNotFoundError）。允许用 TAOBAO_SKILL_DIR 覆盖。
-SKILL = pathlib.Path(os.environ.get("TAOBAO_SKILL_DIR") or (BASE.parent / "Taobao-Search-Skill" / "scripts"))
+SKILL = pathlib.Path(os.environ.get("TAOBAO_SKILL_DIR") or (BASE.parent / "skills" / "taobao-search" / "scripts"))
 sys.path.insert(0, str(BASE))
 sys.path.insert(0, str(SKILL))
 

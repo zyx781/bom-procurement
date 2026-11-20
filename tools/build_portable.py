@@ -110,19 +110,19 @@ def install_deps(py_dir: Path) -> None:
     (target / "sitecustomize.py").write_text(
         '"""便携版的 sys.path 补丁：把包内代码目录挂上去。\n\n'
         "嵌入式 Python 的 ._pth 会关掉「脚本目录自动入 path」，\n"
-        "而本工具既跑 bom-site/server.py 也跑 Taobao-Search-Skill/scripts/taobao.py，\n"
+        "而本工具既跑 bom-site/server.py 也跑 skills/taobao-search/scripts/taobao.py，\n"
         "所以按运行时自身位置推出包根目录，再补两条。\n"
         '"""\n'
         "import os\n"
         "import sys\n\n"
         "_pkg_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(sys.executable))))\n"
-        "for _sub in (\"bom-site\", os.path.join(\"Taobao-Search-Skill\", \"scripts\")):\n"
+        "for _sub in (\"bom-site\", os.path.join(\"skills\", \"taobao-search\", \"scripts\")):\n"
         "    _p = os.path.join(_pkg_root, _sub)\n"
         "    if os.path.isdir(_p) and _p not in sys.path:\n"
         "        sys.path.append(_p)\n",
         encoding="utf-8",
     )
-    log("  补丁     sitecustomize.py → 自动挂上 bom-site 与 Taobao-Search-Skill/scripts")
+    log("  补丁     sitecustomize.py → 自动挂上 bom-site 与 skills/taobao-search/scripts")
 
 
 def copy_source(dest: Path) -> int:

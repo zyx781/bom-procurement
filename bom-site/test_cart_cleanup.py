@@ -11,7 +11,7 @@ import sys
 
 BASE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE))
-SKILL = BASE.parent / "Taobao-Search-Skill" / "scripts"
+SKILL = BASE.parent / "skills" / "taobao-search" / "scripts"
 sys.path.insert(0, str(SKILL))
 
 import taobao  # noqa: E402

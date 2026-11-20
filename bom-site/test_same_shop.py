@@ -177,7 +177,7 @@ check("行详情显示店铺", "rec.shop || rec.candidate.shop" in _app)
 
 print("== 12. 搜索卡片有店名才认（取不到就不参与合并） ==")
 try:
-    sys.path.insert(0, str(Path(__file__).parent.parent / "Taobao-Search-Skill" / "scripts"))
+    sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "taobao-search" / "scripts"))
     import browser_adapter as ba
 
     fx = ba.BrowserAdapter.__new__(ba.BrowserAdapter)

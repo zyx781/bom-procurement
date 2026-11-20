@@ -9,6 +9,22 @@
 
 ---
 
+## 下载（只是想用、不想看代码）
+
+不用克隆仓库，直接下压缩包：
+
+| 下载 | 大小 | 适合谁 |
+|---|---|---|
+| **[免安装便携版](https://github.com/zyx781/bom-procurement/releases/download/v0.13.7/BOM-Procurement-v0.13.7-portable.zip)** | 52 MB | 电脑没装 Python —— 解压双击就能用，推荐 |
+| **[标准版](https://github.com/zyx781/bom-procurement/releases/download/v0.13.7/BOM-Procurement-v0.13.7.zip)** | 1.7 MB | 已经装了 Python 3.10 或更高版本 |
+
+- 所有版本与更新记录：[Releases](https://github.com/zyx781/bom-procurement/releases)
+- 校验值：[SHA256SUMS.txt](https://github.com/zyx781/bom-procurement/releases/download/v0.13.7/SHA256SUMS.txt)
+- 三步上手：解压 → 双击 `启动BOM选型台.bat` → 跟着浏览器里的向导走（详见包内 `使用说明.md`）
+- 系统要求：Windows 10 / 11，自带 Microsoft Edge
+
+---
+
 ## 它能做什么 / 不能做什么
 
 | 能做 | 不能做 |
